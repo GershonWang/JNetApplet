@@ -1,0 +1,7 @@
+{
+  "Plugin": {
+    "Version": "1.0",
+    "Id": "space.jokul.JNetApplet",
+    "Url": "main.qml"
+  }
+}
