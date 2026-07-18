@@ -21,5 +21,6 @@ echo "Installing JNetApplet (requires sudo)..."
 sudo cmake --install build
 
 echo "Installation complete!"
-echo "Please restart dde-shell to load the plugin:"
-echo "  systemctl --user restart dde-shell@DDE"
+echo "Restarting dde-shell..."
+systemctl --user restart dde-shell@DDE
+echo "Done! Plugin loaded."
