@@ -2,6 +2,11 @@
   "Plugin": {
     "Version": "1.0",
     "Id": "space.jokul.JNetApplet",
-    "Url": "main.qml"
+    "Url": "networkview.qml",
+    "Parent": "org.deepin.ds.dock",
+    "Name": "Network Monitor",
+    "Name[zh_CN]": "网络速度监控",
+    "Description": "Monitor network speed and traffic",
+    "Description[zh_CN]": "监控网络速度和流量"
   }
 }
