@@ -21,6 +21,8 @@ for the UI. The C++ backend reads `/proc/net/dev` to monitor network traffic.
 - Taskbar icon displays live speed (changes color at high speeds)
 - Hover tooltip shows speed summary
 - Click to open detailed popup
+- Popup shows active interface IP address, per-interface speed comparison and stats
+- One-click plugin uninstall from the popup
 
 ## Build & install
 
@@ -42,6 +44,14 @@ bash install.sh
 `cmake --install` needs `sudo` because the default `DDE_SHELL_PACKAGE_INSTALL_DIR`
 is `/usr/share/dde-shell` (a CMake CACHE variable on this system).
 
+### Deb packaging
+
+`build-deb.sh` builds a `.deb` from the version declared in `CMakeLists.txt`:
+
+```sh
+bash build-deb.sh   # -> jnetapplet_<version>_<arch>.deb
+```
+
 After installation, restart dde-shell:
 
 ```sh
@@ -57,11 +67,13 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 ```
 ├── CMakeLists.txt                 # Build configuration
 ├── install.sh                     # Install script
+├── build-deb.sh                   # Deb packaging script
 ├── networkmonitorapplet.h         # C++ backend header
 ├── networkmonitorapplet.cpp       # C++ backend implementation
 ├── package/
 │   ├── metadata.json              # Plugin metadata
 │   └── networkview.qml            # QML UI
+├── docs/                          # Design docs and implementation plans
 └── AGENTS.md                      # This file
 ```
 
@@ -90,6 +102,7 @@ Inherits from `DApplet`, provides:
 - `networkInterfaces`: List of available interfaces
 - `interfaceStats`: Per-interface statistics
 - `activeInterface`: Currently selected interface
+- `ipAddress`: IP address of the active interface
 - `refresh()`: Manually trigger stats update
 - `setActiveInterface(name)`: Switch active interface
 
