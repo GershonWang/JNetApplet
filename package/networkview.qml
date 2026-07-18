@@ -21,10 +21,10 @@ AppletItem {
 
     readonly property var applet: Applet
     readonly property bool ready: applet ? applet.ready : false
-    readonly property qint64 downloadSpeed: applet ? applet.downloadSpeed : 0
-    readonly property qint64 uploadSpeed: applet ? applet.uploadSpeed : 0
-    readonly property qint64 totalDownload: applet ? applet.totalDownload : 0
-    readonly property qint64 totalUpload: applet ? applet.totalUpload : 0
+    readonly property real downloadSpeed: applet ? applet.downloadSpeed : 0
+    readonly property real uploadSpeed: applet ? applet.uploadSpeed : 0
+    readonly property real totalDownload: applet ? applet.totalDownload : 0
+    readonly property real totalUpload: applet ? applet.totalUpload : 0
     readonly property string activeInterface: applet ? (applet.activeInterface || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
     readonly property var interfaceStats: applet ? (applet.interfaceStats || []) : []

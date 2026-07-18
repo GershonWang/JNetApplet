@@ -51,24 +51,24 @@ bool NetworkMonitorApplet::init()
     return DApplet::init();
 }
 
-qint64 NetworkMonitorApplet::downloadSpeed() const
+double NetworkMonitorApplet::downloadSpeed() const
 {
-    return m_downloadSpeed;
+    return static_cast<double>(m_downloadSpeed);
 }
 
-qint64 NetworkMonitorApplet::uploadSpeed() const
+double NetworkMonitorApplet::uploadSpeed() const
 {
-    return m_uploadSpeed;
+    return static_cast<double>(m_uploadSpeed);
 }
 
-qint64 NetworkMonitorApplet::totalDownload() const
+double NetworkMonitorApplet::totalDownload() const
 {
-    return m_totalDownload;
+    return static_cast<double>(m_totalDownload);
 }
 
-qint64 NetworkMonitorApplet::totalUpload() const
+double NetworkMonitorApplet::totalUpload() const
 {
-    return m_totalUpload;
+    return static_cast<double>(m_totalUpload);
 }
 
 QStringList NetworkMonitorApplet::networkInterfaces() const

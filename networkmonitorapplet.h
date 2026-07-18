@@ -30,10 +30,10 @@ class NetworkMonitorApplet : public DApplet
 {
     Q_OBJECT
 
-    Q_PROPERTY(qint64 downloadSpeed READ downloadSpeed NOTIFY speedChanged)
-    Q_PROPERTY(qint64 uploadSpeed READ uploadSpeed NOTIFY speedChanged)
-    Q_PROPERTY(qint64 totalDownload READ totalDownload NOTIFY totalChanged)
-    Q_PROPERTY(qint64 totalUpload READ totalUpload NOTIFY totalChanged)
+    Q_PROPERTY(double downloadSpeed READ downloadSpeed NOTIFY speedChanged)
+    Q_PROPERTY(double uploadSpeed READ uploadSpeed NOTIFY speedChanged)
+    Q_PROPERTY(double totalDownload READ totalDownload NOTIFY totalChanged)
+    Q_PROPERTY(double totalUpload READ totalUpload NOTIFY totalChanged)
     Q_PROPERTY(QStringList networkInterfaces READ networkInterfaces NOTIFY interfacesChanged)
     Q_PROPERTY(QStringList interfaceStats READ interfaceStats NOTIFY statsChanged)
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
@@ -46,10 +46,10 @@ public:
     virtual bool load() override;
     virtual bool init() override;
 
-    qint64 downloadSpeed() const;
-    qint64 uploadSpeed() const;
-    qint64 totalDownload() const;
-    qint64 totalUpload() const;
+    double downloadSpeed() const;
+    double uploadSpeed() const;
+    double totalDownload() const;
+    double totalUpload() const;
     QStringList networkInterfaces() const;
     QStringList interfaceStats() const;
     bool ready() const;
