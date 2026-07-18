@@ -34,6 +34,31 @@ AppletItem {
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
     readonly property var interfaceStats: applet ? (applet.interfaceStats || []) : []
 
+    // 判断是否为物理网卡（QML 侧排序用，与 C++ isPhysicalInterface 逻辑一致）
+    function isPhysicalIf(name) {
+        return name.startsWith("wlp") || name.startsWith("wlan")
+            || name.startsWith("enp") || name.startsWith("eth")
+    }
+
+    // 排序后的接口列表：活动接口最前，其次物理网卡，最后虚拟网卡
+    // 设计原因：用户希望启动监测的网卡在最左边，方便查看和切换
+    readonly property var sortedInterfaces: {
+        if (!root.ready || root.networkInterfaces.length === 0) return []
+        var physical = []
+        var virtual = []
+        for (var i = 0; i < root.networkInterfaces.length; i++) {
+            var name = root.networkInterfaces[i]
+            if (name === root.activeInterface) continue
+            if (root.isPhysicalIf(name)) physical.push(name)
+            else virtual.push(name)
+        }
+        physical.sort()
+        virtual.sort()
+        var result = []
+        if (root.activeInterface) result.push(root.activeInterface)
+        return result.concat(physical).concat(virtual)
+    }
+
     // 紧凑格式化速度（用于任务栏图标和 tooltip，不带单位后缀，节省空间）
     // 设计原因：任务栏 ~48px 空间有限，"1.2M" 比 "1.2 MB/s" 节省约一半宽度
     // 最小单位为 KB：B 级别也转换为 KB 显示（如 512 B/s -> "0.50K"），
@@ -428,49 +453,69 @@ AppletItem {
                     }
                 }
 
-                // 接口切换 chip 列表（仅多接口时显示，一行等宽分散显示）
-                Row {
+                // 接口切换 chip 列表：水平滚动，活动接口在最左，物理网卡次之，虚拟网卡在后
+                // chip 少时分散撑满一行；chip 多超出宽度时固定宽度 + 水平滚动
+                Flickable {
+                    id: chipFlickable
                     Layout.fillWidth: true
-                    spacing: 6
+                    Layout.preferredHeight: 32
                     visible: root.ready && root.networkInterfaces.length > 1
+                    contentWidth: Math.max(chipRow.width, width)
+                    contentHeight: chipRow.height
+                    flickableDirection: Flickable.HorizontalFlick
+                    clip: true
 
-                    Repeater {
-                        model: root.networkInterfaces
+                    // 等宽分配宽度：假设所有 chip 等宽撑满时的单个宽度
+                    readonly property real equalChipWidth: root.sortedInterfaces.length > 0
+                        ? (width - 6 * (root.sortedInterfaces.length - 1)) / root.sortedInterfaces.length
+                        : 0
 
-                        Rectangle {
-                            // 每个 chip 等宽分配，撑满一行分散显示
-                            width: root.networkInterfaces.length > 0
-                                   ? (parent.width - 6 * (root.networkInterfaces.length - 1)) / root.networkInterfaces.length
-                                   : 0
-                            height: 28
-                            radius: 8
-                            color: modelData === root.activeInterface
-                                   ? root.accentBlue
-                                   : (chipMouse.containsMouse ? root.accentBlueLight : root.cardBackground)
-                            border.width: 1
-                            border.color: modelData === root.activeInterface
-                                           ? root.accentBlue
-                                           : root.cardBorder
+                    Row {
+                        id: chipRow
+                        spacing: 6
 
-                            Text {
-                                id: chipText
-                                anchors.centerIn: parent
-                                text: modelData
-                                font.pixelSize: 11
-                                font.weight: modelData === root.activeInterface ? Font.Bold : Font.Normal
-                                color: modelData === root.activeInterface ? "white" : root.primaryText
-                            }
+                        Repeater {
+                            model: root.sortedInterfaces
 
-                            MouseArea {
-                                id: chipMouse
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                hoverEnabled: true
-                                onClicked: {
-                                    if (root.applet) root.applet.setActiveInterface(modelData)
+                            Rectangle {
+                                // 宽度取等宽和自然宽度的较大值：
+                                // chip 少时 equalChipWidth > 自然宽度 -> 分散撑满一行
+                                // chip 多时 自然宽度 > equalChipWidth -> 固定宽度 + 水平滚动
+                                width: Math.max(chipFlickable.equalChipWidth, chipText.implicitWidth + 24)
+                                height: 28
+                                radius: 8
+                                color: modelData === root.activeInterface
+                                       ? root.accentBlue
+                                       : (chipMouse.containsMouse ? root.accentBlueLight : root.cardBackground)
+                                border.width: 1
+                                border.color: modelData === root.activeInterface
+                                               ? root.accentBlue
+                                               : root.cardBorder
+
+                                Text {
+                                    id: chipText
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    font.pixelSize: 11
+                                    font.weight: modelData === root.activeInterface ? Font.Bold : Font.Normal
+                                    color: modelData === root.activeInterface ? "white" : root.primaryText
+                                }
+
+                                MouseArea {
+                                    id: chipMouse
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        if (root.applet) root.applet.setActiveInterface(modelData)
+                                    }
                                 }
                             }
                         }
+                    }
+
+                    ScrollBar.horizontal: ScrollBar {
+                        policy: ScrollBar.AsNeeded
                     }
                 }
 
@@ -525,76 +570,176 @@ AppletItem {
         id: contextMenu
 
         Platform.MenuItem {
-            text: qsTr("刷新")
-            onTriggered: {
-                if (root.applet) root.applet.refresh()
-            }
-        }
-
-        Platform.MenuSeparator {}
-
-        Platform.MenuItem {
             text: qsTr("设置")
-            onTriggered: settingsWindow.show()
+            onTriggered: {
+                settingsWindow.show()
+                settingsWindow.raise()
+                settingsWindow.requestActivate()
+            }
         }
 
         Platform.MenuSeparator {}
 
         Platform.MenuItem {
             text: qsTr("关于")
-            onTriggered: aboutDialog.open()
+            onTriggered: {
+                aboutWindow.show()
+                aboutWindow.raise()
+                aboutWindow.requestActivate()
+            }
         }
     }
 
-    // 关于对话框：显示插件信息
-    Dialog {
-        id: aboutDialog
-        anchors.centerIn: parent
-        modal: true
-        width: 280
-        height: 160
+    // 关于窗口：独立顶层窗口，在桌面中间弹出，展示作者信息
+    // 与设置窗口同样的 frameless + 自定义标题栏模式
+    Window {
+        id: aboutWindow
+        width: 320
+        height: 230
+        visible: false
+        flags: Qt.FramelessWindowHint | Qt.Window
+        modality: Qt.NonModal
+        color: "transparent"
 
-        background: Rectangle {
-            color: root.cardBackground
-            radius: 12
-            border.width: 1
-            border.color: root.cardBorder
+        onVisibleChanged: {
+            if (visible) {
+                x = (Screen.width - width) / 2
+                y = (Screen.height - height) / 2
+            }
         }
 
-        contentItem: ColumnLayout {
-            spacing: 8
+        Rectangle {
+            anchors.fill: parent
+            color: "#f5f5f5"
+            radius: 12
+            border.width: 1
+            border.color: "#e0e0e0"
 
-            Text {
-                text: qsTr("网络速度监控")
-                font.pixelSize: 16
-                font.weight: Font.Bold
-                color: root.primaryText
-                Layout.alignment: Qt.AlignHCenter
-            }
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 0
+                spacing: 0
 
-            Text {
-                text: qsTr("版本：1.0")
-                font.pixelSize: 12
-                color: root.secondaryText
-                Layout.alignment: Qt.AlignHCenter
-            }
+                // 自定义标题栏（可拖动）
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 44
+                    color: "transparent"
 
-            Text {
-                text: qsTr("监控网络速度和流量")
-                font.pixelSize: 11
-                color: root.tertiaryText
-                Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 240
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-            }
+                    MouseArea {
+                        anchors.fill: parent
+                        drag.target: aboutWindow
+                    }
 
-            Item { Layout.fillHeight: true }
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 16
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("关于")
+                        font.pixelSize: 15
+                        font.weight: Font.Bold
+                        color: "#333333"
+                    }
 
-            Button {
-                text: qsTr("确定")
-                Layout.alignment: Qt.AlignHCenter
-                onClicked: aboutDialog.close()
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 28
+                        height: 28
+                        radius: 14
+                        color: aboutCloseMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "×"
+                            font.pixelSize: 20
+                            font.weight: Font.Bold
+                            color: aboutCloseMouse.containsMouse ? root.accentRed : "#666666"
+                        }
+
+                        MouseArea {
+                            id: aboutCloseMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: aboutWindow.hide()
+                        }
+                    }
+                }
+
+                // 内容区
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    anchors.margins: 0
+                    spacing: 10
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    Layout.topMargin: 4
+
+                    // 标题组：插件名 + 英文名紧凑排列
+                    ColumnLayout {
+                        spacing: 2
+                        Layout.alignment: Qt.AlignHCenter
+
+                        Text {
+                            text: qsTr("网络速度监控")
+                            font.pixelSize: 18
+                            font.weight: Font.Bold
+                            color: "#333333"
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+
+                        Text {
+                            text: "JNetApplet"
+                            font.pixelSize: 12
+                            color: "#999999"
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                    }
+
+                    // 分隔线
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#e0e0e0"
+                    }
+
+                    // 信息行
+                    ColumnLayout {
+                        spacing: 6
+                        Layout.fillWidth: true
+
+                        Text {
+                            text: qsTr("版本：1.0")
+                            font.pixelSize: 12
+                            color: "#666666"
+                        }
+
+                        Text {
+                            text: qsTr("作者：Jokul")
+                            font.pixelSize: 12
+                            color: "#666666"
+                        }
+
+                        Text {
+                            text: qsTr("描述：监控网络速度和流量")
+                            font.pixelSize: 12
+                            color: "#666666"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                            text: qsTr("仓库：git.jokul.space/Jokul/JNetApplet")
+                            font.pixelSize: 11
+                            color: "#999999"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
             }
         }
     }
@@ -610,6 +755,8 @@ AppletItem {
         flags: Qt.FramelessWindowHint | Qt.Window
         // NonModal：不阻塞桌面其他区域，用户可同时操作任务栏
         modality: Qt.NonModal
+        // 卸载按钮文字：复制命令后临时显示提示，定时器到期后还原
+        property string uninstallButtonText: qsTr("卸载插件")
         // 窗口透明：让圆角外的区域不显示，由内部 Rectangle 提供可见背景
         color: "transparent"
 
@@ -760,22 +907,33 @@ AppletItem {
 
                         Item { Layout.fillHeight: true }
 
-                        // 卸载插件按钮
+                        // 卸载插件按钮：文字可动态切换（复制命令后显示提示）
+                        // 提示状态期间按钮不可点击，文字变绿色
                         Rectangle {
                             id: uninstallButton
                             Layout.fillWidth: true
                             Layout.preferredHeight: 40
-                            color: uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08)
+                            // 提示状态时背景和边框变绿
+                            readonly property bool isStatus: settingsWindow.uninstallButtonText !== qsTr("卸载插件")
+                            color: isStatus
+                                   ? Qt.rgba(22/255, 163/255, 74/255, 0.08)
+                                   : (uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08))
                             radius: 10
                             border.width: 1
-                            border.color: root.accentRed
+                            border.color: isStatus ? Qt.rgba(22/255, 163/255, 74/255, 1) : root.accentRed
 
                             Text {
                                 anchors.centerIn: parent
-                                text: qsTr("卸载插件")
-                                font.pixelSize: 13
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.margins: 8
+                                text: settingsWindow.uninstallButtonText
+                                font.pixelSize: uninstallButton.isStatus ? 11 : 13
                                 font.weight: Font.Medium
-                                color: root.accentRed
+                                // 提示状态时文字绿色，否则红色
+                                color: uninstallButton.isStatus ? Qt.rgba(22/255, 163/255, 74/255, 1) : root.accentRed
+                                horizontalAlignment: Text.AlignHCenter
+                                wrapMode: Text.WordWrap
                             }
 
                             MouseArea {
@@ -783,21 +941,10 @@ AppletItem {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                // 提示状态期间禁用点击
+                                enabled: !uninstallButton.isStatus
                                 onClicked: uninstallConfirmDialog.open()
                             }
-                        }
-
-                        // 卸载状态提示（确认后显示，提示用户去终端执行）
-                        Text {
-                            id: uninstallStatus
-                            visible: false
-                            text: qsTr("卸载命令已复制到剪贴板，请在终端中粘贴执行")
-                            font.pixelSize: 11
-                            color: "#16a34a"
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.WordWrap
                         }
 
                         // 关闭按钮
@@ -831,13 +978,16 @@ AppletItem {
             }
         }
 
-        // 卸载确认对话框
+        // 卸载确认对话框：在设置窗口内水平居中
         Dialog {
             id: uninstallConfirmDialog
             width: 320
             height: 260
             modal: true
             visible: false
+            // 在设置窗口中心显示
+            x: (settingsWindow.width - width) / 2
+            y: (settingsWindow.height - height) / 2
 
             background: Rectangle {
                 color: "#f5f5f5"
@@ -860,7 +1010,7 @@ AppletItem {
                 }
 
                 Text {
-                    text: qsTr("确定要卸载此插件吗？此操作将删除插件文件并重启 dde-shell。")
+                    text: qsTr("以下命令用于卸载插件并重启 dde-shell，请复制到终端中执行：")
                     font.pixelSize: 12
                     color: "#333333"
                     Layout.alignment: Qt.AlignHCenter
@@ -919,7 +1069,7 @@ AppletItem {
                         }
                     }
 
-                    // 确认卸载按钮
+                    // 复制命令按钮
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
@@ -928,7 +1078,7 @@ AppletItem {
 
                         Text {
                             anchors.centerIn: parent
-                            text: qsTr("确认卸载")
+                            text: qsTr("复制命令")
                             font.pixelSize: 13
                             font.weight: Font.Medium
                             color: "white"
@@ -944,8 +1094,8 @@ AppletItem {
                                 clipboardHelper.selectAll()
                                 clipboardHelper.copy()
                                 uninstallConfirmDialog.close()
-                                // 显示状态提示，5 秒后自动隐藏
-                                uninstallStatus.visible = true
+                                // 卸载按钮文字临时替换为复制成功提示，5 秒后还原
+                                settingsWindow.uninstallButtonText = qsTr("卸载命令已复制到剪贴板，请在终端中粘贴执行")
                                 statusHideTimer.start()
                             }
                         }
@@ -963,11 +1113,11 @@ AppletItem {
         text: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
     }
 
-    // 卸载状态提示自动隐藏定时器
+    // 卸载按钮文字还原定时器：复制命令后 5 秒将按钮文字从提示还原为"卸载插件"
     Timer {
         id: statusHideTimer
         interval: 5000
-        onTriggered: uninstallStatus.visible = false
+        onTriggered: settingsWindow.uninstallButtonText = qsTr("卸载插件")
     }
 
     // 点击处理
