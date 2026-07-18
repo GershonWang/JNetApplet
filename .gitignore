@@ -23,3 +23,6 @@ cmake-build-*/
 # System files
 .DS_Store
 Thumbs.db
+
+# AI 工作流内部文档（不纳入版本控制）
+docs/superpowers/
