@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QRegularExpression>
+#include <QNetworkInterface>
 
 DS_BEGIN_NAMESPACE
 
@@ -103,6 +104,12 @@ QString NetworkMonitorApplet::activeInterface() const
     return m_activeInterface;
 }
 
+// 返回活动接口的 IPv4 地址，供 QML 显示
+QString NetworkMonitorApplet::ipAddress() const
+{
+    return m_ipAddress;
+}
+
 void NetworkMonitorApplet::refresh()
 {
     readNetworkStats();
@@ -114,6 +121,8 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
         m_activeInterface = interface;
         m_firstUpdate = true;
         emit activeInterfaceChanged();
+        // 接口切换后立即检测新接口的 IP 地址
+        detectIpAddress();
     }
 }
 
@@ -167,14 +176,27 @@ void NetworkMonitorApplet::readNetworkStats()
         
         // 自动选择活动接口
         if (m_activeInterface.isEmpty() && !m_interfaceList.isEmpty()) {
-            // 优先选择有流量的接口
+            // 优先选择物理网卡（wlp/wlan/enp/eth）中有流量的接口，
+            // 避免选中 Meta/tun0 等虚拟代理接口作为默认显示
             for (const QString &name : m_interfaceList) {
+                if (!isPhysicalInterface(name)) continue;
                 const NetworkInterface &iface = m_interfaces[name];
                 if (iface.rxBytes > 0 || iface.txBytes > 0) {
                     m_activeInterface = name;
                     break;
                 }
             }
+            // 其次选择任意有流量的接口（物理网卡都无流量时的兜底）
+            if (m_activeInterface.isEmpty()) {
+                for (const QString &name : m_interfaceList) {
+                    const NetworkInterface &iface = m_interfaces[name];
+                    if (iface.rxBytes > 0 || iface.txBytes > 0) {
+                        m_activeInterface = name;
+                        break;
+                    }
+                }
+            }
+            // 最后选第一个（无任何流量时）
             if (m_activeInterface.isEmpty()) {
                 m_activeInterface = m_interfaceList.first();
             }
@@ -190,6 +212,8 @@ void NetworkMonitorApplet::readNetworkStats()
     
     calculateSpeed();
     emit statsChanged();
+    // 每次刷新都检测 IP，以应对 DHCP 续约等 IP 变更场景
+    detectIpAddress();
 }
 
 void NetworkMonitorApplet::calculateSpeed()
@@ -253,6 +277,40 @@ qint64 NetworkMonitorApplet::getActiveTxBytes() const
         return 0;
     }
     return m_interfaces[m_activeInterface].txBytes;
+}
+
+// 检测活动接口的 IPv4 地址
+// 跳过 IPv6 和 loopback，只取第一个有效 IPv4 地址
+// IP 变化时发射 ipAddressChanged 信号通知 QML 更新
+// 设计原因：DHCP 续约、网络切换等场景下 IP 可能变化，需持续检测
+void NetworkMonitorApplet::detectIpAddress()
+{
+    QString newIp;
+    if (!m_activeInterface.isEmpty()) {
+        QNetworkInterface iface = QNetworkInterface::interfaceFromName(m_activeInterface);
+        for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+            // 只取 IPv4 地址，跳过 IPv6 和 loopback
+            if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol
+                && !entry.ip().isLoopback()) {
+                newIp = entry.ip().toString();
+                break;
+            }
+        }
+    }
+    if (m_ipAddress != newIp) {
+        m_ipAddress = newIp;
+        emit ipAddressChanged();
+    }
+}
+
+// 判断是否为物理网卡
+// 物理网卡前缀：无线 wlp/wlan/wifi，有线 enp/eth
+// 虚拟接口（Meta/tun/tap/docker/veth/br-）返回 false，
+// 用于自动选择时优先真实网卡而非代理 TUN 接口
+bool NetworkMonitorApplet::isPhysicalInterface(const QString &name) const
+{
+    return name.startsWith("wlp") || name.startsWith("wlan")
+        || name.startsWith("enp") || name.startsWith("eth");
 }
 
 D_APPLET_CLASS(NetworkMonitorApplet)

@@ -38,6 +38,8 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QStringList interfaceStats READ interfaceStats NOTIFY statsChanged)
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
     Q_PROPERTY(QString activeInterface READ activeInterface NOTIFY activeInterfaceChanged)
+    // 活动接口的 IPv4 地址，供 QML 在弹出面板和 tooltip 中显示
+    Q_PROPERTY(QString ipAddress READ ipAddress NOTIFY ipAddressChanged)
 
 public:
     explicit NetworkMonitorApplet(QObject *parent = nullptr);
@@ -54,6 +56,7 @@ public:
     QStringList interfaceStats() const;
     bool ready() const;
     QString activeInterface() const;
+    QString ipAddress() const;
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void setActiveInterface(const QString &interface);
@@ -65,11 +68,17 @@ signals:
     void statsChanged();
     void readyChanged();
     void activeInterfaceChanged();
+    void ipAddressChanged();
 
 private:
     void readNetworkStats();
     void calculateSpeed();
     void detectInterfaces();
+    // 检测活动接口的 IPv4 地址，变化时发射 ipAddressChanged
+    void detectIpAddress();
+    // 判断是否为物理网卡（无线 wlp/wlan，有线 enp/eth），
+    // 用于自动选择时优先真实网卡而非虚拟代理接口（如 Meta/tun0）
+    bool isPhysicalInterface(const QString &name) const;
     qint64 getActiveRxBytes() const;
     qint64 getActiveTxBytes() const;
 
@@ -77,6 +86,7 @@ private:
     QMap<QString, NetworkInterface> m_interfaces;
     QStringList m_interfaceList;
     QString m_activeInterface;
+    QString m_ipAddress;           // 活动接口的 IPv4 地址
     
     // 速度计算
     qint64 m_lastRxBytes;
