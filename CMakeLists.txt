@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Quick DBus)
+find_package(Qt6 REQUIRED COMPONENTS Core Quick DBus Network)
 find_package(Dtk6 REQUIRED COMPONENTS Core)
 find_package(DDEShell REQUIRED)
 
@@ -29,6 +29,7 @@ target_link_libraries(space.jokul.JNetApplet PRIVATE
     Qt6::Core
     Qt6::Quick
     Qt6::DBus
+    Qt6::Network
     Dtk6::Core
     Dde::Shell
 )
