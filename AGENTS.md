@@ -6,12 +6,21 @@ Guidance for AI agents working in this repo. Verified against `CMakeLists.txt`,
 
 ## What this is
 
-A **pure-QML dde-shell applet** (deepin desktop shell panel widget). There is no
-C++ and no `.so` plugin — the entire applet is `package/main.qml` +
-`package/metadata.json`, installed as a data package via dde-shell's CMake macros.
+A **dde-shell applet** (deepin desktop shell panel widget) for network speed monitoring.
+Uses a C++ backend (`NetworkMonitorApplet` class) for data collection and a QML frontend
+for the UI. The C++ backend reads `/proc/net/dev` to monitor network traffic.
 
 - Applet ID: `space.jokul.JNetApplet`.
-- Root element of `main.qml` must be `AppletItem` from `import org.deepin.ds 1.0`.
+- Root element of `networkview.qml` must be `AppletItem` from `import org.deepin.ds 1.0`.
+
+## Features
+
+- Real-time download/upload speed monitoring (1-second refresh)
+- Total data transfer statistics
+- Multiple network interface support with interface switching
+- Taskbar icon displays live speed (changes color at high speeds)
+- Hover tooltip shows speed summary
+- Click to open detailed popup
 
 ## Build & install
 
@@ -24,55 +33,86 @@ cmake --build build
 sudo cmake --install build   # -> /usr/share/dde-shell/space.jokul.JNetApplet/
 ```
 
-`cmake --install` needs `sudo` because the default `DDE_SHELL_PACKAGE_INSTALL_DIR`
-is `/usr/share/dde-shell` (a CMake CACHE variable on this system). For a user-local
-install instead:
+Or use the install script:
 
 ```sh
-cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local
-cmake --build build && cmake --install build   # -> ~/.local/share/dde-shell/space.jokul.JNetApplet/
+bash install.sh
+```
+
+`cmake --install` needs `sudo` because the default `DDE_SHELL_PACKAGE_INSTALL_DIR`
+is `/usr/share/dde-shell` (a CMake CACHE variable on this system).
+
+After installation, restart dde-shell:
+
+```sh
+systemctl --user restart dde-shell@DDE
 ```
 
 There is no test, lint, typecheck, or CI target. Verification is manual: install,
 then restart `dde-shell` (it discovers applets by scanning the install dir for
-`metadata.json`). The build also stages a copy at `build/packages/space.jokul.JNetApplet/`
-for previewing the QML without installing.
+`metadata.json`).
+
+## Project structure
+
+```
+├── CMakeLists.txt                 # Build configuration
+├── install.sh                     # Install script
+├── networkmonitorapplet.h         # C++ backend header
+├── networkmonitorapplet.cpp       # C++ backend implementation
+├── package/
+│   ├── metadata.json              # Plugin metadata
+│   └── networkview.qml            # QML UI
+└── AGENTS.md                      # This file
+```
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────┐
+│              DDE Shell Taskbar                   │
+├──────────────────────────────────────────────────┤
+│        space.jokul.JNetApplet                    │
+│  ┌────────────────┐  ┌────────────────────────┐  │
+│  │ C++ Backend    │  │ QML Frontend           │  │
+│  │ NetworkMonitor │  │ networkview.qml        │  │
+│  │ - /proc/net/dev│  │ - Speed display        │  │
+│  │ - Speed calc   │  │ - Popup window         │  │
+│  │ - Interface    │  │ - Interface switcher   │  │
+│  └────────────────┘  └────────────────────────┘  │
+└──────────────────────────────────────────────────┘
+```
+
+## C++ Backend (NetworkMonitorApplet)
+
+Inherits from `DApplet`, provides:
+- `downloadSpeed` / `uploadSpeed`: Current speed in bytes/sec
+- `totalDownload` / `totalUpload`: Total data transferred
+- `networkInterfaces`: List of available interfaces
+- `interfaceStats`: Per-interface statistics
+- `activeInterface`: Currently selected interface
+- `refresh()`: Manually trigger stats update
+- `setActiveInterface(name)`: Switch active interface
 
 ## Identifier correspondence (keep in sync when renaming)
 
 | Where | Field | Value |
 |---|---|---|
-| `CMakeLists.txt` | `ds_install_package(PACKAGE …)` | `space.jokul.JNetApplet` |
+| `CMakeLists.txt` | `add_library(...)` target | `space.jokul.JNetApplet` |
+| `CMakeLists.txt` | `PLUGIN_ID` | `space.jokul.JNetApplet` |
 | `package/metadata.json` | `Plugin.Id` | `space.jokul.JNetApplet` |
 
-The CMake `PACKAGE` becomes the install subdirectory name; `Plugin.Id` is the runtime
-identifier. They don't technically have to match, but every official dde-shell applet
-keeps them identical — treat them as required to match.
-
-`Plugin.Url` (`main.qml`) is a path **relative to `package/`**, not an identifier.
+`Plugin.Url` (`networkview.qml`) is a path **relative to `package/`**, not an identifier.
 Keep it pointing at the entry QML.
 
 ## Required metadata fields (QML applet)
 
-`metadata.json` must contain `Plugin.Version`, `Plugin.Id`, and `Plugin.Url`. The
-current file is complete — don't drop any. (`Plugin.Url` is omitted only for
-widget-based, non-QML plugins.)
-
-## Package layout is fixed by the macro
-
-`ds_install_package` reads `package/` relative to `CMAKE_CURRENT_SOURCE_DIR` by
-default (overridable via `PACKAGE_ROOT_DIR`, not used here). Keep the directory named
-`package/` with `metadata.json` at its root.
-
-## Adding translations (not yet set up)
-
-If i18n is needed, use the `ds_handle_package(PACKAGE <id>)` macro from the same
-DDEShell package. It expects `.ts` files at `translations/<id>_<lang>.ts` and
-installs compiled `.qm` to `${DDE_SHELL_TRANSLATION_INSTALL_DIR}/<id>/translations/`.
-Do not invent a different translation workflow.
+`metadata.json` must contain `Plugin.Version`, `Plugin.Id`, `Plugin.Url`, and
+`Plugin.Parent`. The current file is complete — don't drop any.
 
 ## Conventions
 
 - QML files carry SPDX headers (`SPDX-FileCopyrightText` +
   `SPDX-License-Identifier: LGPL-3.0-or-later`). Preserve on new/edited QML files.
+- C++ files carry SPDX headers (`SPDX-License-Identifier: LGPL-3.0-or-later`).
 - Default branch is `master` (not `main`).
+- QML property types must be QML-compatible (use `double`/`real` instead of `qint64`).
