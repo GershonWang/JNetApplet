@@ -110,6 +110,12 @@ QString NetworkMonitorApplet::ipAddress() const
     return m_ipAddress;
 }
 
+// 返回活动接口的 IPv6 全球地址，供 QML 显示
+QString NetworkMonitorApplet::ipv6Address() const
+{
+    return m_ipv6Address;
+}
+
 void NetworkMonitorApplet::refresh()
 {
     readNetworkStats();
@@ -279,27 +285,40 @@ qint64 NetworkMonitorApplet::getActiveTxBytes() const
     return m_interfaces[m_activeInterface].txBytes;
 }
 
-// 检测活动接口的 IPv4 地址
-// 跳过 IPv6 和 loopback，只取第一个有效 IPv4 地址
-// IP 变化时发射 ipAddressChanged 信号通知 QML 更新
-// 设计原因：DHCP 续约、网络切换等场景下 IP 可能变化，需持续检测
+// 检测活动接口的 IPv4 与 IPv6 地址
+// IPv4：跳过 loopback，取第一个
+// IPv6：跳过 loopback 和 link-local (fe80::)，取第一个全球地址
+// 任一地址变化时分别 emit 对应信号通知 QML 更新
+// 设计原因：DHCP 续约、网络切换、IPv6 SLAAC 等场景下地址可能变化，需持续检测
 void NetworkMonitorApplet::detectIpAddress()
 {
     QString newIp;
+    QString newIpv6;
     if (!m_activeInterface.isEmpty()) {
         QNetworkInterface iface = QNetworkInterface::interfaceFromName(m_activeInterface);
         for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
-            // 只取 IPv4 地址，跳过 IPv6 和 loopback
+            // IPv4：跳过 loopback，取第一个
             if (entry.ip().protocol() == QAbstractSocket::IPv4Protocol
-                && !entry.ip().isLoopback()) {
+                && !entry.ip().isLoopback()
+                && newIp.isEmpty()) {
                 newIp = entry.ip().toString();
-                break;
+            }
+            // IPv6：跳过 loopback 和 link-local (fe80::)，取第一个全球地址
+            if (entry.ip().protocol() == QAbstractSocket::IPv6Protocol
+                && !entry.ip().isLoopback()
+                && !entry.ip().isLinkLocal()
+                && newIpv6.isEmpty()) {
+                newIpv6 = entry.ip().toString();
             }
         }
     }
     if (m_ipAddress != newIp) {
         m_ipAddress = newIp;
         emit ipAddressChanged();
+    }
+    if (m_ipv6Address != newIpv6) {
+        m_ipv6Address = newIpv6;
+        emit ipv6AddressChanged();
     }
 }
 
