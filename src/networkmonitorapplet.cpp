@@ -121,17 +121,10 @@ QString NetworkMonitorApplet::ipv6Address() const
 // dde-shell 加载时存入 DPluginMetaData，此处通过继承自 DApplet 的 pluginMetaData() 读取
 QString NetworkMonitorApplet::version() const
 {
-    // metadata.json 结构：{ "Plugin": { "Version": "x.y.z", ... } }
-    // DPluginMetaData 内部存储方式不确定：可能已展开 Plugin 层级（value("Version") 直接可用），
-    // 也可能保留原始嵌套结构（需 value("Plugin").toMap().value("Version")）
-    // 两种都尝试，取非空值
-    const DPluginMetaData meta = pluginMetaData();
-    QString v = meta.value("Version").toString();
-    if (v.isEmpty()) {
-        v = meta.value("Plugin").toMap().value("Version").toString();
-    }
-    qDebug() << "[JNetApplet] version() =" << v;
-    return v;
+    // DPluginMetaData::value() 已在 "Plugin" 层级内部查找（源码：frame/pluginmetadata.cpp）
+    // metadata.json 的 { "Plugin": { "Version": "x.y.z" } } 被 DPluginMetaData 加载后，
+    // value("Version") 直接返回版本号，无需再 .value("Plugin").toMap() 展开
+    return pluginMetaData().value("Version").toString();
 }
 
 void NetworkMonitorApplet::refresh()
