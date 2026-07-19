@@ -31,6 +31,8 @@ AppletItem {
     readonly property string activeInterface: applet ? (applet.activeInterface || "") : ""
     // 活动接口的 IPv4 地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipAddress: applet ? (applet.ipAddress || "") : ""
+    // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
+    readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
     readonly property var interfaceStats: applet ? (applet.interfaceStats || []) : []
 
@@ -180,12 +182,14 @@ AppletItem {
         }
     }
 
-    // 悬停提示：网卡名 + IP 地址一行展示
-    // PanelToolTip 不支持 contentItem 覆盖和文本对齐，用默认左对齐 text 属性
+    // 悬停提示：网卡名 + IPv4 单行，IPv6 在第二行（仅有 IPv6 时追加）
+    // 设计原因：IPv6 地址较长，单行容纳不下；无 IPv6 时保持单行与原视觉一致
     PanelToolTip {
         id: toolTip
         text: root.ready
-              ? (root.activeInterface + " · " + qsTr("IP地址：") + (root.ipAddress || qsTr("无")))
+              ? (root.activeInterface
+                 + " · IPv4：" + (root.ipAddress || qsTr("无"))
+                 + (root.ipv6Address ? "\nIPv6：" + root.ipv6Address : ""))
               : qsTr("未检测到网络接口")
         toolTipX: DockPanelPositioner.x
         toolTipY: DockPanelPositioner.y
@@ -268,7 +272,8 @@ AppletItem {
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: 180
-                            Layout.preferredHeight: 40
+                            // 有 IPv6 时增高以容纳第三行；无 IPv6 时保持原 40px
+                            Layout.preferredHeight: root.ipv6Address ? 54 : 40
                             color: root.cardBackground
                             radius: 8
                             border.width: 1
@@ -287,10 +292,19 @@ AppletItem {
                                 }
 
                                 Text {
-                                    text: root.ipAddress ? qsTr("IP地址：") + root.ipAddress : ""
+                                    text: root.ipAddress ? qsTr("IPv4：") + root.ipAddress : ""
                                     font.pixelSize: 13
                                     color: root.secondaryText
                                     visible: root.ipAddress !== ""
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+
+                                // IPv6 全球地址行，无 IPv6 时隐藏不占位
+                                Text {
+                                    text: root.ipv6Address ? qsTr("IPv6：") + root.ipv6Address : ""
+                                    font.pixelSize: 13
+                                    color: root.secondaryText
+                                    visible: root.ipv6Address !== ""
                                     Layout.alignment: Qt.AlignHCenter
                                 }
                             }
