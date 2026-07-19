@@ -22,9 +22,10 @@ AppletItem {
 
     // 水平任务栏：宽度稍宽容纳双行数值，高度匹配 dock 尺寸
     // 竖向任务栏：宽度匹配 dock 尺寸（~40px），高度加大容纳竖排字符
-    // 2.2 倍：dockSize=40 时约 88px，可容纳最多 8 字符的速度字符串（如 "1023.99K"）
+    // 2.4 倍：dockSize=40 时约 96px，可容纳最多 8 字符的速度字符串（如 "1023.99K"）
+    // 增大字号后需更高以容纳竖排字符
     implicitWidth: isVerticalDock ? dockSize : Math.round(dockSize * 1.35)
-    implicitHeight: isVerticalDock ? Math.round(dockSize * 2.2) : dockSize
+    implicitHeight: isVerticalDock ? Math.round(dockSize * 2.4) : dockSize
 
     readonly property var applet: Applet
     readonly property bool ready: applet ? applet.ready : false
@@ -150,16 +151,16 @@ AppletItem {
 
             Text {
                 text: "↓"
-                font.pixelSize: root.dockSize * 0.18
+                font.pixelSize: root.dockSize * 0.20
                 color: root.secondaryText
                 Layout.alignment: Qt.AlignVCenter
             }
 
             Text {
                 text: root.formatSpeedShort(root.downloadSpeed)
-                font.pixelSize: root.dockSize * 0.22
+                font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
-                color: root.downloadValueColor
+                color: root.primaryText
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
             }
@@ -171,16 +172,16 @@ AppletItem {
 
             Text {
                 text: "↑"
-                font.pixelSize: root.dockSize * 0.18
+                font.pixelSize: root.dockSize * 0.20
                 color: root.secondaryText
                 Layout.alignment: Qt.AlignVCenter
             }
 
             Text {
                 text: root.formatSpeedShort(root.uploadSpeed)
-                font.pixelSize: root.dockSize * 0.22
+                font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
-                color: root.uploadValueColor
+                color: root.primaryText
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
             }
@@ -204,7 +205,7 @@ AppletItem {
 
             Text {
                 text: "↓"
-                font.pixelSize: root.dockSize * 0.18
+                font.pixelSize: root.dockSize * 0.20
                 color: root.secondaryText
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -215,10 +216,10 @@ AppletItem {
                 model: root.formatSpeedShort(root.downloadSpeed).split('')
                 Text {
                     text: modelData
-                    font.pixelSize: root.dockSize * 0.22
+                    font.pixelSize: root.dockSize * 0.25
                     height: font.pixelSize
                     font.weight: Font.Medium
-                    color: root.downloadValueColor
+                    color: root.primaryText
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
@@ -231,7 +232,7 @@ AppletItem {
 
             Text {
                 text: "↑"
-                font.pixelSize: root.dockSize * 0.18
+                font.pixelSize: root.dockSize * 0.20
                 color: root.secondaryText
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -240,10 +241,10 @@ AppletItem {
                 model: root.formatSpeedShort(root.uploadSpeed).split('')
                 Text {
                     text: modelData
-                    font.pixelSize: root.dockSize * 0.22
+                    font.pixelSize: root.dockSize * 0.25
                     height: font.pixelSize
                     font.weight: Font.Medium
-                    color: root.uploadValueColor
+                    color: root.primaryText
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
