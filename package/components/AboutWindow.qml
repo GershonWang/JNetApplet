@@ -99,6 +99,8 @@ Window {
             }
 
             // 标题区：插件中文名 + 英文名，整体居中
+            // 注意：用 Layout.fillWidth + horizontalAlignment 而非 Layout.alignment，
+            // 后者在 ColumnLayout 内对 Text 不可靠（实测会左对齐贴边）
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
@@ -108,14 +110,16 @@ Window {
                     font.pixelSize: 18
                     font.weight: Font.Bold
                     color: "#333333"
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
                 }
 
                 Text {
                     text: "JNetApplet"
                     font.pixelSize: 12
                     color: "#999999"
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
 
