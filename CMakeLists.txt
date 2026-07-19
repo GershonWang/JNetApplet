@@ -36,5 +36,10 @@ target_link_libraries(space.jokul.JNetApplet PRIVATE
 
 # 安装到dde-shell插件目录
 install(TARGETS space.jokul.JNetApplet DESTINATION /usr/lib/x86_64-linux-gnu/dde-shell)
-install(FILES package/metadata.json DESTINATION /usr/share/dde-shell/${PLUGIN_ID})
+
+# 由模板生成 metadata.json，版本号从 project() 取，避免多处手动维护
+# 设计原因：版本号唯一源为 CMakeLists.txt 顶部的 project(... VERSION)，
+# configure_file 在构建目录生成最终 metadata.json，install 安装生成文件
+configure_file(package/metadata.json.in ${CMAKE_CURRENT_BINARY_DIR}/metadata.json @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/metadata.json DESTINATION /usr/share/dde-shell/${PLUGIN_ID})
 install(FILES package/networkview.qml DESTINATION /usr/share/dde-shell/${PLUGIN_ID})

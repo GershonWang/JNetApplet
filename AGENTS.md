@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Guidance for AI agents working in this repo. Verified against `CMakeLists.txt`,
-`package/metadata.json`, and the installed macro file at
+`package/metadata.json.in`, and the installed macro file at
 `/usr/lib/x86_64-linux-gnu/cmake/DDEShell/DDEShellPackageMacros.cmake`.
 
 ## What this is
@@ -71,7 +71,7 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 ├── networkmonitorapplet.h         # C++ backend header
 ├── networkmonitorapplet.cpp       # C++ backend implementation
 ├── package/
-│   ├── metadata.json              # Plugin metadata
+│   ├── metadata.json.in           # Plugin metadata 模板（由 CMake 生成 metadata.json）
 │   └── networkview.qml            # QML UI
 ├── docs/                          # Design docs and implementation plans
 └── AGENTS.md                      # This file
@@ -112,15 +112,26 @@ Inherits from `DApplet`, provides:
 |---|---|---|
 | `CMakeLists.txt` | `add_library(...)` target | `space.jokul.JNetApplet` |
 | `CMakeLists.txt` | `PLUGIN_ID` | `space.jokul.JNetApplet` |
-| `package/metadata.json` | `Plugin.Id` | `space.jokul.JNetApplet` |
+| `package/metadata.json.in` | `Plugin.Id` | `space.jokul.JNetApplet` |
 
 `Plugin.Url` (`networkview.qml`) is a path **relative to `package/`**, not an identifier.
 Keep it pointing at the entry QML.
 
 ## Required metadata fields (QML applet)
 
-`metadata.json` must contain `Plugin.Version`, `Plugin.Id`, `Plugin.Url`, and
-`Plugin.Parent`. The current file is complete — don't drop any.
+`package/metadata.json.in` is the template; CMake's `configure_file()` generates the
+final `metadata.json` in the build directory at configure time. The template must
+contain `Plugin.Version`, `Plugin.Id`, `Plugin.Url`, and `Plugin.Parent`. Don't drop any.
+
+## Version management
+
+**Single source of truth**: `CMakeLists.txt` line 3 `project(JNetApplet VERSION x.y.z)`.
+
+- `package/metadata.json.in` uses `@PROJECT_VERSION@` placeholder, substituted at
+  configure time -> installed `metadata.json` always matches.
+- `build-deb.sh` extracts the version directly from `CMakeLists.txt` via grep.
+- **To bump the version**: edit only the `project(... VERSION ...)` line in
+  `CMakeLists.txt`. All downstream consumers (install, deb) pick it up automatically.
 
 ## Conventions
 

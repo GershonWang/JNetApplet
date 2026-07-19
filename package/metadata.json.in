@@ -1,6 +1,6 @@
 {
   "Plugin": {
-    "Version": "1.0",
+    "Version": "@PROJECT_VERSION@",
     "Id": "space.jokul.JNetApplet",
     "Url": "networkview.qml",
     "Parent": "org.deepin.ds.dock",

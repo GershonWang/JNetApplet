@@ -68,7 +68,7 @@ bash build-deb.sh
 ├── networkmonitorapplet.h                  # C++ 后端头文件
 ├── networkmonitorapplet.cpp                # C++ 后端实现
 ├── package/
-│   ├── metadata.json                       # 插件元数据
+│   ├── metadata.json.in                   # 插件元数据模板（由 CMake 生成 metadata.json）
 │   └── networkview.qml                     # QML 界面
 ├── docs/                                   # 设计文档与实现计划
 ├── README.md                               # 本文件
