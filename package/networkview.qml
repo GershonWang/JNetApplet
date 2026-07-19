@@ -197,7 +197,7 @@ AppletItem {
 
         // 下载列：箭头在上，数值字符从上往下竖排
         Column {
-            spacing: 1
+            spacing: 0
             Layout.alignment: Qt.AlignHCenter
 
             Text {
@@ -214,6 +214,7 @@ AppletItem {
                 Text {
                     text: modelData
                     font.pixelSize: root.dockSize * 0.22
+                    height: font.pixelSize
                     font.weight: Font.Medium
                     color: root.downloadValueColor
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -223,7 +224,7 @@ AppletItem {
 
         // 上传列：结构与下载列对称，颜色用 uploadValueColor
         Column {
-            spacing: 1
+            spacing: 0
             Layout.alignment: Qt.AlignHCenter
 
             Text {
@@ -238,6 +239,7 @@ AppletItem {
                 Text {
                     text: modelData
                     font.pixelSize: root.dockSize * 0.22
+                    height: font.pixelSize
                     font.weight: Font.Medium
                     color: root.uploadValueColor
                     anchors.horizontalCenter: parent.horizontalCenter
