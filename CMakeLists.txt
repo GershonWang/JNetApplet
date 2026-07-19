@@ -44,3 +44,8 @@ install(TARGETS space.jokul.JNetApplet DESTINATION /usr/lib/x86_64-linux-gnu/dde
 configure_file(package/metadata.json.in ${CMAKE_CURRENT_BINARY_DIR}/metadata.json @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/metadata.json DESTINATION /usr/share/dde-shell/${PLUGIN_ID})
 install(FILES package/networkview.qml DESTINATION /usr/share/dde-shell/${PLUGIN_ID})
+
+# 安装 components 子目录下所有 QML 组件
+# 设计原因：拆分出的子组件需随主 QML 一起安装到 dde-shell 插件目录，
+# 否则 networkview.qml 的 import "components" 在运行时找不到类型
+install(DIRECTORY package/components DESTINATION /usr/share/dde-shell/${PLUGIN_ID})

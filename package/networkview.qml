@@ -10,6 +10,7 @@ import Qt.labs.platform as Platform
 import org.deepin.ds 1.0
 import org.deepin.ds.dock 1.0
 import org.deepin.dtk 1.0
+import "components"
 
 AppletItem {
     id: root
@@ -673,158 +674,11 @@ AppletItem {
         }
     }
 
-    // 关于窗口：独立顶层窗口，在桌面中间弹出，展示作者信息
-    // 与设置窗口同样的 frameless + 自定义标题栏模式
-    Window {
+    // 关于窗口：抽取为独立组件 package/components/AboutWindow.qml
+    // 依赖通过属性传入：accentColor = root.accentRed
+    AboutWindow {
         id: aboutWindow
-        width: 320
-        height: 230
-        visible: false
-        flags: Qt.FramelessWindowHint | Qt.Window
-        modality: Qt.NonModal
-        color: "transparent"
-
-        onVisibleChanged: {
-            if (visible) {
-                x = (Screen.width - width) / 2
-                y = (Screen.height - height) / 2
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: "#f5f5f5"
-            radius: 12
-            border.width: 1
-            border.color: "#e0e0e0"
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 0
-                spacing: 0
-
-                // 自定义标题栏（可拖动）
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 44
-                    color: "transparent"
-
-                    MouseArea {
-                        anchors.fill: parent
-                        drag.target: aboutWindow
-                    }
-
-                    Text {
-                        anchors.left: parent.left
-                        anchors.leftMargin: 16
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("关于")
-                        font.pixelSize: 15
-                        font.weight: Font.Bold
-                        color: "#333333"
-                    }
-
-                    Rectangle {
-                        anchors.right: parent.right
-                        anchors.rightMargin: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 28
-                        height: 28
-                        radius: 14
-                        color: aboutCloseMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : "transparent"
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "×"
-                            font.pixelSize: 20
-                            font.weight: Font.Bold
-                            color: aboutCloseMouse.containsMouse ? root.accentRed : "#666666"
-                        }
-
-                        MouseArea {
-                            id: aboutCloseMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: aboutWindow.hide()
-                        }
-                    }
-                }
-
-                // 内容区
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    anchors.margins: 0
-                    spacing: 10
-                    Layout.leftMargin: 24
-                    Layout.rightMargin: 24
-                    Layout.topMargin: 4
-
-                    // 标题组：插件名 + 英文名紧凑排列
-                    ColumnLayout {
-                        spacing: 2
-                        Layout.alignment: Qt.AlignHCenter
-
-                        Text {
-                            text: qsTr("网络速度监控")
-                            font.pixelSize: 18
-                            font.weight: Font.Bold
-                            color: "#333333"
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-
-                        Text {
-                            text: "JNetApplet"
-                            font.pixelSize: 12
-                            color: "#999999"
-                            Layout.alignment: Qt.AlignHCenter
-                        }
-                    }
-
-                    // 分隔线
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 1
-                        color: "#e0e0e0"
-                    }
-
-                    // 信息行
-                    ColumnLayout {
-                        spacing: 6
-                        Layout.fillWidth: true
-
-                        Text {
-                            text: qsTr("版本：1.0")
-                            font.pixelSize: 12
-                            color: "#666666"
-                        }
-
-                        Text {
-                            text: qsTr("作者：Jokul")
-                            font.pixelSize: 12
-                            color: "#666666"
-                        }
-
-                        Text {
-                            text: qsTr("描述：监控网络速度和流量")
-                            font.pixelSize: 12
-                            color: "#666666"
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                        }
-
-                        Text {
-                            text: qsTr("仓库：git.jokul.space/Jokul/JNetApplet")
-                            font.pixelSize: 11
-                            color: "#999999"
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-            }
-        }
+        accentColor: root.accentRed
     }
 
     // 设置窗口：独立顶层窗口，在桌面中间弹出
