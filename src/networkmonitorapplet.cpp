@@ -127,6 +127,37 @@ QString NetworkMonitorApplet::version() const
     return pluginMetaData().value("Version").toString();
 }
 
+// 返回当前活动接口的下行速度历史，转换为 QVariantList of QPointF 供 QML 使用
+// 设计原因：QPointF 仅携带 x/y 两个值，上传与下载分别对应两个列表
+QVariantList NetworkMonitorApplet::speedHistoryDownload() const
+{
+    QVariantList list;
+    if (m_activeInterface.isEmpty() || !m_speedHistory.contains(m_activeInterface)) {
+        return list;
+    }
+    const QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
+    list.reserve(samples.size());
+    for (const SpeedSample &s : samples) {
+        list.append(QPointF(s.timestamp, s.downloadSpeed));
+    }
+    return list;
+}
+
+// 返回当前活动接口的上行速度历史，结构同 speedHistoryDownload
+QVariantList NetworkMonitorApplet::speedHistoryUpload() const
+{
+    QVariantList list;
+    if (m_activeInterface.isEmpty() || !m_speedHistory.contains(m_activeInterface)) {
+        return list;
+    }
+    const QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
+    list.reserve(samples.size());
+    for (const SpeedSample &s : samples) {
+        list.append(QPointF(s.timestamp, s.uploadSpeed));
+    }
+    return list;
+}
+
 void NetworkMonitorApplet::refresh()
 {
     readNetworkStats();
@@ -138,6 +169,8 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
         m_activeInterface = interface;
         m_firstUpdate = true;
         emit activeInterfaceChanged();
+        // 接口切换后通知 QML 趋势图切换显示新接口的历史数据
+        emit speedHistoryChanged();
         // 接口切换后立即检测新接口的 IP 地址
         detectIpAddress();
     }
@@ -190,7 +223,16 @@ void NetworkMonitorApplet::readNetworkStats()
     if (newInterfaces.keys() != m_interfaces.keys()) {
         m_interfaceList = newInterfaces.keys();
         m_interfaces = newInterfaces;
-        
+
+        // 清理已消失接口的历史缓冲，避免内存泄漏
+        // 设计原因：USB 网卡、VPN 隧道等接口可能随时消失，其历史数据不再需要
+        const QStringList oldIfaces = m_speedHistory.keys();
+        for (const QString &name : oldIfaces) {
+            if (!newInterfaces.contains(name)) {
+                m_speedHistory.remove(name);
+            }
+        }
+
         // 自动选择活动接口
         if (m_activeInterface.isEmpty() && !m_interfaceList.isEmpty()) {
             // 优先选择物理网卡（wlp/wlan/enp/eth）中有流量的接口，
@@ -255,7 +297,26 @@ void NetworkMonitorApplet::calculateSpeed()
     
     m_lastRxBytes = currentRxBytes;
     m_lastTxBytes = currentTxBytes;
-    
+
+    // 追加采样点到当前活动接口的环形缓冲
+    // 设计原因：applet 启动即持续采集，用户随时打开趋势图都能看到完整 5 分钟数据
+    if (!m_activeInterface.isEmpty()) {
+        SpeedSample sample;
+        sample.timestamp = QDateTime::currentSecsSinceEpoch();
+        sample.downloadSpeed = static_cast<double>(m_downloadSpeed);
+        sample.uploadSpeed = static_cast<double>(m_uploadSpeed);
+        m_speedHistory[m_activeInterface].append(sample);
+
+        // 滑动窗口裁剪：超过 300 点时丢弃最旧的
+        // removeFirst 是 O(n)，但 300 点每秒一次开销可忽略，无需复杂环形索引
+        QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
+        while (samples.size() > MAX_HISTORY_SAMPLES) {
+            samples.removeFirst();
+        }
+
+        emit speedHistoryChanged();
+    }
+
     emit speedChanged();
     emit totalChanged();
 }

@@ -662,6 +662,16 @@ AppletItem {
             }
         }
 
+        // 流量波动图：屏幕居中独立窗口，展示活动接口最近 30 分钟网速趋势
+        Platform.MenuItem {
+            text: qsTr("流量波动图")
+            onTriggered: {
+                trafficChartWindow.show()
+                trafficChartWindow.raise()
+                trafficChartWindow.requestActivate()
+            }
+        }
+
         Platform.MenuSeparator {}
 
         Platform.MenuItem {
@@ -680,6 +690,14 @@ AppletItem {
         id: aboutWindow
         accentColor: root.accentRed
         version: root.applet ? root.applet.version : "1.0"
+    }
+
+    // 流量波动图窗口：屏幕居中独立窗口，展示活动接口最近 30 分钟网速趋势
+    // 依赖通过属性传入：accentColor = root.accentRed，applet = root.applet
+    TrafficChartWindow {
+        id: trafficChartWindow
+        accentColor: root.accentRed
+        applet: root.applet
     }
 
     // 设置窗口：独立顶层窗口，在桌面中间弹出
