@@ -68,8 +68,9 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 ├── CMakeLists.txt                 # Build configuration
 ├── install.sh                     # Install script
 ├── build-deb.sh                   # Deb packaging script
-├── networkmonitorapplet.h         # C++ backend header
-├── networkmonitorapplet.cpp       # C++ backend implementation
+├── src/
+│   ├── networkmonitorapplet.h     # C++ backend header
+│   └── networkmonitorapplet.cpp   # C++ backend implementation
 ├── package/
 │   ├── metadata.json.in           # Plugin metadata 模板（由 CMake 生成 metadata.json）
 │   └── networkview.qml            # QML UI

@@ -14,14 +14,15 @@ find_package(DDEShell REQUIRED)
 set(PLUGIN_ID "space.jokul.JNetApplet")
 
 add_library(space.jokul.JNetApplet SHARED
-    networkmonitorapplet.h
-    networkmonitorapplet.cpp
+    src/networkmonitorapplet.h
+    src/networkmonitorapplet.cpp
 )
 
 set_target_properties(space.jokul.JNetApplet PROPERTIES PREFIX "")
 
+# 头文件搜索路径指向 src/，使 #include "networkmonitorapplet.h" 可被外部解析
 target_include_directories(space.jokul.JNetApplet PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     /usr/include/dde-shell
 )
 

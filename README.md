@@ -65,8 +65,9 @@ bash build-deb.sh
 ├── CMakeLists.txt                          # 构建配置
 ├── install.sh                              # 安装脚本
 ├── build-deb.sh                            # deb 一键打包脚本
-├── networkmonitorapplet.h                  # C++ 后端头文件
-├── networkmonitorapplet.cpp                # C++ 后端实现
+├── src/
+│   ├── networkmonitorapplet.h              # C++ 后端头文件
+│   └── networkmonitorapplet.cpp            # C++ 后端实现
 ├── package/
 │   ├── metadata.json.in                   # 插件元数据模板（由 CMake 生成 metadata.json）
 │   └── networkview.qml                     # QML 界面
