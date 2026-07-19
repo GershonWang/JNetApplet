@@ -192,13 +192,15 @@ AppletItem {
     // 数值长度变化时易裁切；逐字符竖排每列仅 ~10px，双列 ~25px，舒适容纳且视觉对称
     RowLayout {
         visible: root.isVerticalDock
-        anchors.centerIn: parent
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: 4
         spacing: 4
 
         // 下载列：箭头在上，数值字符从上往下竖排
         Column {
             spacing: 0
-            Layout.alignment: Qt.AlignHCenter
+            Layout.alignment: Qt.AlignTop | Qt.AlignHCenter
 
             Text {
                 text: "↓"
@@ -225,7 +227,7 @@ AppletItem {
         // 上传列：结构与下载列对称，颜色用 uploadValueColor
         Column {
             spacing: 0
-            Layout.alignment: Qt.AlignHCenter
+            Layout.alignment: Qt.AlignTop | Qt.AlignHCenter
 
             Text {
                 text: "↑"
