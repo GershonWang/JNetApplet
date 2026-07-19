@@ -340,7 +340,7 @@ AppletItem {
                         // 网卡名 + IP 地址卡片背景
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: 180
+                            Layout.preferredWidth: 300
                             // 有 IPv6 时增高以容纳第三行；无 IPv6 时保持原 40px
                             Layout.preferredHeight: root.ipv6Address ? 54 : 40
                             color: root.cardBackground
