@@ -16,11 +16,14 @@ AppletItem {
     objectName: "network monitor applet"
     property int dockOrder: 21
     property int dockSize: Panel.rootObject.dockItemMaxSize || 48
+    // 任务栏方向：0=Top, 1=Right, 2=Bottom, 3=Left；% 2 为 0 表示水平，1 表示竖向
+    // 设计原因：dde-shell 规范用法，org.deepin.ds.dock 已在 line 11 导入
+    property bool isVerticalDock: Panel.position % 2 === 1
 
-    // 任务栏宽度稍宽于标准 dock 尺寸，容纳双行速度数值
-    // 设计原因：固定宽度避免数值长度变化导致插件宽度抖动、箭头位置漂移
-    implicitWidth: Math.round(dockSize * 1.35)
-    implicitHeight: dockSize
+    // 水平任务栏：宽度稍宽容纳双行数值，高度匹配 dock 尺寸
+    // 竖向任务栏：宽度匹配 dock 尺寸（~40px），高度加大容纳竖排字符
+    implicitWidth: isVerticalDock ? dockSize : Math.round(dockSize * 1.35)
+    implicitHeight: isVerticalDock ? Math.round(dockSize * 1.5) : dockSize
 
     readonly property var applet: Applet
     readonly property bool ready: applet ? applet.ready : false
@@ -134,6 +137,7 @@ AppletItem {
     // 不给每行固定高度，让 RowLayout 按内容自然高度排列，
     // 整组垂直居中于 dock 区域，避免两行间出现过大间隙
     Column {
+        visible: !root.isVerticalDock
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: 4
@@ -178,6 +182,65 @@ AppletItem {
                 color: root.uploadValueColor
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
+            }
+        }
+    }
+
+    // 竖向任务栏布局：双列字符竖排，每列一个方向（下载|上传）
+    // 设计原因：竖向任务栏宽度仅 ~40px，水平布局的 "↓6.64K" 约 35px 勉强容纳但
+    // 数值长度变化时易裁切；逐字符竖排每列仅 ~10px，双列 ~25px，舒适容纳且视觉对称
+    RowLayout {
+        visible: root.isVerticalDock
+        anchors.centerIn: parent
+        spacing: 4
+
+        // 下载列：箭头在上，数值字符从上往下竖排
+        Column {
+            spacing: 1
+            Layout.alignment: Qt.AlignHCenter
+
+            Text {
+                text: "↓"
+                font.pixelSize: root.dockSize * 0.18
+                color: root.secondaryText
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Repeater {
+                // 将 "6.64K" 拆为 ["6", ".", "6", "4", "K"] 逐字符渲染
+                // 属性绑定：downloadSpeed 变化时 formatSpeedShort 重算，split 自动刷新 model
+                model: root.formatSpeedShort(root.downloadSpeed).split('')
+                Text {
+                    text: modelData
+                    font.pixelSize: root.dockSize * 0.22
+                    font.weight: Font.Medium
+                    color: root.downloadValueColor
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
+        }
+
+        // 上传列：结构与下载列对称，颜色用 uploadValueColor
+        Column {
+            spacing: 1
+            Layout.alignment: Qt.AlignHCenter
+
+            Text {
+                text: "↑"
+                font.pixelSize: root.dockSize * 0.18
+                color: root.secondaryText
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Repeater {
+                model: root.formatSpeedShort(root.uploadSpeed).split('')
+                Text {
+                    text: modelData
+                    font.pixelSize: root.dockSize * 0.22
+                    font.weight: Font.Medium
+                    color: root.uploadValueColor
+                    horizontalAlignment: Text.AlignHCenter
+                }
             }
         }
     }
