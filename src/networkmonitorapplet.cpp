@@ -122,7 +122,16 @@ QString NetworkMonitorApplet::ipv6Address() const
 QString NetworkMonitorApplet::version() const
 {
     // metadata.json 结构：{ "Plugin": { "Version": "x.y.z", ... } }
-    return pluginMetaData().value("Plugin").toMap().value("Version").toString();
+    // DPluginMetaData 内部存储方式不确定：可能已展开 Plugin 层级（value("Version") 直接可用），
+    // 也可能保留原始嵌套结构（需 value("Plugin").toMap().value("Version")）
+    // 两种都尝试，取非空值
+    const DPluginMetaData meta = pluginMetaData();
+    QString v = meta.value("Version").toString();
+    if (v.isEmpty()) {
+        v = meta.value("Plugin").toMap().value("Version").toString();
+    }
+    qDebug() << "[JNetApplet] version() =" << v;
+    return v;
 }
 
 void NetworkMonitorApplet::refresh()
