@@ -22,8 +22,9 @@ AppletItem {
 
     // 水平任务栏：宽度稍宽容纳双行数值，高度匹配 dock 尺寸
     // 竖向任务栏：宽度匹配 dock 尺寸（~40px），高度加大容纳竖排字符
+    // 2.2 倍：dockSize=40 时约 88px，可容纳最多 8 字符的速度字符串（如 "1023.99K"）
     implicitWidth: isVerticalDock ? dockSize : Math.round(dockSize * 1.35)
-    implicitHeight: isVerticalDock ? Math.round(dockSize * 1.5) : dockSize
+    implicitHeight: isVerticalDock ? Math.round(dockSize * 2.2) : dockSize
 
     readonly property var applet: Applet
     readonly property bool ready: applet ? applet.ready : false
@@ -203,7 +204,7 @@ AppletItem {
                 text: "↓"
                 font.pixelSize: root.dockSize * 0.18
                 color: root.secondaryText
-                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
             }
 
             Repeater {
@@ -215,7 +216,7 @@ AppletItem {
                     font.pixelSize: root.dockSize * 0.22
                     font.weight: Font.Medium
                     color: root.downloadValueColor
-                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
         }
@@ -229,7 +230,7 @@ AppletItem {
                 text: "↑"
                 font.pixelSize: root.dockSize * 0.18
                 color: root.secondaryText
-                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
             }
 
             Repeater {
@@ -239,7 +240,7 @@ AppletItem {
                     font.pixelSize: root.dockSize * 0.22
                     font.weight: Font.Medium
                     color: root.uploadValueColor
-                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
         }
