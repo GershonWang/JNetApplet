@@ -70,7 +70,9 @@ bash build-deb.sh
 │   └── networkmonitorapplet.cpp            # C++ 后端实现
 ├── package/
 │   ├── metadata.json.in                   # 插件元数据模板（由 CMake 生成 metadata.json）
-│   └── networkview.qml                     # QML 界面
+│   ├── networkview.qml                    # QML 界面主入口
+│   └── components/                        # 拆分出的子组件
+│       └── AboutWindow.qml                # 关于窗口组件
 ├── docs/                                   # 设计文档与实现计划
 ├── README.md                               # 本文件
 └── AGENTS.md                               # AI 代理工作指引

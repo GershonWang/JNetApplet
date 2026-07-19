@@ -73,7 +73,9 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 │   └── networkmonitorapplet.cpp   # C++ backend implementation
 ├── package/
 │   ├── metadata.json.in           # Plugin metadata 模板（由 CMake 生成 metadata.json）
-│   └── networkview.qml            # QML UI
+│   ├── networkview.qml            # QML UI 主入口
+│   └── components/                # 拆分出的子组件
+│       └── AboutWindow.qml        # 关于窗口组件
 ├── docs/                          # Design docs and implementation plans
 └── AGENTS.md                      # This file
 ```
