@@ -116,6 +116,15 @@ QString NetworkMonitorApplet::ipv6Address() const
     return m_ipv6Address;
 }
 
+// 返回插件版本号，从 dde-shell 插件元数据（metadata.json）读取
+// 版本唯一源为 CMakeLists.txt 的 project(VERSION)，经 configure_file 写入 metadata.json，
+// dde-shell 加载时存入 DPluginMetaData，此处通过继承自 DApplet 的 pluginMetaData() 读取
+QString NetworkMonitorApplet::version() const
+{
+    // metadata.json 结构：{ "Plugin": { "Version": "x.y.z", ... } }
+    return pluginMetaData().value("Plugin").toMap().value("Version").toString();
+}
+
 void NetworkMonitorApplet::refresh()
 {
     readNetworkStats();

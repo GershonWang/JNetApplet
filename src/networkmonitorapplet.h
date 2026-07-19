@@ -42,6 +42,8 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QString ipAddress READ ipAddress NOTIFY ipAddressChanged)
     // 活动接口的 IPv6 全球地址（已过滤 link-local 和 loopback），供 QML 显示
     Q_PROPERTY(QString ipv6Address READ ipv6Address NOTIFY ipv6AddressChanged)
+    // 插件版本号，从 dde-shell 元数据读取，版本唯一源为 CMakeLists.txt project(VERSION)
+    Q_PROPERTY(QString version READ version CONSTANT)
 
 public:
     explicit NetworkMonitorApplet(QObject *parent = nullptr);
@@ -60,6 +62,8 @@ public:
     QString activeInterface() const;
     QString ipAddress() const;
     QString ipv6Address() const;
+    // 返回插件版本号，从 dde-shell 插件元数据（metadata.json）读取
+    QString version() const;
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void setActiveInterface(const QString &interface);

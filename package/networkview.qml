@@ -675,10 +675,11 @@ AppletItem {
     }
 
     // 关于窗口：抽取为独立组件 package/components/AboutWindow.qml
-    // 依赖通过属性传入：accentColor = root.accentRed
+    // 依赖通过属性传入：accentColor = root.accentRed，version 取自 C++ 后端 applet.version
     AboutWindow {
         id: aboutWindow
         accentColor: root.accentRed
+        version: root.applet ? root.applet.version : "1.0"
     }
 
     // 设置窗口：独立顶层窗口，在桌面中间弹出
