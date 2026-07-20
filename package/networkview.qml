@@ -158,7 +158,7 @@ AppletItem {
             Text {
                 text: "↓"
                 font.pixelSize: root.dockSize * 0.20
-                color: root.secondaryText
+                color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -179,7 +179,7 @@ AppletItem {
             Text {
                 text: "↑"
                 font.pixelSize: root.dockSize * 0.20
-                color: root.secondaryText
+                color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
             }
 
@@ -212,7 +212,7 @@ AppletItem {
             Text {
                 text: "↓"
                 font.pixelSize: root.dockSize * 0.20
-                color: root.secondaryText
+                color: root.speedTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
@@ -239,7 +239,7 @@ AppletItem {
             Text {
                 text: "↑"
                 font.pixelSize: root.dockSize * 0.20
-                color: root.secondaryText
+                color: root.speedTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
