@@ -338,13 +338,17 @@ Window {
                     var ul = root.applet ? root.applet.speedHistoryUpload : []
                     var n = dl.length
 
-                    // ---- Y 轴上限计算（规范 §4.4）----
-                    // 1. vMax = 所有采样点 max(download, upload)
-                    // 2. vMax == 0 时上限取 1024（1 KB/s）避免除零
-                    // 3. 否则取 vMax * 1.2 向上取整到 1/2/5 × 10^n 序列
+                    // ---- Y 轴上限计算（动态适应最近活动）----
+                    // 使用最近 60 秒的数据计算 Y 轴上限，而非全量 5 分钟缓冲。
+                    // 设计原因：若使用全量缓冲，当历史中存在大流量峰值（如 12MB/s 下载）时，
+                    // 即使当前网速已降至 KB/s 级别，Y 轴仍保持高位，导致当前曲线被压到底部
+                    // 无法观察波动。改用 60 秒窗口后，峰值滑出窗口时 Y 轴自动缩小，
+                    // 始终为当前活动提供合适的显示比例。
                     var vMax = 0
                     var i
-                    for (i = 0; i < n; i++) {
+                    var recentWindow = 60  // 秒，Y 轴基于最近 1 分钟的活动计算
+                    var recentStart = Math.max(0, n - recentWindow)
+                    for (i = recentStart; i < n; i++) {
                         if (dl[i].y > vMax) vMax = dl[i].y
                         if (i < ul.length && ul[i].y > vMax) vMax = ul[i].y
                     }
