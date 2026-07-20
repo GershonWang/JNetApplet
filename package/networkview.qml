@@ -727,6 +727,10 @@ AppletItem {
         id: settingsWindow
         width: 340
         height: 450
+        minimumWidth: 340
+        maximumWidth: 340
+        minimumHeight: 450
+        maximumHeight: 450
         visible: false
         flags: Qt.FramelessWindowHint | Qt.Window
         // NonModal：不阻塞桌面其他区域，用户可同时操作任务栏
@@ -939,32 +943,7 @@ AppletItem {
                             }
                         }
 
-                        // 关闭按钮
-                        Rectangle {
-                            id: bottomCloseButton
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 40
-                            color: bottomCloseMouse.containsMouse ? root.accentBlueLight : "#ffffff"
-                            radius: 10
-                            border.width: 1
-                            border.color: bottomCloseMouse.containsMouse ? root.accentBlue : "#e0e0e0"
 
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("关闭")
-                                font.pixelSize: 13
-                                font.weight: Font.Medium
-                                color: bottomCloseMouse.containsMouse ? root.accentBlue : "#333333"
-                            }
-
-                            MouseArea {
-                                id: bottomCloseMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: settingsWindow.hide()
-                            }
-                        }
                     }
                 }
             }
