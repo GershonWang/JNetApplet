@@ -10,7 +10,6 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
-import "components"
 
 Window {
     id: root
@@ -31,12 +30,12 @@ Window {
     // 卸载按钮文字：复制命令后临时显示提示，定时器到期后还原
     property string uninstallButtonText: qsTr("卸载插件")
 
-    width: 340
-    height: 450
-    minimumWidth: 340
-    maximumWidth: 340
-    minimumHeight: 450
-    maximumHeight: 450
+    width: 350
+    height: 390
+    minimumWidth: 350
+    maximumWidth: 350
+    minimumHeight: 390
+    maximumHeight: 390
     visible: false
     flags: Qt.FramelessWindowHint | Qt.Window
     // NonModal：不阻塞桌面其他区域，用户可同时操作任务栏
@@ -86,11 +85,13 @@ Window {
                 Layout.preferredHeight: 44
                 color: "transparent"
 
-                // 拖动区域
+                // 拖动层：声明在关闭按钮之前（位于其下方），避免遮挡按钮点击与 hover
+                // 用 startSystemMove() 系统级窗口拖动，由窗口管理器接管移动，
+                // 这是 frameless Window 的正确做法，pressed 即触发，丝滑无抖动
                 MouseArea {
                     anchors.fill: parent
-                    drag.target: root
-                    cursorShape: Qt.ArrowCursor
+                    cursorShape: Qt.OpenHandCursor
+                    onPressed: root.startSystemMove()
                 }
 
                 // 标题文字
@@ -184,11 +185,21 @@ Window {
                                     RadioButton {
                                         anchors.left: parent.left
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: modelData + " — " + interfaceDescription(modelData)
+                                        text: modelData
                                         checked: modelData === activeInterface
                                         onToggled: {
                                             if (applet) applet.setActiveInterface(modelData)
                                         }
+                                    }
+
+                                    // 接口类型描述：右对齐显示，与接口名分居两侧
+                                    Text {
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 12
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: interfaceDescription(modelData)
+                                        font.pixelSize: 12
+                                        color: "#999999"
                                     }
                                 }
                             }
@@ -220,7 +231,7 @@ Window {
                         onColorSelected: if (applet) applet.textColor = color
                     }
 
-                    Item { Layout.fillHeight: true }
+                    Item { Layout.preferredHeight: 4 }
 
                     // 卸载插件按钮：文字可动态切换（复制命令后显示提示）
                     // 提示状态期间按钮不可点击，文字变绿色
