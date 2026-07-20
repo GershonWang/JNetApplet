@@ -135,6 +135,11 @@ AppletItem {
     // 上传值颜色：固定绿色，不做高速警示
     readonly property color uploadValueColor: accentGreen
 
+    // 任务栏网速数值字体色：用户自定义色优先（持久化），未设置时跟随系统主题
+    // 设计原因：primaryText 派生自 DockPalette，深浅色任务栏自动适配；
+    // 用户主动选色后覆盖，空串回退到 primaryText 保持自适应
+    readonly property color speedTextColor: (applet && applet.textColor.length > 0) ? applet.textColor : primaryText
+
     // 任务栏图标区：双行紧凑数值，箭头与数值紧贴、左对齐
     // 设计原因：箭头与数值作为一组固定在左侧，数值左对齐紧贴箭头；
     // 不给每行固定高度，让 RowLayout 按内容自然高度排列，
@@ -161,7 +166,7 @@ AppletItem {
                 text: root.formatSpeedShort(root.downloadSpeed)
                 font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
-                color: root.primaryText
+                color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
             }
@@ -182,7 +187,7 @@ AppletItem {
                 text: root.formatSpeedShort(root.uploadSpeed)
                 font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
-                color: root.primaryText
+                color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignLeft
             }
@@ -220,7 +225,7 @@ AppletItem {
                     font.pixelSize: root.dockSize * 0.25
                     height: font.pixelSize
                     font.weight: Font.Medium
-                    color: root.primaryText
+                    color: root.speedTextColor
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
@@ -245,7 +250,7 @@ AppletItem {
                     font.pixelSize: root.dockSize * 0.25
                     height: font.pixelSize
                     font.weight: Font.Medium
-                    color: root.primaryText
+                    color: root.speedTextColor
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
@@ -706,7 +711,7 @@ AppletItem {
     Window {
         id: settingsWindow
         width: 340
-        height: 350
+        height: 450
         visible: false
         flags: Qt.FramelessWindowHint | Qt.Window
         // NonModal：不阻塞桌面其他区域，用户可同时操作任务栏
@@ -859,6 +864,22 @@ AppletItem {
                                     Layout.alignment: Qt.AlignHCenter
                                 }
                             }
+                        }
+
+                        // 字体颜色选择区：预设色板 + 跟随系统选项
+                        // 设计原因：用户选择的颜色通过 applet.textColor 持久化到
+                        // ~/.config/jnetapplet/settings.ini，重启 dde-shell 后仍生效
+                        Text {
+                            text: qsTr("字体颜色")
+                            font.pixelSize: 13
+                            font.weight: Font.Bold
+                            color: "#666666"
+                        }
+
+                        TextColorPicker {
+                            Layout.fillWidth: true
+                            currentColor: root.applet ? root.applet.textColor : ""
+                            onColorSelected: if (root.applet) root.applet.textColor = color
                         }
 
                         Item { Layout.fillHeight: true }

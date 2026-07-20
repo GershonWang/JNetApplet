@@ -11,6 +11,9 @@
 #include <QDir>
 #include <QRegularExpression>
 #include <QNetworkInterface>
+#include <QColor>
+#include <QSettings>
+#include <QStandardPaths>
 
 DS_BEGIN_NAMESPACE
 
@@ -25,7 +28,22 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_totalUpload(0)
     , m_ready(false)
     , m_firstUpdate(true)
+    , m_textColor()
 {
+    // 从独立配置文件读取持久化的字体颜色
+    // 设计原因：使用独立配置文件避免污染 dde-shell 的共享配置，
+    // 空串表示"跟随系统"，由 QML 层回退到 primaryText 实现
+    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                               + QStringLiteral("/jnetapplet/settings.ini");
+    QSettings settings(configPath, QSettings::IniFormat);
+    if (settings.contains(QStringLiteral("textColor"))) {
+        const QString saved = settings.value(QStringLiteral("textColor")).toString();
+        // 空串合法（跟随系统），非空则校验是否为合法颜色值
+        if (saved.isEmpty() || QColor::isValidColorName(saved)) {
+            m_textColor = saved;
+        }
+        // 若校验失败则保持空串默认值（跟随系统），不抛出也不记录
+    }
 }
 
 NetworkMonitorApplet::~NetworkMonitorApplet()
@@ -125,6 +143,42 @@ QString NetworkMonitorApplet::version() const
     // metadata.json 的 { "Plugin": { "Version": "x.y.z" } } 被 DPluginMetaData 加载后，
     // value("Version") 直接返回版本号，无需再 .value("Plugin").toMap() 展开
     return pluginMetaData().value("Version").toString();
+}
+
+// 返回任务栏网速字体颜色，空串表示跟随系统主题
+QString NetworkMonitorApplet::textColor() const
+{
+    return m_textColor;
+}
+
+// 设置任务栏网速字体颜色，空串表示跟随系统主题
+// 设计原因：
+//   - 空串语义：空串作为"跟随系统"的语义值，QML 层用 textColor ? textColor : primaryText 做回退，
+//     避免后端硬编码系统色
+//   - 校验逻辑：非空颜色值通过 QColor::isValidColor 校验，无效值直接忽略，不存储不发射信号
+//   - 独立配置文件：使用 ~/.config/jnetapplet/settings.ini 而非 dde-shell 共享配置，
+//     避免污染其他组件的配置空间
+void NetworkMonitorApplet::setTextColor(const QString &color)
+{
+    // 空串视为合法（表示跟随系统），不校验
+    if (!color.isEmpty() && !QColor::isValidColorName(color)) {
+        return;
+    }
+
+    if (m_textColor == color) {
+        return;
+    }
+
+    m_textColor = color;
+
+    // 持久化到独立配置文件
+    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                               + QStringLiteral("/jnetapplet/settings.ini");
+    QSettings settings(configPath, QSettings::IniFormat);
+    settings.setValue(QStringLiteral("textColor"), m_textColor);
+    settings.sync();
+
+    emit textColorChanged();
 }
 
 // 返回当前活动接口的下行速度历史，转换为 QVariantList of QPointF 供 QML 使用

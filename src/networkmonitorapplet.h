@@ -14,6 +14,8 @@
 #include <QHash>
 #include <QPointF>
 #include <QDateTime>
+#include <QColor>
+#include <QSettings>
 
 DS_BEGIN_NAMESPACE
 
@@ -56,6 +58,9 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QString ipv6Address READ ipv6Address NOTIFY ipv6AddressChanged)
     // 插件版本号，从 dde-shell 元数据读取，版本唯一源为 CMakeLists.txt project(VERSION)
     Q_PROPERTY(QString version READ version CONSTANT)
+    // 任务栏网速数值字体颜色，空串表示跟随系统主题（由 QML 回退到 primaryText），
+    // 用户在设置窗口选择后持久化到 ~/.config/jnetapplet/settings.ini
+    Q_PROPERTY(QString textColor READ textColor WRITE setTextColor NOTIFY textColorChanged)
     // 当前活动接口的下行速度历史采样点（QPointF 列表：x=时间戳秒, y=速度 bytes/sec）
     // 用于趋势图绘制下载折线，每次 calculateSpeed 追加一个点并发射 speedHistoryChanged
     Q_PROPERTY(QVariantList speedHistoryDownload READ speedHistoryDownload NOTIFY speedHistoryChanged)
@@ -85,6 +90,10 @@ public:
     QVariantList speedHistoryUpload() const;
     // 返回插件版本号，从 dde-shell 插件元数据（metadata.json）读取
     QString version() const;
+    // 返回任务栏网速字体颜色，空串表示跟随系统主题
+    QString textColor() const;
+    // 设置任务栏网速字体颜色，空串表示跟随系统主题
+    void setTextColor(const QString &color);
 
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void setActiveInterface(const QString &interface);
@@ -99,6 +108,8 @@ signals:
     void ipAddressChanged();
     void ipv6AddressChanged();
     void speedHistoryChanged();
+    // 任务栏网速字体颜色变化时通知 QML 更新
+    void textColorChanged();
 
 private:
     void readNetworkStats();
@@ -131,6 +142,10 @@ private:
     
     bool m_ready;
     bool m_firstUpdate;
+    // 任务栏网速字体颜色，空串表示跟随系统主题
+    // 设计原因：空串作为"跟随系统"的语义值，QML 层用 textColor ? textColor : primaryText
+    // 做回退，避免后端硬编码系统色
+    QString m_textColor;
 
     // 速度历史环形缓冲：每个接口独立维护一份，key 为接口名
     // 设计原因：接口切换时趋势图不出现跳变，切回时仍能看到该接口历史
