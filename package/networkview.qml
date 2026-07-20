@@ -81,6 +81,21 @@ AppletItem {
         }
     }
 
+    // 根据接口名返回类型描述，用于设置窗口网络接口列表
+    // 设计原因：用户面对多个网口时难以仅凭 enp3s0/wlp3s0 等命名判断用途，
+    // 加一行类型说明（有线/无线/VPN 等）降低认知负担
+    function interfaceDescription(name) {
+        if (name === "lo") return qsTr("本地回环")
+        if (name === "Meta") return qsTr("虚拟接口")
+        if (/^enp|^eth/.test(name)) return qsTr("有线网络")
+        if (/^wlp|^wlan/.test(name)) return qsTr("无线网络")
+        if (/^docker|^veth/.test(name)) return qsTr("容器网络")
+        if (/^br/.test(name)) return qsTr("桥接")
+        if (/^tun|^tap/.test(name)) return qsTr("VPN")
+        if (/^virbr/.test(name)) return qsTr("虚拟桥接")
+        return qsTr("其他")
+    }
+
     // 格式化速度显示（带单位，用于弹出面板，信息更完整）
     // 最小单位为 KB，与 formatSpeedShort 保持一致；所有级别保留 2 位小数
     function formatSpeed(bytesPerSec) {
@@ -846,7 +861,7 @@ AppletItem {
                                         RadioButton {
                                             anchors.left: parent.left
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: modelData
+                                            text: modelData + " — " + root.interfaceDescription(modelData)
                                             checked: modelData === root.activeInterface
                                             onToggled: {
                                                 if (root.applet) root.applet.setActiveInterface(modelData)
