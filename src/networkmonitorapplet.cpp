@@ -44,6 +44,13 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
         }
         // 若校验失败则保持空串默认值（跟随系统），不抛出也不记录
     }
+
+    // 从配置文件读取持久化的活动接口，启动时自动恢复用户上次选择
+    // 设计原因：用户手动选择的网卡应跨重启保持，而非每次启动重新自动检测；
+    // 若保存的接口已不存在（如 USB 网卡拔出），readNetworkStats 会清空并回退到自动选择
+    if (settings.contains(QStringLiteral("activeInterface"))) {
+        m_activeInterface = settings.value(QStringLiteral("activeInterface")).toString();
+    }
 }
 
 NetworkMonitorApplet::~NetworkMonitorApplet()
@@ -222,6 +229,15 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
     if (m_activeInterface != interface) {
         m_activeInterface = interface;
         m_firstUpdate = true;
+
+        // 持久化到配置文件，下次启动自动加载用户选择的网卡
+        // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
+        const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                                   + QStringLiteral("/jnetapplet/settings.ini");
+        QSettings settings(configPath, QSettings::IniFormat);
+        settings.setValue(QStringLiteral("activeInterface"), m_activeInterface);
+        settings.sync();
+
         emit activeInterfaceChanged();
         // 接口切换后通知 QML 趋势图切换显示新接口的历史数据
         emit speedHistoryChanged();
@@ -285,6 +301,11 @@ void NetworkMonitorApplet::readNetworkStats()
             if (!newInterfaces.contains(name)) {
                 m_speedHistory.remove(name);
             }
+        }
+
+        // 保存的接口已不在当前列表中（如 USB 网卡拔出），清空让自动选择接管
+        if (!m_activeInterface.isEmpty() && !m_interfaceList.contains(m_activeInterface)) {
+            m_activeInterface.clear();
         }
 
         // 自动选择活动接口

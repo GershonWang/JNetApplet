@@ -51,6 +51,8 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QStringList networkInterfaces READ networkInterfaces NOTIFY interfacesChanged)
     Q_PROPERTY(QStringList interfaceStats READ interfaceStats NOTIFY statsChanged)
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
+    // 当前活动接口，用户在弹窗或设置窗口选择后持久化到 ~/.config/jnetapplet/settings.ini，
+    // 下次启动自动恢复；若保存的接口已不存在则回退到自动选择
     Q_PROPERTY(QString activeInterface READ activeInterface NOTIFY activeInterfaceChanged)
     // 活动接口的 IPv4 地址，供 QML 在弹出面板和 tooltip 中显示
     Q_PROPERTY(QString ipAddress READ ipAddress NOTIFY ipAddressChanged)
