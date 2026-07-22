@@ -13,8 +13,9 @@
 ~~`calculateSpeed()` 直接用 `currentRxBytes - m_lastRxBytes` 作为 bytes/sec，未除以实际流逝时间。系统负载高或定时器抖动时，速度值会失真。~~
 已改为记录上次采样的毫秒时间戳 `m_lastTimestampMs`，按真实流逝时间 `delta_bytes / elapsed_seconds` 计算速度；速度存储由 `qint64` 改为 `double` 保留精度；`elapsedSec > 0` 守卫避免除零。
 
-**2. 计数器回绕/重置产生负速度**
-网卡重启、`/proc/net/dev` 计数器溢出或接口重置时，`currentRxBytes - m_lastRxBytes` 可能为负。代码无任何兜底，QML 会显示负速度。应加 `if (delta < 0) delta = 0;` 保护。
+**2. ~~计数器回绕/重置产生负速度~~ ✅ 已修复**
+~~网卡重启、`/proc/net/dev` 计数器溢出或接口重置时，`currentRxBytes - m_lastRxBytes` 可能为负。代码无任何兜底，QML 会显示负速度。~~
+已在 `calculateSpeed()` 中对 `rxDelta` / `txDelta` 钳制为 0，计数器回绕/接口重置/网卡重启时不再产生负速度。
 
 **3. "总量统计"语义有误导**
 `m_totalDownload = currentRxBytes` 只存储活动接口的当前计数器值，并非真正的累计流量。它会在以下场景跳变：切换网卡（跳到新接口计数器）、网卡重启（归零）、系统重启（归零）。README 宣称"累计上传/下载流量统计"，但实际不是跨重启/跨接口的累计。

@@ -378,8 +378,12 @@ void NetworkMonitorApplet::calculateSpeed()
 
     // 仅当间隔合法时计算速度，避免除零；间隔为 0 时保持上次速度值
     if (elapsedSec > 0) {
-        m_downloadSpeed = (currentRxBytes - m_lastRxBytes) / elapsedSec;
-        m_uploadSpeed = (currentTxBytes - m_lastTxBytes) / elapsedSec;
+        // 计数器回绕/接口重置时差值可能为负，钳制为 0 避免显示负速度
+        // 触发场景：网卡重启、/proc/net/dev 计数器溢出、USB 网卡拔出重插
+        const qint64 rxDelta = currentRxBytes - m_lastRxBytes;
+        const qint64 txDelta = currentTxBytes - m_lastTxBytes;
+        m_downloadSpeed = (rxDelta > 0 ? rxDelta : 0) / elapsedSec;
+        m_uploadSpeed = (txDelta > 0 ? txDelta : 0) / elapsedSec;
     }
 
     m_lastRxBytes = currentRxBytes;
