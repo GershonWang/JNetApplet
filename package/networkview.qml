@@ -48,23 +48,21 @@ AppletItem {
             || name.startsWith("enp") || name.startsWith("eth")
     }
 
-    // 排序后的接口列表：活动接口最前，其次物理网卡，最后虚拟网卡
-    // 设计原因：用户希望启动监测的网卡在最左边，方便查看和切换
+    // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
+    // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
+    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式
     readonly property var sortedInterfaces: {
         if (!root.ready || root.networkInterfaces.length === 0) return []
         var physical = []
         var virtual = []
         for (var i = 0; i < root.networkInterfaces.length; i++) {
             var name = root.networkInterfaces[i]
-            if (name === root.activeInterface) continue
             if (root.isPhysicalIf(name)) physical.push(name)
             else virtual.push(name)
         }
         physical.sort()
         virtual.sort()
-        var result = []
-        if (root.activeInterface) result.push(root.activeInterface)
-        return result.concat(physical).concat(virtual)
+        return physical.concat(virtual)
     }
 
     // 紧凑格式化速度（用于任务栏图标和 tooltip，不带单位后缀，节省空间）
@@ -316,6 +314,9 @@ AppletItem {
             // C++ 后端 m_refreshTimer 持续更新，popup 通过属性绑定自动显示最新数据。
             if (popupVisible) {
                 toolTip.close()
+                // popup 打开时确保活动 chip 完整可见：直接定位不播放动画，避免看到打开瞬间的滚动；
+                // Qt.callLater 等待首次打开时 Repeater 完成实例化与布局后再计算位置
+                Qt.callLater(function() { chipFlickable.scrollToActiveChip(false) })
             }
         }
 
@@ -543,8 +544,9 @@ AppletItem {
                     }
                 }
 
-                // 接口切换 chip 列表：水平滚动，活动接口在最左，物理网卡次之，虚拟网卡在后
+                // 接口切换 chip 列表：水平滚动，物理网卡在前、虚拟网卡在后，顺序稳定不随切换变化
                 // chip 少时分散撑满一行；chip 多超出宽度时固定宽度 + 水平滚动
+                // 活动 chip 不在可视区域或被截断时，自动滚动露出完整样式（见 scrollToActiveChip）
                 Flickable {
                     id: chipFlickable
                     Layout.fillWidth: true
@@ -557,6 +559,57 @@ AppletItem {
                     flickableDirection: Flickable.HorizontalFlick
                     clip: true
 
+                    // 平滑滚动动画：直接赋值 contentX 会被 Flickable 的拖拽/回弹行为覆盖，
+                    // 用 NumberAnimation 驱动 contentX 实现自动滚动，平滑且不冲突
+                    NumberAnimation {
+                        id: chipScrollAnim
+                        target: chipFlickable
+                        property: "contentX"
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+
+                    // 用户开始拖拽/滑动时停止自动滚动，避免动画与用户操作争抢
+                    onMovementStarted: chipScrollAnim.stop()
+
+                    // 自动滚动使活动接口的 chip 完整可见：
+                    // 列表顺序稳定后活动 chip 可能位于可视区域外或被截断，
+                    // 切换接口或 popup 打开时调用，将其滚动露出完整样式。
+                    // animated=false 用于 popup 刚打开时立即定位，跳过滚动过程
+                    function scrollToActiveChip(animated) {
+                        if (!visible || width <= 0) return
+                        var idx = root.sortedInterfaces.indexOf(root.activeInterface)
+                        if (idx < 0) return
+                        var chip = chipRepeater.itemAt(idx)
+                        if (!chip) return
+                        var targetX = contentX
+                        if (chip.x < contentX) {
+                            // chip 在可视区左侧之外：回滚使 chip 左边缘与可视区左缘对齐
+                            targetX = chip.x
+                        } else if (chip.x + chip.width > contentX + width) {
+                            // chip 在可视区右侧之外或被截断：滚动使 chip 右边缘与可视区右缘对齐
+                            targetX = chip.x + chip.width - width
+                        }
+                        // 钳制到合法滚动范围 [0, contentWidth - width]，避免触发边界回弹
+                        targetX = Math.max(0, Math.min(targetX, Math.max(0, contentWidth - width)))
+                        if (Math.abs(targetX - contentX) < 1) return
+                        chipScrollAnim.stop()
+                        if (animated) {
+                            chipScrollAnim.to = targetX
+                            chipScrollAnim.start()
+                        } else {
+                            contentX = targetX
+                        }
+                    }
+
+                    // 活动接口变化时（用户点击 chip 或后端自动切换）自动滚动露出活动 chip
+                    Connections {
+                        target: root
+                        function onActiveInterfaceChanged() {
+                            chipFlickable.scrollToActiveChip(true)
+                        }
+                    }
+
                     // 等宽分配宽度：假设所有 chip 等宽撑满时的单个宽度
                     readonly property real equalChipWidth: root.sortedInterfaces.length > 0
                         ? (width - 6 * (root.sortedInterfaces.length - 1)) / root.sortedInterfaces.length
@@ -567,6 +620,7 @@ AppletItem {
                         spacing: 6
 
                         Repeater {
+                            id: chipRepeater
                             model: root.sortedInterfaces
 
                             Rectangle {
