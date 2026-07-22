@@ -548,7 +548,9 @@ AppletItem {
                 Flickable {
                     id: chipFlickable
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
+                    // 高度需容纳 chip（28px）+ 水平滚动条（~6px）+ 上下间距，
+                    // 此前 32px 仅剩 4px 给滚动条，导致滚动条无法正常显示
+                    Layout.preferredHeight: 40
                     visible: root.ready && root.networkInterfaces.length > 1
                     contentWidth: Math.max(chipRow.width, width)
                     contentHeight: chipRow.height
@@ -604,8 +606,20 @@ AppletItem {
                         }
                     }
 
+                    // 自定义滚动条样式：默认 ScrollBar 在面板配色下可能不可见，
+                    // 用 contentItem 显式绘制，颜色派生自 basePalette 适配深浅主题
                     ScrollBar.horizontal: ScrollBar {
+                        id: chipScrollBar
                         policy: ScrollBar.AsNeeded
+                        interactive: true
+
+                        contentItem: Rectangle {
+                            implicitHeight: 4
+                            radius: 2
+                            // 按压时加深、悬停时中等、默认稍淡，保证滚动条在深浅主题下均可见
+                            color: chipScrollBar.pressed ? root.secondaryText
+                                  : (chipScrollBar.hovered ? root.secondaryText : root.tertiaryText)
+                        }
                     }
                 }
 
