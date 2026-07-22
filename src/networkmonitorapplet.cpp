@@ -372,18 +372,20 @@ void NetworkMonitorApplet::calculateSpeed()
     // 改为除以真实间隔后，无论定时器抖动如何速度都准确。
     const double elapsedSec = (nowMs - m_lastTimestampMs) / 1000.0;
 
-    // 更新总量
-    m_totalDownload = currentRxBytes;
-    m_totalUpload = currentTxBytes;
-
-    // 仅当间隔合法时计算速度，避免除零；间隔为 0 时保持上次速度值
+    // 仅当间隔合法时计算速度并累加会话流量，避免除零；间隔为 0 时保持上次值
     if (elapsedSec > 0) {
         // 计数器回绕/接口重置时差值可能为负，钳制为 0 避免显示负速度
         // 触发场景：网卡重启、/proc/net/dev 计数器溢出、USB 网卡拔出重插
         const qint64 rxDelta = currentRxBytes - m_lastRxBytes;
         const qint64 txDelta = currentTxBytes - m_lastTxBytes;
-        m_downloadSpeed = (rxDelta > 0 ? rxDelta : 0) / elapsedSec;
-        m_uploadSpeed = (txDelta > 0 ? txDelta : 0) / elapsedSec;
+        const qint64 rxDeltaClamped = rxDelta > 0 ? rxDelta : 0;
+        const qint64 txDeltaClamped = txDelta > 0 ? txDelta : 0;
+        m_downloadSpeed = rxDeltaClamped / elapsedSec;
+        m_uploadSpeed = txDeltaClamped / elapsedSec;
+        // 累加会话总量：原实现直接取计数器值，切换网卡/网卡重启时总量跳变；
+        // 改为累加增量后，总量 = 本次会话期间所有活动接口的流量总和，不再跳变
+        m_totalDownload += rxDeltaClamped;
+        m_totalUpload += txDeltaClamped;
     }
 
     m_lastRxBytes = currentRxBytes;

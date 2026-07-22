@@ -17,8 +17,9 @@
 ~~网卡重启、`/proc/net/dev` 计数器溢出或接口重置时，`currentRxBytes - m_lastRxBytes` 可能为负。代码无任何兜底，QML 会显示负速度。~~
 已在 `calculateSpeed()` 中对 `rxDelta` / `txDelta` 钳制为 0，计数器回绕/接口重置/网卡重启时不再产生负速度。
 
-**3. "总量统计"语义有误导**
-`m_totalDownload = currentRxBytes` 只存储活动接口的当前计数器值，并非真正的累计流量。它会在以下场景跳变：切换网卡（跳到新接口计数器）、网卡重启（归零）、系统重启（归零）。README 宣称"累计上传/下载流量统计"，但实际不是跨重启/跨接口的累计。
+**3. ~~"总量统计"语义有误导~~ ✅ 已修复**
+~~`m_totalDownload = currentRxBytes` 只存储活动接口的当前计数器值，并非真正的累计流量。~~
+已改为累加会话增量 `m_totalDownload += rxDeltaClamped`，"总计"语义从"活动接口计数器值"变为"本次会话累计流量"：从 0 开始增长，切换网卡不再跳变，网卡重启不归零。跨重启持久化属于 #18 的范畴。
 
 **4. 独立窗口不支持深色模式**
 `AboutWindow.qml`、`SettingsWindow.qml`、`TextColorPicker.qml`、`TrafficChartWindow.qml` 全部硬编码浅色（`#FFFFFF`、`#333333`、`#f5f5f5` 等），不随系统主题适配。而 `networkview.qml` 和 `NetworkPopup.qml` 正确地从 `DockPalette` 派生颜色。deepin 深色模式下这些窗口视觉割裂严重。
