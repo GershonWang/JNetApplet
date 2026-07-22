@@ -58,6 +58,22 @@ Window {
         return qsTr("其他")
     }
 
+    // 根据接口名返回类型图标（Unicode 符号），用于网络接口列表每行左侧
+    // 设计原因：项目未引入图标库，用 Text 渲染 Unicode 符号（与 networkview.qml 的 ↓↑ 一致）；
+    // 所选符号均为 DejaVu/Noto 等常见字体覆盖的单色字形，避免彩色 emoji 破坏浅色主题观感，
+    // 匹配规则与 interfaceDescription 保持一致
+    function interfaceIcon(name) {
+        if (name === "lo") return "↻"               // 本地回环：循环箭头
+        if (name === "Meta") return "▢"             // 虚拟接口：空心方块
+        if (/^enp|^eth/.test(name)) return "⇄"      // 有线网络：双向链路
+        if (/^wlp|^wlan/.test(name)) return "∿"     // 无线网络：信号波形
+        if (/^docker|^veth/.test(name)) return "▣"  // 容器网络：盒中盒
+        if (/^br/.test(name)) return "⋈"            // 桥接：连接（蝴蝶结形）
+        if (/^tun|^tap/.test(name)) return "⚿"      // VPN：钥匙
+        if (/^virbr/.test(name)) return "⋈"         // 虚拟桥接：同桥接
+        return "◉"                                  // 其他：通用网络节点
+    }
+
     // 显示时居中到桌面
     onVisibleChanged: {
         if (visible) {
@@ -159,59 +175,157 @@ Window {
                         color: "#666666"
                     }
 
-                    // 接口列表容器
+                    // 接口列表容器：最多显示约 5 行（160px），超出部分垂直滚动
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: networkInterfaces.length > 0 ? 40 + networkInterfaces.length * 28 : 80
+                        // 高度 = 上下边距 10*2 + 列表可视高度；可视高度 = min(内容高度, 160)
+                        // 内容高度 = 行高 30*n + 行间距 2*(n-1)，接口少时卡片随行数收缩
+                        Layout.preferredHeight: networkInterfaces.length > 0
+                            ? Math.min(ifaceColumn.implicitHeight, 160) + 20
+                            : 80
                         color: "#ffffff"
                         radius: 10
                         border.width: 1
                         border.color: "#e0e0e0"
 
-                        ColumnLayout {
+                        // 用 ScrollView 而非裸 Flickable：自带滚轮滚动支持，
+                        // 且滚动条显示时自动让出内容宽度，不会遮挡行内文字
+                        ScrollView {
+                            id: ifaceScrollView
                             anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 8
+                            anchors.margins: 10
+                            visible: networkInterfaces.length > 0
+                            clip: true
+                            // 内容宽度跟随可视宽度（自动减去滚动条占位），禁止水平滚动
+                            contentWidth: availableWidth
 
-                            // 接口列表：RadioButton 单选切换活动接口
-                            Repeater {
-                                model: networkInterfaces
-                                delegate: Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 28
-                                    color: "transparent"
-                                    radius: 6
+                            // 自定义滚动条样式：与 networkview.qml chip 滚动条一致（4px 圆角矩形），
+                            // 颜色改用硬编码灰色系适配本窗口浅色主题；
+                            // AsNeeded 策略保证接口少时不显示滚动条
+                            ScrollBar.vertical: ScrollBar {
+                                id: ifaceScrollBar
+                                policy: ScrollBar.AsNeeded
+                                interactive: true
 
-                                    RadioButton {
-                                        anchors.left: parent.left
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: modelData
-                                        checked: modelData === activeInterface
-                                        onToggled: {
-                                            if (applet) applet.setActiveInterface(modelData)
-                                        }
-                                    }
-
-                                    // 接口类型描述：右对齐显示，与接口名分居两侧
-                                    Text {
-                                        anchors.right: parent.right
-                                        anchors.rightMargin: 12
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: interfaceDescription(modelData)
-                                        font.pixelSize: 12
-                                        color: "#999999"
-                                    }
+                                contentItem: Rectangle {
+                                    implicitWidth: 4
+                                    radius: 2
+                                    // 按压/悬停加深、默认稍淡，保证滚动条在白色卡片上可见
+                                    color: ifaceScrollBar.pressed ? "#666666"
+                                          : (ifaceScrollBar.hovered ? "#666666" : "#999999")
                                 }
                             }
 
-                            // 无接口提示
-                            Text {
-                                text: qsTr("未检测到网络接口")
-                                font.pixelSize: 12
-                                color: "#999999"
-                                visible: networkInterfaces.length === 0
-                                Layout.alignment: Qt.AlignHCenter
+                            Column {
+                                id: ifaceColumn
+                                width: ifaceScrollView.availableWidth
+                                // 行间距 2：紧凑列表，各行 hover 背景不粘连
+                                spacing: 2
+
+                                // 接口列表：整行点击切换活动接口
+                                // 行样式：类型图标 + 单选圆点 + 名称 + 右侧类型描述；
+                                // hover 显示浅灰底，选中行浅蓝底 + 蓝色细边框
+                                Repeater {
+                                    model: networkInterfaces
+                                    delegate: Rectangle {
+                                        id: ifaceRow
+                                        width: ifaceColumn.width
+                                        height: 30
+                                        radius: 8
+                                        // 当前行是否为活动接口（选中态）
+                                        readonly property bool isActive: modelData === activeInterface
+                                        readonly property bool hovered: rowMouse.containsMouse
+                                        // 选中态强调色用 #1565c0（较 #1976d2 更深）：
+                                        // 保证 ▢ 等空心图标在浅蓝选中背景上仍有足够对比度
+                                        readonly property color activeColor: "#1565c0"
+                                        // 背景优先级：选中 > hover；选中行 hover 时稍加深以保留交互反馈
+                                        color: isActive
+                                               ? (hovered ? "#d8ecfd" : "#e3f2fd")
+                                               : (hovered ? "#f0f0f0" : "transparent")
+                                        // 选中行加蓝色细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动
+                                        border.width: 1
+                                        border.color: isActive ? "#90caf9" : "transparent"
+
+                                        // 整行 hover + 点击：行内元素均不处理鼠标事件，
+                                        // 点击行任意位置即选中该接口
+                                        MouseArea {
+                                            id: rowMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: if (applet) applet.setActiveInterface(modelData)
+                                        }
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 10
+                                            anchors.rightMargin: 10
+                                            spacing: 8
+
+                                            // 网卡类型图标：固定宽度居中，保证不同字形的视觉对齐
+                                            Text {
+                                                Layout.alignment: Qt.AlignVCenter
+                                                Layout.preferredWidth: 20
+                                                horizontalAlignment: Text.AlignHCenter
+                                                text: interfaceIcon(modelData)
+                                                font.pixelSize: 14
+                                                color: ifaceRow.isActive ? ifaceRow.activeColor : "#777777"
+                                            }
+
+                                            // 自绘单选圆点：替代 RadioButton 作纯视觉指示器，
+                                            // 避免 DTK 样式渲染差异（本文件早期版本 RadioButton 标签渲染异常），
+                                            // 选中态颜色完全可控；点击由整行 MouseArea 统一处理
+                                            Rectangle {
+                                                Layout.alignment: Qt.AlignVCenter
+                                                Layout.preferredWidth: 16
+                                                Layout.preferredHeight: 16
+                                                radius: 8
+                                                color: "transparent"
+                                                border.width: 2
+                                                border.color: ifaceRow.isActive ? ifaceRow.activeColor
+                                                              : (ifaceRow.hovered ? "#666666" : "#999999")
+
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: 8
+                                                    height: 8
+                                                    radius: 4
+                                                    visible: ifaceRow.isActive
+                                                    color: ifaceRow.activeColor
+                                                }
+                                            }
+
+                                            // 接口名称：过长时右侧省略
+                                            Text {
+                                                Layout.alignment: Qt.AlignVCenter
+                                                Layout.fillWidth: true
+                                                text: modelData
+                                                font.pixelSize: 13
+                                                font.weight: ifaceRow.isActive ? Font.Medium : Font.Normal
+                                                color: ifaceRow.isActive ? ifaceRow.activeColor : "#333333"
+                                                elide: Text.ElideRight
+                                            }
+
+                                            // 接口类型描述：右对齐显示，与接口名分居两侧
+                                            Text {
+                                                Layout.alignment: Qt.AlignVCenter
+                                                text: interfaceDescription(modelData)
+                                                font.pixelSize: 12
+                                                color: "#999999"
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                        }
+
+                        // 无接口提示：在卡片内居中
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("未检测到网络接口")
+                            font.pixelSize: 12
+                            color: "#999999"
+                            visible: networkInterfaces.length === 0
                         }
                     }
 
