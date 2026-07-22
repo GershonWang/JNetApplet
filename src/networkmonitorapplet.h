@@ -135,8 +135,11 @@ private:
     // 速度计算
     qint64 m_lastRxBytes;
     qint64 m_lastTxBytes;
-    qint64 m_downloadSpeed;
-    qint64 m_uploadSpeed;
+    // 上次采样的毫秒时间戳，用于按真实间隔计算速度（避免定时器抖动失真）
+    qint64 m_lastTimestampMs;
+    // 当前瞬时速度（字节/秒），用 double 存储以保留按真实间隔除算的小数精度
+    double m_downloadSpeed;
+    double m_uploadSpeed;
     
     // 总量
     qint64 m_totalDownload;

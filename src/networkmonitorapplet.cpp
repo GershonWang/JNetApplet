@@ -22,6 +22,7 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_refreshTimer(nullptr)
     , m_lastRxBytes(0)
     , m_lastTxBytes(0)
+    , m_lastTimestampMs(0)
     , m_downloadSpeed(0)
     , m_uploadSpeed(0)
     , m_totalDownload(0)
@@ -79,12 +80,12 @@ bool NetworkMonitorApplet::init()
 
 double NetworkMonitorApplet::downloadSpeed() const
 {
-    return static_cast<double>(m_downloadSpeed);
+    return m_downloadSpeed;
 }
 
 double NetworkMonitorApplet::uploadSpeed() const
 {
-    return static_cast<double>(m_uploadSpeed);
+    return m_uploadSpeed;
 }
 
 double NetworkMonitorApplet::totalDownload() const
@@ -354,32 +355,44 @@ void NetworkMonitorApplet::calculateSpeed()
 {
     qint64 currentRxBytes = getActiveRxBytes();
     qint64 currentTxBytes = getActiveTxBytes();
-    
+    // 当前采样时间戳（毫秒），用于按真实流逝时间计算速度
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+
     if (m_firstUpdate) {
         m_firstUpdate = false;
         m_lastRxBytes = currentRxBytes;
         m_lastTxBytes = currentTxBytes;
+        m_lastTimestampMs = nowMs;
         return;
     }
-    
-    // 计算速度（字节/秒）
-    m_downloadSpeed = currentRxBytes - m_lastRxBytes;
-    m_uploadSpeed = currentTxBytes - m_lastTxBytes;
-    
+
+    // 按真实流逝时间计算速度（字节/秒）
+    // 设计原因：原实现假设定时间隔严格 1 秒，直接取字节差作为速度；
+    // 系统负载高时 QTimer 可能延迟触发，实际间隔偏离 1 秒导致速度失真。
+    // 改为除以真实间隔后，无论定时器抖动如何速度都准确。
+    const double elapsedSec = (nowMs - m_lastTimestampMs) / 1000.0;
+
     // 更新总量
     m_totalDownload = currentRxBytes;
     m_totalUpload = currentTxBytes;
-    
+
+    // 仅当间隔合法时计算速度，避免除零；间隔为 0 时保持上次速度值
+    if (elapsedSec > 0) {
+        m_downloadSpeed = (currentRxBytes - m_lastRxBytes) / elapsedSec;
+        m_uploadSpeed = (currentTxBytes - m_lastTxBytes) / elapsedSec;
+    }
+
     m_lastRxBytes = currentRxBytes;
     m_lastTxBytes = currentTxBytes;
+    m_lastTimestampMs = nowMs;
 
     // 追加采样点到当前活动接口的环形缓冲
     // 设计原因：applet 启动即持续采集，用户随时打开趋势图都能看到完整 5 分钟数据
     if (!m_activeInterface.isEmpty()) {
         SpeedSample sample;
         sample.timestamp = QDateTime::currentSecsSinceEpoch();
-        sample.downloadSpeed = static_cast<double>(m_downloadSpeed);
-        sample.uploadSpeed = static_cast<double>(m_uploadSpeed);
+        sample.downloadSpeed = m_downloadSpeed;
+        sample.uploadSpeed = m_uploadSpeed;
         m_speedHistory[m_activeInterface].append(sample);
 
         // 滑动窗口裁剪：超过 300 点时丢弃最旧的
