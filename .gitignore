@@ -15,6 +15,7 @@ cmake-build-*/
 *.so
 *.so.*
 *.dylib
+*.deb
 
 # Qt Creator
 *.pro.user
