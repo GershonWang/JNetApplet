@@ -20,6 +20,9 @@ add_library(space.jokul.JNetApplet SHARED
 
 set_target_properties(space.jokul.JNetApplet PROPERTIES PREFIX "")
 
+# 将 project(VERSION) 暴露为编译宏，供 C++ version() 兜底使用
+target_compile_definitions(space.jokul.JNetApplet PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
+
 # 头文件搜索路径指向 src/，使 #include "networkmonitorapplet.h" 可被外部解析
 target_include_directories(space.jokul.JNetApplet PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src

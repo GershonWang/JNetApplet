@@ -47,8 +47,9 @@
 ~~所有文件头 `SPDX-FileCopyrightText: 2024 MyCompany`，"MyCompany" 是模板占位符。~~
 已将 8 个源文件的版权头改为 `SPDX-FileCopyrightText: 2026 Jokul`。
 
-**10. `version()` 无兜底**
-若 `pluginMetaData().value("Version")` 返回空（元数据未加载），AboutWindow 版本行显示空白。networkview.qml 有 `"1.0"` 兜底，但 AboutWindow 的 `version` 属性直接来自 `applet.version`，无兜底。
+**10. ~~`version()` 无兜底~~ ✅ 已修复**
+~~若 `pluginMetaData().value("Version")` 返回空（元数据未加载），AboutWindow 版本行显示空白。~~
+已在 `version()` 中加兜底：元数据返回空时回退到编译时版本号 `PROJECT_VERSION` 宏。CMakeLists.txt 新增 `target_compile_definitions` 将 `project(VERSION)` 暴露为编译宏。
 
 ---
 

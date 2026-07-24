@@ -150,7 +150,11 @@ QString NetworkMonitorApplet::version() const
     // DPluginMetaData::value() 已在 "Plugin" 层级内部查找（源码：frame/pluginmetadata.cpp）
     // metadata.json 的 { "Plugin": { "Version": "x.y.z" } } 被 DPluginMetaData 加载后，
     // value("Version") 直接返回版本号，无需再 .value("Plugin").toMap() 展开
-    return pluginMetaData().value("Version").toString();
+    const QString ver = pluginMetaData().value("Version").toString();
+    // 兜底：元数据未加载或无 Version 字段时回退到编译时版本号
+    // 设计原因：QML 各处 version 属性兜底不一致（networkview.qml 有 "1.0"，AboutWindow 无），
+    // 统一在后端兜底，避免 AboutWindow 版本行显示空白
+    return ver.isEmpty() ? QStringLiteral(PROJECT_VERSION) : ver;
 }
 
 // 返回任务栏网速字体颜色，空串表示跟随系统主题
