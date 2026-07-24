@@ -43,8 +43,9 @@
 ~~`AboutWindow`、`SettingsWindow`、`TrafficChartWindow` 用 `Screen.width/height` 居中，frameless 窗口在多屏环境下可能出现在非预期屏幕。~~
 已加 `Screen.virtualX` / `Screen.virtualY` 偏移，窗口在任务栏所在屏幕内居中而非虚拟桌面原点。
 
-**9. SPDX 版权归属为占位符**
-所有文件头 `SPDX-FileCopyrightText: 2024 MyCompany`，"MyCompany" 是模板占位符，应改为实际版权持有者（如 `2024 Jokul`）。
+**9. ~~SPDX 版权归属为占位符~~ ✅ 已修复**
+~~所有文件头 `SPDX-FileCopyrightText: 2024 MyCompany`，"MyCompany" 是模板占位符。~~
+已将 8 个源文件的版权头改为 `SPDX-FileCopyrightText: 2026 Jokul`。
 
 **10. `version()` 无兜底**
 若 `pluginMetaData().value("Version")` 返回空（元数据未加载），AboutWindow 版本行显示空白。networkview.qml 有 `"1.0"` 兜底，但 AboutWindow 的 `version` 属性直接来自 `applet.version`，无兜底。
