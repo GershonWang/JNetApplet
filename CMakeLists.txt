@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Quick DBus Network LinguistTools)
+find_package(Qt6 REQUIRED COMPONENTS Core Quick DBus Network LinguistTools Test)
 find_package(Dtk6 REQUIRED COMPONENTS Core)
 find_package(DDEShell REQUIRED)
 
@@ -66,3 +66,30 @@ install(DIRECTORY package/components DESTINATION /usr/share/dde-shell/${PLUGIN_I
 
 # 安装编译后的翻译文件
 install(FILES ${QM_FILES} DESTINATION /usr/share/dde-shell/${PLUGIN_ID}/translations)
+
+# ---- 单元测试 ----
+# 直接编译源文件到测试可执行文件，避免共享库依赖问题
+enable_testing()
+add_executable(tst_networkmonitorapplet
+    tests/tst_networkmonitorapplet.cpp
+    src/networkmonitorapplet.cpp
+    src/networkmonitorapplet.h
+)
+target_link_libraries(tst_networkmonitorapplet PRIVATE
+    Qt6::Test
+    Qt6::Core
+    Qt6::Quick
+    Qt6::DBus
+    Qt6::Network
+    Dtk6::Core
+    Dde::Shell
+)
+target_include_directories(tst_networkmonitorapplet PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    /usr/include/dde-shell
+)
+target_compile_definitions(tst_networkmonitorapplet PRIVATE
+    PROJECT_VERSION="${PROJECT_VERSION}"
+    TRANSLATIONS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/translations"
+)
+add_test(NAME tst_networkmonitorapplet COMMAND tst_networkmonitorapplet)
