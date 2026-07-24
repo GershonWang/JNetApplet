@@ -66,7 +66,7 @@ echo "[1/6] 检查构建依赖..."
 # 设计原因：用户 clone 后直接运行 build-deb.sh 经常因缺少 -dev 包导致
 # CMake 配置失败，但原脚本用 tail -3 吞掉关键错误，用户无法定位问题。
 # 在构建前主动预检可提前给出明确指引。
-DEPS=(qt6-base-dev qt6-declarative-dev libdtkcommon-dev libdde-shell-dev)
+DEPS=(qt6-base-dev qt6-declarative-dev libdtkcommon-dev libdtk6gui-dev libxkbcommon-dev libdde-shell-dev)
 MISSING=()
 for pkg in "${DEPS[@]}"; do
     if ! dpkg -s "$pkg" &> /dev/null 2>&1; then

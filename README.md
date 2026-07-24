@@ -28,7 +28,7 @@ QML 前端渲染界面，实时显示当前网卡的上行/下行速率与累计
 构建需要以下开发包：
 
 ```sh
-sudo apt install build-essential cmake pkg-config qt6-base-dev qt6-declarative-dev libdtkcommon-dev libdde-shell-dev
+sudo apt install build-essential cmake pkg-config qt6-base-dev qt6-declarative-dev libdtkcommon-dev libdtk6gui-dev libxkbcommon-dev libdde-shell-dev
 ```
 
 各包与 CMake `find_package` 的对应关系：
@@ -36,8 +36,10 @@ sudo apt install build-essential cmake pkg-config qt6-base-dev qt6-declarative-d
 | 依赖包 | 提供 | 对应 CMake find_package |
 |---|---|---|
 | qt6-base-dev | Qt6 Core / DBus / Network | Qt6 Core DBus Network |
-| qt6-declarative-dev | Qt6 Quick | Qt6 Quick |
+| qt6-declarative-dev | Qt6 Quick / LinguistTools / Test | Qt6 Quick LinguistTools Test |
 | libdtkcommon-dev | Dtk6 Core | Dtk6 Core |
+| libdtk6gui-dev | Dtk6 Gui（DDEShell 间接依赖） | Dtk6Gui（由 DDEShellConfig.cmake find_dependency） |
+| libxkbcommon-dev | XKB（DDEShell 间接依赖） | XKB（由 DDEShellConfig.cmake find_dependency） |
 | libdde-shell-dev | DDEShell | DDEShell |
 
 > 运行时仅需 `dde-shell` 及 Qt6/Dtk6 运行库，上述 `-dev` 包仅构建时需要。
