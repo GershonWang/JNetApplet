@@ -55,15 +55,9 @@
 
 ## 二、代码质量 / 可维护性
 
-**11. 大量重复代码跨组件复制**
-以下代码在 `networkview.qml` 和 `NetworkPopup.qml` 中完全重复，`formatSpeed` 还在 `TrafficChartWindow.qml` 中第三份拷贝：
-- `isPhysicalIf()` 函数
-- `sortedInterfaces` 属性
-- `formatSpeed()` / `formatTotal()` 函数
-- 全套调色板定义（`basePalette`、`primaryText`、`accentBlue`…）
-- `downloadValueColor` / `uploadValueColor`
-
-改一处需同步改 2-3 处，极易遗漏。应抽取为公共 QML 文件（如 `Theme.qml` 单例 + `Format.js`）。
+**11. ~~大量重复代码跨组件复制~~ ✅ 已修复**
+~~`networkview.qml` 和 `NetworkPopup.qml` 中重复颜色定义、`isPhysicalIf`、`formatSpeed`、`formatTotal` 等，`formatSpeed` 还在 `TrafficChartWindow.qml` 中第三份拷贝。~~
+已新建 `package/components/NetCommon.qml` 聚合所有公共颜色与函数。3 个文件删除重复定义改为引用 `common.xxx`，净删除 91 行重复代码。`downloadValueColor` 由属性绑定改为函数（调用方传速度值）。
 
 **12. 死代码：`interfaceStats` 属性未被使用**
 `networkview.qml:43` 绑定了 `interfaceStats` 属性，但从未在任何 UI 中读取。C++ 侧的 `interfaceStats()` 函数和 `Q_PROPERTY` 也是死代码。且其 `QStringList` 用 `|` 分隔符编码结构化数据的方式本身也很脆弱。

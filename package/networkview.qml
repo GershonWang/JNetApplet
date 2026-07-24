@@ -42,22 +42,21 @@ AppletItem {
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
     readonly property var interfaceStats: applet ? (applet.interfaceStats || []) : []
 
-    // 判断是否为物理网卡（QML 侧排序用，与 C++ isPhysicalInterface 逻辑一致）
-    function isPhysicalIf(name) {
-        return name.startsWith("wlp") || name.startsWith("wlan")
-            || name.startsWith("enp") || name.startsWith("eth")
-    }
+    // 公共颜色与格式化函数：集中定义于 components/NetCommon.qml（随 import "components" 引入），
+    // 与 NetworkPopup、TrafficChartWindow 共享同一份实现，消除跨组件重复定义
+    NetCommon { id: common }
 
     // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
     // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
-    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式
+    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
+    // 物理网卡判断逻辑共用 common.isPhysicalIf（与 C++ isPhysicalInterface 一致）
     readonly property var sortedInterfaces: {
         if (!root.ready || root.networkInterfaces.length === 0) return []
         var physical = []
         var virtual = []
         for (var i = 0; i < root.networkInterfaces.length; i++) {
             var name = root.networkInterfaces[i]
-            if (root.isPhysicalIf(name)) physical.push(name)
+            if (common.isPhysicalIf(name)) physical.push(name)
             else virtual.push(name)
         }
         physical.sort()
@@ -79,43 +78,15 @@ AppletItem {
         }
     }
 
+    // 带单位的速度/总量格式化函数（formatSpeed / formatTotal）已移至 NetCommon，
+    // 本文件未直接使用；弹窗与图表窗口经 common.formatSpeed / common.formatTotal 调用
 
-    // 格式化速度显示（带单位，用于弹出面板，信息更完整）
-    // 最小单位为 KB，与 formatSpeedShort 保持一致；所有级别保留 2 位小数
-    function formatSpeed(bytesPerSec) {
-        if (bytesPerSec < 1024 * 1024) {
-            return (bytesPerSec / 1024).toFixed(2) + " KB/s"
-        } else if (bytesPerSec < 1024 * 1024 * 1024) {
-            return (bytesPerSec / (1024 * 1024)).toFixed(2) + " MB/s"
-        } else {
-            return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + " GB/s"
-        }
-    }
-
-    // 格式化总量显示（用于弹出面板的累计统计）
-    function formatTotal(bytes) {
-        if (bytes < 1024) {
-            return bytes.toFixed(0) + " B"
-        } else if (bytes < 1024 * 1024) {
-            return (bytes / 1024).toFixed(1) + " KB"
-        } else if (bytes < 1024 * 1024 * 1024) {
-            return (bytes / (1024 * 1024)).toFixed(1) + " MB"
-        } else {
-            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB"
-        }
-    }
-
-    // 任务栏图标颜色派生自 DTK 系统调色板（windowText），跟随系统主题适配。
-    // 设计原因：原用 DockPalette.iconTextPalette，但实测其不随系统深色主题变化，
-    // 深色模式下返回深色文字（黑底黑字）、浅色模式下返回浅色文字（白底白字），方向相反。
-    // DTK.palette.windowText 在深色模式下为浅色、浅色模式下为深色，与任务栏背景匹配。
-    // 注意：仅用于任务栏图标区（speedTextColor 回退），弹窗和独立窗口各自派生颜色。
-    readonly property color baseTextColor: DTK.palette.windowText
-    readonly property color primaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.95)
-    readonly property color secondaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.80)
-    readonly property color tertiaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.65)
-    readonly property color cardBackground: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.06)
-    readonly property color cardBorder: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.10)
+    // 颜色别名：转发 common 的公共颜色，保持下游 root.xxx 引用不变。
+    // 仅保留本文件实际使用的两个（primaryText 供 speedTextColor 回退、
+    // accentRed 传入各独立窗口）；其余公共颜色本文件未用，不再重复定义。
+    // 颜色派生逻辑与主题适配的设计原因见 NetCommon.qml 文件头注释
+    readonly property color primaryText: common.primaryText
+    readonly property color accentRed: common.accentRed
 
     // 深色模式检测：用 DTK 系统调色板的窗口背景亮度判定，而非 DockPalette。
     // 设计原因：DockPalette.iconTextPalette 反映的是任务栏图标文字色，不随系统深色主题变化；
@@ -123,26 +94,6 @@ AppletItem {
     // 浅色模式下为浅色（hslLightness >= 0.5）。主题切换时 DTK.paletteChanged 自动触发重新求值。
     // 检测结果通过属性注入各独立窗口（AboutWindow 等独立 Window 无法访问 dock 上下文的 DockPalette）
     readonly property bool isDarkMode: DTK.palette.window.hslLightness < 0.5
-
-    // 强调色：下载蓝、上传绿，是面板与任务栏的主视觉区分
-    readonly property color accentBlue: Qt.rgba(20 / 255, 80 / 255, 160 / 255, 1)
-    readonly property color accentBlueLight: Qt.rgba(20 / 255, 80 / 255, 160 / 255, 0.12)
-    readonly property color accentGreen: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 1)
-    readonly property color accentGreenLight: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 0.12)
-
-    // 高速警示色：下载速度超过阈值时由蓝转橙再转红
-    readonly property color accentOrange: Qt.rgba(245 / 255, 158 / 255, 11 / 255, 1)
-    readonly property color accentRed: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
-
-    // 下载值颜色：保留原有阈值逻辑（>10MB/s 红、>1MB/s 橙、否则蓝），仅作用于下载值
-    readonly property color downloadValueColor: {
-        if (downloadSpeed > 10 * 1024 * 1024) return accentRed
-        if (downloadSpeed > 1 * 1024 * 1024) return accentOrange
-        return accentBlue
-    }
-
-    // 上传值颜色：固定绿色，不做高速警示
-    readonly property color uploadValueColor: accentGreen
 
     // 任务栏网速数值字体色：用户自定义色优先（持久化），未设置时跟随系统主题
     // 设计原因：primaryText 派生自 DTK.palette.windowText，深浅色系统主题自动适配；

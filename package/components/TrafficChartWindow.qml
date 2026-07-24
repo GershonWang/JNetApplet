@@ -16,9 +16,14 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import "."
 
 Window {
     id: root
+
+    // 公共格式化函数：集中定义于同目录 NetCommon.qml，
+    // 与 networkview.qml、NetworkPopup 共享同一份实现，消除跨组件重复定义
+    NetCommon { id: common }
 
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
@@ -102,17 +107,8 @@ Window {
         }
     }
 
-    // 格式化速度显示（带单位，最小 KB，保留 2 位小数）
-    // 与 networkview.qml 的 formatSpeed 同实现；组件内自带一份保证独立可用
-    function formatSpeed(bytesPerSec) {
-        if (bytesPerSec < 1024 * 1024) {
-            return (bytesPerSec / 1024).toFixed(2) + " KB/s"
-        } else if (bytesPerSec < 1024 * 1024 * 1024) {
-            return (bytesPerSec / (1024 * 1024)).toFixed(2) + " MB/s"
-        } else {
-            return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + " GB/s"
-        }
-    }
+    // 格式化速度显示：统一调用 common.formatSpeed（带单位，最小 KB，保留 2 位小数），
+    // 与 networkview.qml / NetworkPopup 共用 NetCommon 中的同一份实现
 
     // Y 轴上限取整：将 v 向上取整到 1/2/5 × 10^n 序列
     // 设计原因：使刻度值为易读的整数（如 12345 -> 20000，80000 -> 100000），
@@ -308,7 +304,7 @@ Window {
 
                 Text {
                     // applet 为空时兜底为 0，保证独立预览不报错
-                    text: root.formatSpeed(root.applet ? root.applet.downloadSpeed : 0)
+                    text: common.formatSpeed(root.applet ? root.applet.downloadSpeed : 0)
                     font.pixelSize: 12
                     color: root.textPrimary
                 }
@@ -323,7 +319,7 @@ Window {
                 }
 
                 Text {
-                    text: root.formatSpeed(root.applet ? root.applet.uploadSpeed : 0)
+                    text: common.formatSpeed(root.applet ? root.applet.uploadSpeed : 0)
                     font.pixelSize: 12
                     color: root.textPrimary
                 }
@@ -560,8 +556,8 @@ Window {
                         var idx = root.hoverIndex
                         var upVal = idx < ul.length ? ul[idx].y : 0
                         root.hoverHint = Qt.formatDateTime(new Date(dl[idx].x * 1000), "HH:mm:ss")
-                                + "  ↓" + root.formatSpeed(dl[idx].y)
-                                + "  ↑" + root.formatSpeed(upVal)
+                                + "  ↓" + common.formatSpeed(dl[idx].y)
+                                + "  ↑" + common.formatSpeed(upVal)
                         canvas.requestPaint()
                     }
 

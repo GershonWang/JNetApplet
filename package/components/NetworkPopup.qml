@@ -4,7 +4,8 @@
 
 // 网络速度监控弹窗内容组件
 // 展示实时速度、总量统计、网卡切换 chip 列表；
-// 由 networkview.qml 的 PanelPopup 实例化，传入 applet 属性，内部自行派生颜色和数据
+// 由 networkview.qml 的 PanelPopup 实例化，传入 applet 属性；
+// 颜色与格式化函数统一取自同目录 NetCommon.qml（common.xxx），数据由 applet 提供
 // 设计原因：PanelPopup 是 dock 上下文类型，不能作为独立组件根元素，
 // 因此本组件用 Control 作为根，由 networkview.qml 的 PanelPopup 包裹
 
@@ -13,9 +14,14 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import org.deepin.ds.dock 1.0
 import org.deepin.dtk 1.0
+import "."
 
 Control {
     id: popup
+
+    // 公共颜色与格式化函数：集中定义于同目录 NetCommon.qml，
+    // 与 networkview.qml、TrafficChartWindow 共享同一份实现，消除跨组件重复定义
+    NetCommon { id: common }
 
     // C++ 后端对象，提供速度/接口/IP 等所有数据
     property var applet: null
@@ -32,84 +38,41 @@ Control {
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
 
-    // 弹窗颜色派生自 DTK 系统调色板（windowText），而非 DockPalette.iconTextPalette。
-    // 设计原因：PanelPopup 背景跟随系统主题（深色模式下变黑），但 DockPalette.iconTextPalette
-    // 反映的是任务栏图标文字色，不随系统深色主题变化，导致深色模式下弹窗黑底黑字。
-    // DTK.palette.windowText 在深色模式下为浅色文字、浅色模式下为深色文字，与弹窗背景同步。
-    // 主题切换时 DTK.paletteChanged 信号自动触发属性绑定重新求值。
-    readonly property color baseTextColor: DTK.palette.windowText
-    readonly property color primaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.95)
-    readonly property color secondaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.80)
-    readonly property color tertiaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.65)
-    readonly property color cardBackground: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.06)
-    readonly property color cardBorder: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.10)
+    // 弹窗颜色别名：转发 common 的公共颜色（派生自 DTK 系统调色板 windowText，
+    // 主题适配的设计原因见 NetCommon.qml 文件头注释），保持下游 popup.xxx 引用不变
+    readonly property color primaryText: common.primaryText
+    readonly property color secondaryText: common.secondaryText
+    readonly property color tertiaryText: common.tertiaryText
+    readonly property color cardBackground: common.cardBackground
+    readonly property color cardBorder: common.cardBorder
 
-    // 强调色：下载蓝、上传绿，是面板的主视觉区分
-    readonly property color accentBlue: Qt.rgba(20 / 255, 80 / 255, 160 / 255, 1)
-    readonly property color accentBlueLight: Qt.rgba(20 / 255, 80 / 255, 160 / 255, 0.12)
-    readonly property color accentGreen: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 1)
-    readonly property color accentGreenLight: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 0.12)
-
-    // 高速警示色：下载速度超过阈值时由蓝转橙再转红
-    readonly property color accentOrange: Qt.rgba(245 / 255, 158 / 255, 11 / 255, 1)
-    readonly property color accentRed: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
-
-    // 下载值颜色：保留原有阈值逻辑（>10MB/s 红、>1MB/s 橙、否则蓝），仅作用于下载值
-    readonly property color downloadValueColor: {
-        if (downloadSpeed > 10 * 1024 * 1024) return accentRed
-        if (downloadSpeed > 1 * 1024 * 1024) return accentOrange
-        return accentBlue
-    }
+    // 强调色别名：下载蓝、上传绿，是面板的主视觉区分
+    readonly property color accentBlue: common.accentBlue
+    readonly property color accentBlueLight: common.accentBlueLight
+    readonly property color accentGreen: common.accentGreen
+    readonly property color accentGreenLight: common.accentGreenLight
 
     // 上传值颜色：固定绿色，不做高速警示
-    readonly property color uploadValueColor: accentGreen
-
-    // 判断是否为物理网卡（QML 侧排序用，与 C++ isPhysicalInterface 逻辑一致）
-    function isPhysicalIf(name) {
-        return name.startsWith("wlp") || name.startsWith("wlan")
-            || name.startsWith("enp") || name.startsWith("eth")
-    }
+    // 下载值颜色带阈值逻辑（>10MB/s 红、>1MB/s 橙、否则蓝），已提取为
+    // common.downloadValueColor(speed) 函数，在使用处直接传入 downloadSpeed 调用
+    readonly property color uploadValueColor: common.uploadValueColor
 
     // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
     // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
-    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式
+    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
+    // 物理网卡判断逻辑共用 common.isPhysicalIf（与 C++ isPhysicalInterface 一致）
     readonly property var sortedInterfaces: {
         if (!popup.ready || popup.networkInterfaces.length === 0) return []
         var physical = []
         var virtual = []
         for (var i = 0; i < popup.networkInterfaces.length; i++) {
             var name = popup.networkInterfaces[i]
-            if (popup.isPhysicalIf(name)) physical.push(name)
+            if (common.isPhysicalIf(name)) physical.push(name)
             else virtual.push(name)
         }
         physical.sort()
         virtual.sort()
         return physical.concat(virtual)
-    }
-
-    // 格式化速度显示（带单位，用于弹出面板，信息更完整）
-    // 最小单位为 KB，与 formatSpeedShort 保持一致；所有级别保留 2 位小数
-    function formatSpeed(bytesPerSec) {
-        if (bytesPerSec < 1024 * 1024) {
-            return (bytesPerSec / 1024).toFixed(2) + " KB/s"
-        } else if (bytesPerSec < 1024 * 1024 * 1024) {
-            return (bytesPerSec / (1024 * 1024)).toFixed(2) + " MB/s"
-        } else {
-            return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + " GB/s"
-        }
-    }
-
-    // 格式化总量显示（用于弹出面板的累计统计）
-    function formatTotal(bytes) {
-        if (bytes < 1024) {
-            return bytes.toFixed(0) + " B"
-        } else if (bytes < 1024 * 1024) {
-            return (bytes / 1024).toFixed(1) + " KB"
-        } else if (bytes < 1024 * 1024 * 1024) {
-            return (bytes / (1024 * 1024)).toFixed(1) + " MB"
-        } else {
-            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB"
-        }
     }
 
     // 供外部调用：popup 打开时滚动到活动 chip
@@ -231,10 +194,10 @@ Control {
                         }
 
                         Text {
-                            text: popup.formatSpeed(popup.downloadSpeed)
+                            text: common.formatSpeed(popup.downloadSpeed)
                             font.pixelSize: 18
                             font.weight: Font.Bold
-                            color: popup.downloadValueColor
+                            color: common.downloadValueColor(popup.downloadSpeed)
                             Layout.alignment: Qt.AlignHCenter
                         }
                     }
@@ -288,7 +251,7 @@ Control {
                         }
 
                         Text {
-                            text: popup.formatSpeed(popup.uploadSpeed)
+                            text: common.formatSpeed(popup.uploadSpeed)
                             font.pixelSize: 18
                             font.weight: Font.Bold
                             color: popup.uploadValueColor
@@ -323,13 +286,13 @@ Control {
                     }
 
                     Text {
-                        text: "↓ " + popup.formatTotal(popup.totalDownload)
+                        text: "↓ " + common.formatTotal(popup.totalDownload)
                         font.pixelSize: 12
                         color: popup.primaryText
                     }
 
                     Text {
-                        text: "↑ " + popup.formatTotal(popup.totalUpload)
+                        text: "↑ " + common.formatTotal(popup.totalUpload)
                         font.pixelSize: 12
                         color: popup.primaryText
                     }
