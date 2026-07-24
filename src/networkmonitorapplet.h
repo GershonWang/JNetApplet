@@ -140,6 +140,10 @@ private:
     // 当前瞬时速度（字节/秒），用 double 存储以保留按真实间隔除算的小数精度
     double m_downloadSpeed;
     double m_uploadSpeed;
+    // 每个接口的上次收发字节数，用于为所有接口（非仅活动接口）计算速度并采集历史
+    // 设计原因：原仅跟踪活动接口，切换到非活动接口时趋势图为空需等待数分钟才有数据
+    QHash<QString, qint64> m_lastRxBytesByIface;
+    QHash<QString, qint64> m_lastTxBytesByIface;
     
     // 总量
     qint64 m_totalDownload;

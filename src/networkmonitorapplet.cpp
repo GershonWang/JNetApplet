@@ -303,12 +303,14 @@ void NetworkMonitorApplet::readNetworkStats()
         m_interfaceList = newInterfaces.keys();
         m_interfaces = newInterfaces;
 
-        // 清理已消失接口的历史缓冲，避免内存泄漏
-        // 设计原因：USB 网卡、VPN 隧道等接口可能随时消失，其历史数据不再需要
+        // 清理已消失接口的历史缓冲和基线数据，避免内存泄漏
+        // 设计原因：USB 网卡、VPN 隧道等接口可能随时消失，其历史数据和基线不再需要
         const QStringList oldIfaces = m_speedHistory.keys();
         for (const QString &name : oldIfaces) {
             if (!newInterfaces.contains(name)) {
                 m_speedHistory.remove(name);
+                m_lastRxBytesByIface.remove(name);
+                m_lastTxBytesByIface.remove(name);
             }
         }
 
@@ -361,61 +363,69 @@ void NetworkMonitorApplet::readNetworkStats()
 
 void NetworkMonitorApplet::calculateSpeed()
 {
-    qint64 currentRxBytes = getActiveRxBytes();
-    qint64 currentTxBytes = getActiveTxBytes();
     // 当前采样时间戳（毫秒），用于按真实流逝时间计算速度
     const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-
-    if (m_firstUpdate) {
-        m_firstUpdate = false;
-        m_lastRxBytes = currentRxBytes;
-        m_lastTxBytes = currentTxBytes;
-        m_lastTimestampMs = nowMs;
-        return;
-    }
-
-    // 按真实流逝时间计算速度（字节/秒）
-    // 设计原因：原实现假设定时间隔严格 1 秒，直接取字节差作为速度；
-    // 系统负载高时 QTimer 可能延迟触发，实际间隔偏离 1 秒导致速度失真。
-    // 改为除以真实间隔后，无论定时器抖动如何速度都准确。
+    const qint64 nowSec = QDateTime::currentSecsSinceEpoch();
     const double elapsedSec = (nowMs - m_lastTimestampMs) / 1000.0;
+    m_lastTimestampMs = nowMs;
 
-    // 仅当间隔合法时计算速度并累加会话流量，避免除零；间隔为 0 时保持上次值
-    if (elapsedSec > 0) {
+    // ---- 活动接口速度计算（用于任务栏显示和总量累加）----
+    if (m_firstUpdate) {
+        // 首次更新或接口切换后：仅记录基线，不计算速度
+        m_firstUpdate = false;
+        m_lastRxBytes = getActiveRxBytes();
+        m_lastTxBytes = getActiveTxBytes();
+    } else if (elapsedSec > 0 && !m_activeInterface.isEmpty()) {
+        // 按真实流逝时间计算速度（字节/秒），避免定时器抖动失真
+        const qint64 currentRxBytes = getActiveRxBytes();
+        const qint64 currentTxBytes = getActiveTxBytes();
         // 计数器回绕/接口重置时差值可能为负，钳制为 0 避免显示负速度
-        // 触发场景：网卡重启、/proc/net/dev 计数器溢出、USB 网卡拔出重插
         const qint64 rxDelta = currentRxBytes - m_lastRxBytes;
         const qint64 txDelta = currentTxBytes - m_lastTxBytes;
         const qint64 rxDeltaClamped = rxDelta > 0 ? rxDelta : 0;
         const qint64 txDeltaClamped = txDelta > 0 ? txDelta : 0;
         m_downloadSpeed = rxDeltaClamped / elapsedSec;
         m_uploadSpeed = txDeltaClamped / elapsedSec;
-        // 累加会话总量：原实现直接取计数器值，切换网卡/网卡重启时总量跳变；
-        // 改为累加增量后，总量 = 本次会话期间所有活动接口的流量总和，不再跳变
+        // 累加会话总量：总量 = 本次会话期间所有活动接口的流量总和
         m_totalDownload += rxDeltaClamped;
         m_totalUpload += txDeltaClamped;
+        m_lastRxBytes = currentRxBytes;
+        m_lastTxBytes = currentTxBytes;
     }
 
-    m_lastRxBytes = currentRxBytes;
-    m_lastTxBytes = currentTxBytes;
-    m_lastTimestampMs = nowMs;
+    // ---- 为所有接口采集速度历史（非仅活动接口）----
+    // 设计原因：原仅采集活动接口，切换到非活动接口时趋势图为空需等待数分钟。
+    // 改为遍历所有接口计算各自速度并追加历史，切换接口时趋势图立即有数据。
+    if (elapsedSec > 0) {
+        for (const QString &name : m_interfaceList) {
+            if (!m_interfaces.contains(name)) continue;
+            const NetworkInterface &iface = m_interfaces[name];
 
-    // 追加采样点到当前活动接口的环形缓冲
-    // 设计原因：applet 启动即持续采集，用户随时打开趋势图都能看到完整 5 分钟数据
-    if (!m_activeInterface.isEmpty()) {
-        SpeedSample sample;
-        sample.timestamp = QDateTime::currentSecsSinceEpoch();
-        sample.downloadSpeed = m_downloadSpeed;
-        sample.uploadSpeed = m_uploadSpeed;
-        m_speedHistory[m_activeInterface].append(sample);
+            // 接口尚未初始化基线（首次采集或运行中新增的接口），记录基线跳过本次
+            if (!m_lastRxBytesByIface.contains(name)) {
+                m_lastRxBytesByIface[name] = iface.rxBytes;
+                m_lastTxBytesByIface[name] = iface.txBytes;
+                continue;
+            }
 
-        // 滑动窗口裁剪：超过 300 点时丢弃最旧的
-        // removeFirst 是 O(n)，但 300 点每秒一次开销可忽略，无需复杂环形索引
-        QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
-        while (samples.size() > MAX_HISTORY_SAMPLES) {
-            samples.removeFirst();
+            const qint64 iRxDelta = iface.rxBytes - m_lastRxBytesByIface[name];
+            const qint64 iTxDelta = iface.txBytes - m_lastTxBytesByIface[name];
+
+            SpeedSample sample;
+            sample.timestamp = nowSec;
+            sample.downloadSpeed = (iRxDelta > 0 ? iRxDelta : 0) / elapsedSec;
+            sample.uploadSpeed = (iTxDelta > 0 ? iTxDelta : 0) / elapsedSec;
+            m_speedHistory[name].append(sample);
+
+            // 滑动窗口裁剪：超过 300 点时丢弃最旧的
+            QVector<SpeedSample> &samples = m_speedHistory[name];
+            while (samples.size() > MAX_HISTORY_SAMPLES) {
+                samples.removeFirst();
+            }
+
+            m_lastRxBytesByIface[name] = iface.rxBytes;
+            m_lastTxBytesByIface[name] = iface.txBytes;
         }
-
         emit speedHistoryChanged();
     }
 
