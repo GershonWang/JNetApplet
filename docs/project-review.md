@@ -59,14 +59,16 @@
 ~~`networkview.qml` 和 `NetworkPopup.qml` 中重复颜色定义、`isPhysicalIf`、`formatSpeed`、`formatTotal` 等，`formatSpeed` 还在 `TrafficChartWindow.qml` 中第三份拷贝。~~
 已新建 `package/components/NetCommon.qml` 聚合所有公共颜色与函数。3 个文件删除重复定义改为引用 `common.xxx`，净删除 91 行重复代码。`downloadValueColor` 由属性绑定改为函数（调用方传速度值）。
 
-**12. 死代码：`interfaceStats` 属性未被使用**
-`networkview.qml:43` 绑定了 `interfaceStats` 属性，但从未在任何 UI 中读取。C++ 侧的 `interfaceStats()` 函数和 `Q_PROPERTY` 也是死代码。且其 `QStringList` 用 `|` 分隔符编码结构化数据的方式本身也很脆弱。
+**12. ~~死代码：`interfaceStats` 属性未被使用~~ ✅ 已修复**
+~~`networkview.qml` 绑定了 `interfaceStats` 属性但从未读取，C++ 侧的 `interfaceStats()` 函数和 `Q_PROPERTY` 也是死代码。~~
+已删除 `Q_PROPERTY`、`interfaceStats()` 实现、`statsChanged` 信号、QML 属性绑定。
 
 **13. 死代码：`refresh()` Q_INVOKABLE 从未被 QML 调用**
 注释（networkview.qml:276）说明此前 QML 调 `applet.refresh()` 导致问题后已移除调用，但 C++ 侧的 `Q_INVOKABLE void refresh()` 仍保留。若确无外部调用方，可删除或标注保留原因。
 
-**14. `interfaceStats` 暴露的数据不完整**
-`NetworkInterface` 结构体解析了 `rxErrors`/`txErrors`/`rxDropped`/`txDropped`，但 `interfaceStats()` 输出时丢弃了这些字段。若未来要展示丢包/错误率，需补全。
+**14. ~~`interfaceStats` 暴露的数据不完整~~ ✅ 随 #12 一并解决**
+~~`NetworkInterface` 结构体解析了 `rxErrors`/`txErrors`/`rxDropped`/`txDropped`，但 `interfaceStats()` 输出时丢弃了这些字段。~~
+`interfaceStats()` 已随 #12 整体删除，不再有不完整的输出。结构体字段保留供未来使用。
 
 **15. README.md 和 AGENTS.md 严重过时**
 - 项目结构只列 `AboutWindow.qml`，实际有 5 个组件（缺 `NetworkPopup`、`SettingsWindow`、`TextColorPicker`、`TrafficChartWindow`）

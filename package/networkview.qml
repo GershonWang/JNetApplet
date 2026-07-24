@@ -40,7 +40,6 @@ AppletItem {
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
-    readonly property var interfaceStats: applet ? (applet.interfaceStats || []) : []
 
     // 公共颜色与格式化函数：集中定义于 components/NetCommon.qml（随 import "components" 引入），
     // 与 NetworkPopup、TrafficChartWindow 共享同一份实现，消除跨组件重复定义

@@ -103,23 +103,6 @@ QStringList NetworkMonitorApplet::networkInterfaces() const
     return m_interfaceList;
 }
 
-QStringList NetworkMonitorApplet::interfaceStats() const
-{
-    QStringList stats;
-    for (const QString &name : m_interfaceList) {
-        if (m_interfaces.contains(name)) {
-            const NetworkInterface &iface = m_interfaces[name];
-            stats << QString("%1|%2|%3|%4|%5")
-                .arg(iface.name)
-                .arg(iface.rxBytes)
-                .arg(iface.txBytes)
-                .arg(iface.rxPackets)
-                .arg(iface.txPackets);
-        }
-    }
-    return stats;
-}
-
 bool NetworkMonitorApplet::ready() const
 {
     return m_ready;
@@ -360,7 +343,6 @@ void NetworkMonitorApplet::readNetworkStats()
     }
     
     calculateSpeed();
-    emit statsChanged();
     // 每次刷新都检测 IP，以应对 DHCP 续约等 IP 变更场景
     detectIpAddress();
 }

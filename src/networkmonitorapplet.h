@@ -49,7 +49,6 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(double totalDownload READ totalDownload NOTIFY totalChanged)
     Q_PROPERTY(double totalUpload READ totalUpload NOTIFY totalChanged)
     Q_PROPERTY(QStringList networkInterfaces READ networkInterfaces NOTIFY interfacesChanged)
-    Q_PROPERTY(QStringList interfaceStats READ interfaceStats NOTIFY statsChanged)
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
     // 当前活动接口，用户在弹窗或设置窗口选择后持久化到 ~/.config/jnetapplet/settings.ini，
     // 下次启动自动恢复；若保存的接口已不存在则回退到自动选择
@@ -81,7 +80,6 @@ public:
     double totalDownload() const;
     double totalUpload() const;
     QStringList networkInterfaces() const;
-    QStringList interfaceStats() const;
     bool ready() const;
     QString activeInterface() const;
     QString ipAddress() const;
@@ -104,7 +102,6 @@ signals:
     void speedChanged();
     void totalChanged();
     void interfacesChanged();
-    void statsChanged();
     void readyChanged();
     void activeInterfaceChanged();
     void ipAddressChanged();
