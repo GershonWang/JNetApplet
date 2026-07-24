@@ -95,7 +95,9 @@ public:
     // 设置任务栏网速字体颜色，空串表示跟随系统主题
     void setTextColor(const QString &color);
 
-    Q_INVOKABLE void refresh();
+    // 定时器回调，由 m_refreshTimer 每秒调用。非 Q_INVOKABLE（QML 不应直接调用，
+    // 否则会打破 1 秒定时间隔导致速度计算失真）
+    void refresh();
     Q_INVOKABLE void setActiveInterface(const QString &interface);
 
 signals:

@@ -233,8 +233,7 @@ AppletItem {
     // C++ 后端 NetworkMonitorApplet::init() 已启动 1 秒间隔的 m_refreshTimer，
     // 持续调用 refresh()->readNetworkStats()->calculateSpeed() 更新速度属性。
     // QML 通过属性绑定自动获取最新值，无需主动触发 refresh。
-    // 此前 QML 额外调用 applet.refresh() 会打破 1 秒定时间隔，
-    // 导致 calculateSpeed() 基于不固定间隔计算字节差，速度显示接近 0。
+    // refresh() 已移除 Q_INVOKABLE 标记，防止 QML 误调用打破定时间隔。
 
     Timer {
         id: toolTipShowTimer

@@ -63,8 +63,9 @@
 ~~`networkview.qml` 绑定了 `interfaceStats` 属性但从未读取，C++ 侧的 `interfaceStats()` 函数和 `Q_PROPERTY` 也是死代码。~~
 已删除 `Q_PROPERTY`、`interfaceStats()` 实现、`statsChanged` 信号、QML 属性绑定。
 
-**13. 死代码：`refresh()` Q_INVOKABLE 从未被 QML 调用**
-注释（networkview.qml:276）说明此前 QML 调 `applet.refresh()` 导致问题后已移除调用，但 C++ 侧的 `Q_INVOKABLE void refresh()` 仍保留。若确无外部调用方，可删除或标注保留原因。
+**13. ~~死代码：`refresh()` Q_INVOKABLE 从未被 QML 调用~~ ✅ 已修复**
+~~C++ 侧的 `Q_INVOKABLE void refresh()` 从未被 QML 调用。~~
+已移除 `Q_INVOKABLE` 标记。`refresh()` 函数本身保留（是 `m_refreshTimer` 每秒回调），仅不再暴露给 QML。
 
 **14. ~~`interfaceStats` 暴露的数据不完整~~ ✅ 随 #12 一并解决**
 ~~`NetworkInterface` 结构体解析了 `rxErrors`/`txErrors`/`rxDropped`/`txDropped`，但 `interfaceStats()` 输出时丢弃了这些字段。~~
