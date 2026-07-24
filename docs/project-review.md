@@ -31,8 +31,9 @@
 
 ### 🟡 中优先级
 
-**6. `setActiveInterface()` 不校验接口有效性**
-可传入不存在的接口名，会被持久化到配置文件。下次启动时虽然会被 `readNetworkStats()` 清空回退，但当前会话期间 `getActiveRxBytes()` 返回 0，速度恒为 0，用户困惑。
+**6. ~~`setActiveInterface()` 不校验接口有效性~~ ✅ 已修复**
+~~可传入不存在的接口名，会被持久化到配置文件，当前会话期间速度恒为 0。~~
+已在方法入口增加 `m_interfaceList.contains(interface)` 校验，无效接口名直接忽略。
 
 **7. 速度历史仅记录活动接口**
 `m_speedHistory` 每秒只给 `m_activeInterface` 追加采样点。非活动接口永不采集，切换到新接口时趋势图为空，需等待数分钟才有数据。若要"切回仍能看到历史"，应后台为所有接口持续采样。

@@ -227,6 +227,14 @@ void NetworkMonitorApplet::refresh()
 
 void NetworkMonitorApplet::setActiveInterface(const QString &interface)
 {
+    // 校验接口是否存在于当前接口列表中，无效接口名直接忽略
+    // 设计原因：传入不存在的接口名会被持久化到配置文件，且当前会话期间
+    // getActiveRxBytes() 返回 0 导致速度恒为 0，用户困惑；
+    // 虽然下次启动 readNetworkStats() 会清空回退，但当前会话不应接受无效值
+    if (!m_interfaceList.contains(interface)) {
+        return;
+    }
+
     if (m_activeInterface != interface) {
         m_activeInterface = interface;
         m_firstUpdate = true;
