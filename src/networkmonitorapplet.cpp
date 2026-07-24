@@ -14,6 +14,9 @@
 #include <QColor>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTranslator>
+#include <QLocale>
+#include <QCoreApplication>
 
 DS_BEGIN_NAMESPACE
 
@@ -65,6 +68,17 @@ bool NetworkMonitorApplet::load()
 
 bool NetworkMonitorApplet::init()
 {
+    // 加载翻译文件：根据系统语言加载对应的 .qm 文件
+    // 设计原因：QML 源串为英文，中文翻译通过 .qm 文件在运行时加载。
+    // 翻译上下文为 QML 文件名（如 "networkview"、"AboutWindow"），
+    // 安装到 QCoreApplication 后 qsTr() 自动查找匹配。
+    QTranslator *translator = new QTranslator(this);
+    const QString locale = QLocale::system().name();
+    if (translator->load(QStringLiteral("jnetapplet_%1.qm").arg(locale),
+                         QStringLiteral(TRANSLATIONS_DIR))) {
+        qApp->installTranslator(translator);
+    }
+
     detectInterfaces();
     
     // 启动定时刷新

@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Quick DBus Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Quick DBus Network LinguistTools)
 find_package(Dtk6 REQUIRED COMPONENTS Core)
 find_package(DDEShell REQUIRED)
 
@@ -22,6 +22,17 @@ set_target_properties(space.jokul.JNetApplet PROPERTIES PREFIX "")
 
 # 将 project(VERSION) 暴露为编译宏，供 C++ version() 兜底使用
 target_compile_definitions(space.jokul.JNetApplet PRIVATE PROJECT_VERSION="${PROJECT_VERSION}")
+
+# 翻译文件：编译 .ts -> .qm，安装到插件目录的 translations/ 子目录
+# 设计原因：QML 中 qsTr() 源串为英文，中文翻译通过 .qm 文件在运行时加载
+set(TS_FILES ${CMAKE_CURRENT_SOURCE_DIR}/translations/jnetapplet_zh_CN.ts)
+qt_add_translation(QM_FILES ${TS_FILES})
+# 翻译文件安装路径，暴露为编译宏供 C++ 加载
+target_compile_definitions(space.jokul.JNetApplet PRIVATE
+    TRANSLATIONS_DIR="/usr/share/dde-shell/${PLUGIN_ID}/translations"
+)
+# 确保 .qm 在构建时生成（qt_add_translation 默认仅 install 时触发）
+add_custom_target(translations ALL DEPENDS ${QM_FILES})
 
 # 头文件搜索路径指向 src/，使 #include "networkmonitorapplet.h" 可被外部解析
 target_include_directories(space.jokul.JNetApplet PRIVATE
@@ -52,3 +63,6 @@ install(FILES package/networkview.qml DESTINATION /usr/share/dde-shell/${PLUGIN_
 # 设计原因：拆分出的子组件需随主 QML 一起安装到 dde-shell 插件目录，
 # 否则 networkview.qml 的 import "components" 在运行时找不到类型
 install(DIRECTORY package/components DESTINATION /usr/share/dde-shell/${PLUGIN_ID})
+
+# 安装编译后的翻译文件
+install(FILES ${QM_FILES} DESTINATION /usr/share/dde-shell/${PLUGIN_ID}/translations)

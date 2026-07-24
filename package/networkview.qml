@@ -222,9 +222,9 @@ AppletItem {
         id: toolTip
         text: root.ready
               ? (root.activeInterface
-                 + " · IPv4：" + (root.ipAddress || qsTr("无"))
-                 + (root.ipv6Address ? "\nIPv6：" + root.ipv6Address : ""))
-              : qsTr("未检测到网络接口")
+                 + " · " + qsTr("IPv4: ") + (root.ipAddress || qsTr("None"))
+                 + (root.ipv6Address ? "\n" + qsTr("IPv6: ") + root.ipv6Address : ""))
+              : qsTr("No network interface detected")
         toolTipX: DockPanelPositioner.x
         toolTipY: DockPanelPositioner.y
     }
@@ -300,7 +300,7 @@ AppletItem {
         id: contextMenu
 
         Platform.MenuItem {
-            text: qsTr("设置")
+            text: qsTr("Settings")
             onTriggered: {
                 settingsWindow.show()
                 settingsWindow.raise()
@@ -310,7 +310,7 @@ AppletItem {
 
         // 流量波动图：屏幕居中独立窗口，展示活动接口最近 30 分钟网速趋势
         Platform.MenuItem {
-            text: qsTr("流量波动图")
+            text: qsTr("Traffic Chart")
             onTriggered: {
                 trafficChartWindow.show()
                 trafficChartWindow.raise()
@@ -321,7 +321,7 @@ AppletItem {
         Platform.MenuSeparator {}
 
         Platform.MenuItem {
-            text: qsTr("关于")
+            text: qsTr("About")
             onTriggered: {
                 aboutWindow.show()
                 aboutWindow.raise()

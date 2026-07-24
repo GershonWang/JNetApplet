@@ -83,7 +83,7 @@ Window {
                     anchors.left: parent.left
                     anchors.leftMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("关于")
+                    text: qsTr("About")
                     font.pixelSize: 15
                     font.weight: Font.Bold
                     color: root.textPrimary
@@ -130,7 +130,7 @@ Window {
                 spacing: 2
 
                 Text {
-                    text: qsTr("网络速度监控")
+                    text: qsTr("Network Speed Monitor")
                     font.pixelSize: 18
                     font.weight: Font.Bold
                     color: root.textPrimary
@@ -179,7 +179,7 @@ Window {
                     spacing: 0
 
                     Text {
-                        text: qsTr("版本")
+                        text: qsTr("Version")
                         font.pixelSize: 12
                         color: "#0081FF"
                         Layout.preferredWidth: 56
@@ -200,7 +200,7 @@ Window {
                     spacing: 0
 
                     Text {
-                        text: qsTr("作者")
+                        text: qsTr("Author")
                         font.pixelSize: 12
                         color: "#0081FF"
                         Layout.preferredWidth: 56
@@ -221,7 +221,7 @@ Window {
                     spacing: 0
 
                     Text {
-                        text: qsTr("描述")
+                        text: qsTr("Description")
                         font.pixelSize: 12
                         color: "#0081FF"
                         Layout.preferredWidth: 56
@@ -229,7 +229,7 @@ Window {
                     }
 
                     Text {
-                        text: qsTr("监控网络速度和流量")
+                        text: qsTr("Monitor network speed and traffic")
                         font.pixelSize: 12
                         color: root.textPrimary
                         Layout.fillWidth: true
@@ -243,7 +243,7 @@ Window {
                     spacing: 0
 
                     Text {
-                        text: qsTr("仓库")
+                        text: qsTr("Repository")
                         font.pixelSize: 12
                         color: "#0081FF"
                         Layout.preferredWidth: 56
@@ -281,7 +281,7 @@ Window {
                             Text {
                                 id: copiedHintText
                                 anchors.centerIn: parent
-                                text: qsTr("已复制")
+                                text: qsTr("Copied")
                                 font.pixelSize: 10
                                 color: "#22A34A"
                             }

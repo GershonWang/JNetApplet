@@ -75,8 +75,9 @@
 ~~项目结构只列 AboutWindow.qml，功能特性未提及设置窗口/字体颜色/流量波动图/IPv6/深色模式，README 写"从弹窗卸载"实际在设置窗口。~~
 已更新 README.md 和 AGENTS.md 的功能特性列表、项目结构（补全 6 个组件）、C++ Backend 属性列表（移除 interfaceStats，新增 ipv6Address/version/textColor/speedHistory 等）。
 
-**16. `qsTr()` 源字符串为中文，无翻译基础设施**
-QML 中 `qsTr("网络速度监控")` 等以中文为源串，但项目无 `.ts` 翻译文件、无 `lupdate`/`lrelease` 构建步骤、C++ 无翻译加载逻辑。`qsTr()` 实质为空操作。若仅面向中文用户可接受；若计划国际化，需补全 i18n 基础设施并以英文为源串。
+**16. ~~`qsTr()` 源字符串为中文，无翻译基础设施~~ ✅ 已修复**
+~~QML 中 `qsTr()` 以中文为源串，无 `.ts` 翻译文件、无 `lupdate`/`lrelease` 构建步骤、C++ 无翻译加载逻辑。~~
+已将全部 44 处 `qsTr` 源串改为英文，新建 `translations/jnetapplet_zh_CN.ts` 中文翻译文件。CMake 增加 `LinguistTools` + `qt_add_translation` 编译 `.ts` -> `.qm`，`init()` 中按系统语言加载 `.qm` 并安装到 `qApp`。
 
 **17. C++ 后端无单元测试**
 项目无任何测试。`calculateSpeed`、`readNetworkStats` 的正则解析、`isPhysicalInterface`、`niceCeil`（QML）等纯逻辑函数适合且应该有单元测试覆盖。

@@ -95,7 +95,7 @@ Control {
                     spacing: 6
 
                     Text {
-                        text: qsTr("网络速度监控")
+                        text: qsTr("Network Speed Monitor")
                         font.pixelSize: 15
                         font.weight: Font.Bold
                         color: popup.primaryText
@@ -126,7 +126,7 @@ Control {
                             }
 
                             Text {
-                                text: popup.ipAddress ? qsTr("IPv4：") + popup.ipAddress : ""
+                                text: popup.ipAddress ? qsTr("IPv4: ") + popup.ipAddress : ""
                                 font.pixelSize: 13
                                 color: popup.secondaryText
                                 visible: popup.ipAddress !== ""
@@ -135,7 +135,7 @@ Control {
 
                             // IPv6 全球地址行，无 IPv6 时隐藏不占位
                             Text {
-                                text: popup.ipv6Address ? qsTr("IPv6：") + popup.ipv6Address : ""
+                                text: popup.ipv6Address ? qsTr("IPv6: ") + popup.ipv6Address : ""
                                 font.pixelSize: 13
                                 color: popup.secondaryText
                                 visible: popup.ipv6Address !== ""
@@ -187,7 +187,7 @@ Control {
                         }
 
                         Text {
-                            text: qsTr("下载")
+                            text: qsTr("Download")
                             font.pixelSize: 11
                             color: popup.secondaryText
                             Layout.alignment: Qt.AlignHCenter
@@ -244,7 +244,7 @@ Control {
                         }
 
                         Text {
-                            text: qsTr("上传")
+                            text: qsTr("Upload")
                             font.pixelSize: 11
                             color: popup.secondaryText
                             Layout.alignment: Qt.AlignHCenter
@@ -279,7 +279,7 @@ Control {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: qsTr("总计")
+                        text: qsTr("Total")
                         font.pixelSize: 11
                         font.weight: Font.Bold
                         color: popup.secondaryText
@@ -456,7 +456,7 @@ Control {
                     }
 
                     Text {
-                        text: qsTr("未检测到网络接口")
+                        text: qsTr("No network interface detected")
                         font.pixelSize: 12
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter

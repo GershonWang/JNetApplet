@@ -177,7 +177,7 @@ Window {
                     anchors.left: parent.left
                     anchors.leftMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("流量波动图")
+                    text: qsTr("Traffic Chart")
                     font.pixelSize: 15
                     font.weight: Font.Bold
                     color: root.textPrimary
@@ -421,7 +421,7 @@ Window {
                         ctx.font = "13px sans-serif"
                         ctx.textAlign = "center"
                         ctx.textBaseline = "middle"
-                        ctx.fillText(qsTr("暂无历史数据"), pl + pw / 2, pt + ph / 2)
+                        ctx.fillText(qsTr("No history data"), pl + pw / 2, pt + ph / 2)
                         return
                     }
 
@@ -578,7 +578,7 @@ Window {
                 Text {
                     anchors.centerIn: parent
                     text: root.hoverHint.length > 0
-                          ? root.hoverHint : qsTr("鼠标移到曲线上查看详情")
+                          ? root.hoverHint : qsTr("Hover over the curve for details")
                     font.pixelSize: 11
                     color: root.hoverHint.length > 0 ? root.textPrimary : root.textTertiary
                 }

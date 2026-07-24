@@ -51,7 +51,7 @@ Window {
     readonly property color selText: isDarkMode ? "#64B5F6" : "#1565C0"
 
     // 卸载按钮文字：复制命令后临时显示提示，定时器到期后还原
-    property string uninstallButtonText: qsTr("卸载插件")
+    property string uninstallButtonText: qsTr("Uninstall Plugin")
 
     width: 350
     height: 390
@@ -70,15 +70,15 @@ Window {
     // 设计原因：用户面对多个网口时难以仅凭 enp3s0/wlp3s0 等命名判断用途，
     // 加一行类型说明（有线/无线/VPN 等）降低认知负担
     function interfaceDescription(name) {
-        if (name === "lo") return qsTr("本地回环")
-        if (name === "Meta") return qsTr("虚拟接口")
-        if (/^enp|^eth/.test(name)) return qsTr("有线网络")
-        if (/^wlp|^wlan/.test(name)) return qsTr("无线网络")
-        if (/^docker|^veth/.test(name)) return qsTr("容器网络")
-        if (/^br/.test(name)) return qsTr("桥接")
+        if (name === "lo") return qsTr("Loopback")
+        if (name === "Meta") return qsTr("Virtual Interface")
+        if (/^enp|^eth/.test(name)) return qsTr("Wired Network")
+        if (/^wlp|^wlan/.test(name)) return qsTr("Wireless Network")
+        if (/^docker|^veth/.test(name)) return qsTr("Container Network")
+        if (/^br/.test(name)) return qsTr("Bridge")
         if (/^tun|^tap/.test(name)) return qsTr("VPN")
-        if (/^virbr/.test(name)) return qsTr("虚拟桥接")
-        return qsTr("其他")
+        if (/^virbr/.test(name)) return qsTr("Virtual Bridge")
+        return qsTr("Other")
     }
 
     // 根据接口名返回类型图标（Unicode 符号），用于网络接口列表每行左侧
@@ -139,7 +139,7 @@ Window {
                     anchors.left: parent.left
                     anchors.leftMargin: 16
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("设置")
+                    text: qsTr("Settings")
                     font.pixelSize: 15
                     font.weight: Font.Bold
                     color: root.textPrimary
@@ -193,7 +193,7 @@ Window {
 
                     // 网络接口选择区
                     Text {
-                        text: qsTr("网络接口")
+                        text: qsTr("Network Interface")
                         font.pixelSize: 13
                         font.weight: Font.Bold
                         color: root.textSecondary
@@ -346,7 +346,7 @@ Window {
                         // 无接口提示：在卡片内居中
                         Text {
                             anchors.centerIn: parent
-                            text: qsTr("未检测到网络接口")
+                            text: qsTr("No network interface detected")
                             font.pixelSize: 12
                             color: root.textTertiary
                             visible: networkInterfaces.length === 0
@@ -357,7 +357,7 @@ Window {
                     // 设计原因：用户选择的颜色通过 applet.textColor 持久化到
                     // ~/.config/jnetapplet/settings.ini，重启 dde-shell 后仍生效
                     Text {
-                        text: qsTr("字体颜色")
+                        text: qsTr("Font Color")
                         font.pixelSize: 13
                         font.weight: Font.Bold
                         color: root.textSecondary
@@ -380,7 +380,7 @@ Window {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
                         // 提示状态时背景和边框变绿
-                        readonly property bool isStatus: uninstallButtonText !== qsTr("卸载插件")
+                        readonly property bool isStatus: uninstallButtonText !== qsTr("Uninstall Plugin")
                         color: isStatus
                                ? Qt.rgba(22/255, 163/255, 74/255, 0.08)
                                : (uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08))
@@ -443,7 +443,7 @@ Window {
             anchors.margins: 20
 
             Text {
-                text: qsTr("警告")
+                text: qsTr("Warning")
                 font.pixelSize: 16
                 font.weight: Font.Bold
                 color: accentColor
@@ -451,7 +451,7 @@ Window {
             }
 
             Text {
-                text: qsTr("以下命令用于卸载插件并重启 dde-shell，请复制到终端中执行：")
+                text: qsTr("The following command uninstalls the plugin and restarts dde-shell. Please copy and run it in terminal:")
                 font.pixelSize: 12
                 color: root.textPrimary
                 Layout.alignment: Qt.AlignHCenter
@@ -496,7 +496,7 @@ Window {
 
                     Text {
                         anchors.centerIn: parent
-                        text: qsTr("取消")
+                        text: qsTr("Cancel")
                         font.pixelSize: 13
                         color: root.textPrimary
                     }
@@ -519,7 +519,7 @@ Window {
 
                     Text {
                         anchors.centerIn: parent
-                        text: qsTr("复制命令")
+                        text: qsTr("Copy Command")
                         font.pixelSize: 13
                         font.weight: Font.Medium
                         color: "white"
@@ -536,7 +536,7 @@ Window {
                             clipboardHelper.copy()
                             uninstallConfirmDialog.close()
                             // 卸载按钮文字临时替换为复制成功提示，5 秒后还原
-                            uninstallButtonText = qsTr("卸载命令已复制到剪贴板，请在终端中粘贴执行")
+                            uninstallButtonText = qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
                             statusHideTimer.start()
                         }
                     }
@@ -557,6 +557,6 @@ Window {
     Timer {
         id: statusHideTimer
         interval: 5000
-        onTriggered: uninstallButtonText = qsTr("卸载插件")
+        onTriggered: uninstallButtonText = qsTr("Uninstall Plugin")
     }
 }
