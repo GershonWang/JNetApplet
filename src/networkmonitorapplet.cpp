@@ -424,8 +424,11 @@ void NetworkMonitorApplet::detectInterfaces()
     m_interfaceList.clear();
     
     for (const QString &entry : entries) {
-        // 过滤回环接口
-        if (entry != "lo") {
+        // 过滤回环接口和虚拟接口，与 readNetworkStats() 保持一致
+        // 设计原因：原仅过滤 lo，docker/veth/br- 接口会短暂出现在列表中，
+        // 随后被 readNetworkStats() 覆盖，造成 UI 闪烁
+        if (entry != "lo" && !entry.startsWith("veth") &&
+            !entry.startsWith("docker") && !entry.startsWith("br-")) {
             m_interfaceList << entry;
         }
     }
