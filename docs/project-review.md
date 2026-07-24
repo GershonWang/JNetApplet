@@ -39,8 +39,9 @@
 ~~`m_speedHistory` 每秒只给 `m_activeInterface` 追加采样点，非活动接口永不采集，切换到新接口时趋势图为空。~~
 已新增 `m_lastRxBytesByIface` / `m_lastTxBytesByIface` 跟踪所有接口的字节基线，`calculateSpeed()` 遍历所有接口采集速度历史。切换接口时趋势图立即有数据。
 
-**8. 窗口居中未考虑多显示器**
-`AboutWindow`、`SettingsWindow`、`TrafficChartWindow` 用 `Screen.width/height` 居中，frameless 窗口在多屏环境下可能出现在非预期屏幕。
+**8. ~~窗口居中未考虑多显示器~~ ✅ 已修复**
+~~`AboutWindow`、`SettingsWindow`、`TrafficChartWindow` 用 `Screen.width/height` 居中，frameless 窗口在多屏环境下可能出现在非预期屏幕。~~
+已加 `Screen.virtualX` / `Screen.virtualY` 偏移，窗口在任务栏所在屏幕内居中而非虚拟桌面原点。
 
 **9. SPDX 版权归属为占位符**
 所有文件头 `SPDX-FileCopyrightText: 2024 MyCompany`，"MyCompany" 是模板占位符，应改为实际版权持有者（如 `2024 Jokul`）。

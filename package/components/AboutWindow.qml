@@ -48,8 +48,10 @@ Window {
 
     onVisibleChanged: {
         if (visible) {
-            x = (Screen.width - width) / 2
-            y = (Screen.height - height) / 2
+            // 居中到当前屏幕（任务栏所在屏幕），加 virtualX/virtualY 偏移
+            // 避免多显示器下窗口出现在非预期屏幕
+            x = Screen.virtualX + (Screen.width - width) / 2
+            y = Screen.virtualY + (Screen.height - height) / 2
         }
     }
 
