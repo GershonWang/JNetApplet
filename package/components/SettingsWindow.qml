@@ -3,9 +3,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 // 设置窗口：独立顶层窗口，桌面居中弹出，提供网络接口选择、字体颜色选择、插件卸载功能
-// 设计要点：白色圆角卡片 + 自定义标题栏可拖动，接口单选切换，卸载按钮带复制命令功能
+// 设计要点：圆角卡片 + 自定义标题栏可拖动，接口单选切换，卸载按钮带复制命令功能；
+// 深/浅主题由 isDarkMode 切换（networkview.qml 依据 DockPalette 检测任务栏深浅后传入），
+// 默认浅色，保证组件独立预览时与原版视觉一致
 // 对外依赖：applet（C++ 后端对象）、networkInterfaces（接口列表）、activeInterface（当前接口）、
-// accentColor（强调色），由 networkview.qml 实例化时传入，触发方式为 show()/raise()/requestActivate()
+// accentColor（强调色）、isDarkMode（深色模式标记），由 networkview.qml 实例化时传入，
+// 触发方式为 show()/raise()/requestActivate()
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -26,6 +29,26 @@ Window {
     // 强调色（红色），关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
     property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+
+    // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
+    // 默认 false（浅色）保证组件独立预览时与原版视觉一致
+    property bool isDarkMode: false
+
+    // ---- 主题感知颜色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
+    readonly property color winBg: isDarkMode ? "#202020" : "#F5F5F5"
+    readonly property color cardBg: isDarkMode ? "#2A2A2A" : "#FFFFFF"
+    readonly property color lineColor: isDarkMode ? "#383838" : "#E0E0E0"
+    readonly property color textPrimary: isDarkMode ? "#E0E0E0" : "#333333"
+    readonly property color textSecondary: isDarkMode ? "#AAAAAA" : "#666666"
+    readonly property color textTertiary: isDarkMode ? "#888888" : "#999999"
+    readonly property color iconGray: isDarkMode ? "#AAAAAA" : "#777777"
+    readonly property color hoverBg: isDarkMode ? "#353535" : "#F0F0F0"
+    readonly property color codeBg: isDarkMode ? "#2A2A2A" : "#E8E8E8"
+    // 选中态蓝色系：深色模式下背景压暗、文字改浅蓝，保证深色卡片上的对比度
+    readonly property color selBg: isDarkMode ? "#1A3A5C" : "#E3F2FD"
+    readonly property color selBgHover: isDarkMode ? "#1E4A6E" : "#D8ECFD"
+    readonly property color selBorder: isDarkMode ? "#2C5A8A" : "#90CAF9"
+    readonly property color selText: isDarkMode ? "#64B5F6" : "#1565C0"
 
     // 卸载按钮文字：复制命令后临时显示提示，定时器到期后还原
     property string uninstallButtonText: qsTr("卸载插件")
@@ -82,13 +105,13 @@ Window {
         }
     }
 
-    // 主容器：提供不透明背景 + 圆角 + 边框
+    // 主容器：提供不透明背景（随 isDarkMode 切换深浅）+ 圆角 + 边框
     Rectangle {
         anchors.fill: parent
-        color: "#f5f5f5"
+        color: root.winBg
         radius: 12
         border.width: 1
-        border.color: "#e0e0e0"
+        border.color: root.lineColor
 
         ColumnLayout {
             anchors.fill: parent
@@ -118,7 +141,7 @@ Window {
                     text: qsTr("设置")
                     font.pixelSize: 15
                     font.weight: Font.Bold
-                    color: "#333333"
+                    color: root.textPrimary
                 }
 
                 // 关闭按钮
@@ -137,7 +160,7 @@ Window {
                         text: "×"
                         font.pixelSize: 20
                         font.weight: Font.Bold
-                        color: closeMouse.containsMouse ? accentColor : "#666666"
+                        color: closeMouse.containsMouse ? accentColor : root.textSecondary
                     }
 
                     MouseArea {
@@ -154,7 +177,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: "#e0e0e0"
+                color: root.lineColor
             }
 
             // 内容区域
@@ -172,7 +195,7 @@ Window {
                         text: qsTr("网络接口")
                         font.pixelSize: 13
                         font.weight: Font.Bold
-                        color: "#666666"
+                        color: root.textSecondary
                     }
 
                     // 接口列表容器：最多显示约 5 行（160px），超出部分垂直滚动
@@ -183,10 +206,10 @@ Window {
                         Layout.preferredHeight: networkInterfaces.length > 0
                             ? Math.min(ifaceColumn.implicitHeight, 160) + 20
                             : 80
-                        color: "#ffffff"
+                        color: root.cardBg
                         radius: 10
                         border.width: 1
-                        border.color: "#e0e0e0"
+                        border.color: root.lineColor
 
                         // 用 ScrollView 而非裸 Flickable：自带滚轮滚动支持，
                         // 且滚动条显示时自动让出内容宽度，不会遮挡行内文字
@@ -200,7 +223,7 @@ Window {
                             contentWidth: availableWidth
 
                             // 自定义滚动条样式：与 networkview.qml chip 滚动条一致（4px 圆角矩形），
-                            // 颜色改用硬编码灰色系适配本窗口浅色主题；
+                            // 颜色使用主题感知灰色系（随 isDarkMode 切换深浅）；
                             // AsNeeded 策略保证接口少时不显示滚动条
                             ScrollBar.vertical: ScrollBar {
                                 id: ifaceScrollBar
@@ -210,9 +233,9 @@ Window {
                                 contentItem: Rectangle {
                                     implicitWidth: 4
                                     radius: 2
-                                    // 按压/悬停加深、默认稍淡，保证滚动条在白色卡片上可见
-                                    color: ifaceScrollBar.pressed ? "#666666"
-                                          : (ifaceScrollBar.hovered ? "#666666" : "#999999")
+                                    // 按压/悬停加深、默认稍淡，保证滚动条在卡片背景上可见
+                                    color: ifaceScrollBar.pressed ? root.textSecondary
+                                          : (ifaceScrollBar.hovered ? root.textSecondary : root.textTertiary)
                                 }
                             }
 
@@ -224,7 +247,7 @@ Window {
 
                                 // 接口列表：整行点击切换活动接口
                                 // 行样式：类型图标 + 单选圆点 + 名称 + 右侧类型描述；
-                                // hover 显示浅灰底，选中行浅蓝底 + 蓝色细边框
+                                // hover 底、选中底与边框颜色均随 isDarkMode 切换深浅
                                 Repeater {
                                     model: networkInterfaces
                                     delegate: Rectangle {
@@ -235,16 +258,16 @@ Window {
                                         // 当前行是否为活动接口（选中态）
                                         readonly property bool isActive: modelData === activeInterface
                                         readonly property bool hovered: rowMouse.containsMouse
-                                        // 选中态强调色用 #1565c0（较 #1976d2 更深）：
-                                        // 保证 ▢ 等空心图标在浅蓝选中背景上仍有足够对比度
-                                        readonly property color activeColor: "#1565c0"
+                                        // 选中态强调色由 root.selText 提供（浅色 #1565c0 / 深色 #64b5f6）：
+                                        // 保证 ▢ 等空心图标在选中背景上仍有足够对比度
+                                        readonly property color activeColor: root.selText
                                         // 背景优先级：选中 > hover；选中行 hover 时稍加深以保留交互反馈
                                         color: isActive
-                                               ? (hovered ? "#d8ecfd" : "#e3f2fd")
-                                               : (hovered ? "#f0f0f0" : "transparent")
-                                        // 选中行加蓝色细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动
+                                               ? (hovered ? root.selBgHover : root.selBg)
+                                               : (hovered ? root.hoverBg : "transparent")
+                                        // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动
                                         border.width: 1
-                                        border.color: isActive ? "#90caf9" : "transparent"
+                                        border.color: isActive ? root.selBorder : "transparent"
 
                                         // 整行 hover + 点击：行内元素均不处理鼠标事件，
                                         // 点击行任意位置即选中该接口
@@ -269,7 +292,7 @@ Window {
                                                 horizontalAlignment: Text.AlignHCenter
                                                 text: interfaceIcon(modelData)
                                                 font.pixelSize: 14
-                                                color: ifaceRow.isActive ? ifaceRow.activeColor : "#777777"
+                                                color: ifaceRow.isActive ? ifaceRow.activeColor : root.iconGray
                                             }
 
                                             // 自绘单选圆点：替代 RadioButton 作纯视觉指示器，
@@ -283,7 +306,7 @@ Window {
                                                 color: "transparent"
                                                 border.width: 2
                                                 border.color: ifaceRow.isActive ? ifaceRow.activeColor
-                                                              : (ifaceRow.hovered ? "#666666" : "#999999")
+                                                              : (ifaceRow.hovered ? root.textSecondary : root.textTertiary)
 
                                                 Rectangle {
                                                     anchors.centerIn: parent
@@ -302,7 +325,7 @@ Window {
                                                 text: modelData
                                                 font.pixelSize: 13
                                                 font.weight: ifaceRow.isActive ? Font.Medium : Font.Normal
-                                                color: ifaceRow.isActive ? ifaceRow.activeColor : "#333333"
+                                                color: ifaceRow.isActive ? ifaceRow.activeColor : root.textPrimary
                                                 elide: Text.ElideRight
                                             }
 
@@ -311,7 +334,7 @@ Window {
                                                 Layout.alignment: Qt.AlignVCenter
                                                 text: interfaceDescription(modelData)
                                                 font.pixelSize: 12
-                                                color: "#999999"
+                                                color: root.textTertiary
                                             }
                                         }
                                     }
@@ -324,7 +347,7 @@ Window {
                             anchors.centerIn: parent
                             text: qsTr("未检测到网络接口")
                             font.pixelSize: 12
-                            color: "#999999"
+                            color: root.textTertiary
                             visible: networkInterfaces.length === 0
                         }
                     }
@@ -336,12 +359,14 @@ Window {
                         text: qsTr("字体颜色")
                         font.pixelSize: 13
                         font.weight: Font.Bold
-                        color: "#666666"
+                        color: root.textSecondary
                     }
 
                     TextColorPicker {
                         Layout.fillWidth: true
                         currentColor: applet ? applet.textColor : ""
+                        // 深色模式标记向下传递：TextColorPicker 内部色板卡片同样主题感知
+                        isDarkMode: root.isDarkMode
                         onColorSelected: if (applet) applet.textColor = color
                     }
 
@@ -405,10 +430,10 @@ Window {
         y: (root.height - height) / 2
 
         background: Rectangle {
-            color: "#f5f5f5"
+            color: root.winBg
             radius: 12
             border.width: 1
-            border.color: "#e0e0e0"
+            border.color: root.lineColor
         }
 
         contentItem: ColumnLayout {
@@ -427,7 +452,7 @@ Window {
             Text {
                 text: qsTr("以下命令用于卸载插件并重启 dde-shell，请复制到终端中执行：")
                 font.pixelSize: 12
-                color: "#333333"
+                color: root.textPrimary
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
@@ -438,7 +463,7 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 60
-                color: "#e8e8e8"
+                color: root.codeBg
                 radius: 8
 
                 Text {
@@ -447,7 +472,7 @@ Window {
                     text: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
                     font.pixelSize: 10
                     font.family: "monospace"
-                    color: "#666666"
+                    color: root.textSecondary
                     wrapMode: Text.WordWrap
                 }
             }
@@ -463,16 +488,16 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
-                    color: cancelUninstallMouse.containsMouse ? "#f0f0f0" : "#ffffff"
+                    color: cancelUninstallMouse.containsMouse ? root.hoverBg : root.cardBg
                     radius: 8
                     border.width: 1
-                    border.color: "#e0e0e0"
+                    border.color: root.lineColor
 
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("取消")
                         font.pixelSize: 13
-                        color: "#333333"
+                        color: root.textPrimary
                     }
 
                     MouseArea {

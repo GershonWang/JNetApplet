@@ -21,8 +21,9 @@
 ~~`m_totalDownload = currentRxBytes` 只存储活动接口的当前计数器值，并非真正的累计流量。~~
 已改为累加会话增量 `m_totalDownload += rxDeltaClamped`，"总计"语义从"活动接口计数器值"变为"本次会话累计流量"：从 0 开始增长，切换网卡不再跳变，网卡重启不归零。跨重启持久化属于 #18 的范畴。
 
-**4. 独立窗口不支持深色模式**
-`AboutWindow.qml`、`SettingsWindow.qml`、`TextColorPicker.qml`、`TrafficChartWindow.qml` 全部硬编码浅色（`#FFFFFF`、`#333333`、`#f5f5f5` 等），不随系统主题适配。而 `networkview.qml` 和 `NetworkPopup.qml` 正确地从 `DockPalette` 派生颜色。deepin 深色模式下这些窗口视觉割裂严重。
+**4. ~~独立窗口不支持深色模式~~ ✅ 已修复**
+~~`AboutWindow.qml`、`SettingsWindow.qml`、`TextColorPicker.qml`、`TrafficChartWindow.qml` 全部硬编码浅色，不随系统主题适配。~~
+已为 4 个独立窗口新增 `isDarkMode` 属性（由 networkview.qml 检测后注入），各窗口定义深/浅双色方案切换。深色模式检测改用 `DTK.palette.window.hslLightness < 0.5`（原 `DockPalette.iconTextPalette` 不随系统主题变化）。同时修复 networkview.qml 任务栏图标和 NetworkPopup 弹窗的颜色基：从 `DockPalette.iconTextPalette` 改为 `DTK.palette.windowText`，解决深色模式黑底黑字问题。
 
 **5. `detectInterfaces()` 过滤规则与 `readNetworkStats()` 不一致**
 `init()` 先调 `detectInterfaces()`（读 `/sys/class/net`，仅过滤 `lo`），再调 `readNetworkStats()`（读 `/proc/net/dev`，过滤 `lo`/`veth`/`docker`/`br-`）。首次刷新前，docker/veth 接口会短暂出现在列表中，造成 UI 闪烁。且 `detectInterfaces()` 的结果会被 `readNetworkStats()` 完全覆盖，属于冗余调用。

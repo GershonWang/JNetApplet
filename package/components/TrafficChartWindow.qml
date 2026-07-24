@@ -5,9 +5,11 @@
 // 流量波动图窗口：屏幕居中的独立顶层窗口，展示当前活动接口最近 5 分钟的
 // 网速趋势（下载/上传双折线图），随 C++ 后端 speedHistoryChanged 信号每秒动态刷新
 // 设计要点：
-// - 视觉风格复用 AboutWindow.qml（白色圆角卡片 12px、1px #E8E8E8 边框、
-//   44px 标题栏、28x28 圆形关闭按钮 hover 淡红底）
-// - 图表使用纯 QML Canvas 绘制，无 QtCharts 等外部依赖（与项目零依赖风格一致）
+// - 视觉风格复用 AboutWindow.qml（圆角卡片 12px、1px 边框、44px 标题栏、
+//   28x28 圆形关闭按钮 hover 淡红底）；深/浅主题由 isDarkMode 切换
+//   （networkview.qml 依据 DockPalette 检测任务栏深浅后传入），默认浅色保证独立预览可用
+// - 图表使用纯 QML Canvas 绘制，无 QtCharts 等外部依赖（与项目零依赖风格一致）；
+//   Canvas 不随属性绑定自动重绘，isDarkMode 变化时主动 requestPaint()
 // - 数据通过属性注入：applet 即 networkview.qml 的 root.applet（C++ 后端对象），
 //   为 null 时组件可独立预览（Canvas 显示"暂无历史数据"空状态）
 // 触发方式：右键菜单"流量波动图" -> show()/raise()/requestActivate()
@@ -28,6 +30,27 @@ Window {
     // 为 null 时组件可独立预览（显示空状态），所有数据访问处均需做空值兜底
     property var applet: null
 
+    // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
+    // 默认 false（浅色）保证组件独立预览时与原版视觉一致
+    property bool isDarkMode: false
+
+    // ---- 主题感知颜色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
+    readonly property color winBg: isDarkMode ? "#202020" : "#FFFFFF"
+    readonly property color lineColor: isDarkMode ? "#383838" : "#E8E8E8"
+    readonly property color textPrimary: isDarkMode ? "#E0E0E0" : "#333333"
+    readonly property color textSecondary: isDarkMode ? "#AAAAAA" : "#666666"
+    readonly property color textTertiary: isDarkMode ? "#888888" : "#999999"
+    // 置顶按钮 hover 底色：浅色用淡黑、深色用淡白，保证两种卡片背景上均可见
+    readonly property color pinHoverBg: isDarkMode ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)
+
+    // 图表绘制色：声明为 string 供 Canvas 2D 上下文直接使用
+    //（QML color 类型含 alpha 时序列化为 #AARRGGBB，Canvas 无法正确解析，故不用 color 类型）
+    readonly property string gridBaselineColor: isDarkMode ? "#383838" : "#DDDDDD"
+    readonly property string gridLineColor: isDarkMode ? "#2A2A2A" : "#E5E5E5"
+    readonly property string axisTextColor: isDarkMode ? "#888888" : "#999999"
+    readonly property string hoverLineColor: isDarkMode ? "#555555" : "#BBBBBB"
+    readonly property string dotCoreColor: isDarkMode ? "#202020" : "#FFFFFF"
+
     // Hover 状态：当前悬停采样点在历史缓冲中的索引，-1 表示无悬停
     // 由图表区 MouseArea 根据 mouseX 反查最近采样点更新；Canvas 据此绘制
     // 竖直辅助线与圆点标记，底部提示条据此显示该时刻数值
@@ -43,6 +66,12 @@ Window {
 
     // 置顶状态变化时重绘图钉图标（未置顶=灰色轮廓，置顶=蓝色填充）
     onPinnedChanged: pinIcon.requestPaint()
+
+    // 主题切换时重绘图表与图钉图标：Canvas 不随属性绑定自动重绘，需主动触发
+    onIsDarkModeChanged: {
+        pinIcon.requestPaint()
+        canvas.requestPaint()
+    }
 
     // 下载折线颜色（绿）与上传折线颜色（橙），与规范 §4.4 一致
     readonly property color downloadLineColor: "#34C759"
@@ -118,13 +147,13 @@ Window {
         return s + " " + unit.suffix
     }
 
-    // 窗口主体：白色圆角卡片，1px 浅灰边框模拟 DTK 窗口描边（与 AboutWindow 一致）
+    // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边（与 AboutWindow 一致）
     Rectangle {
         anchors.fill: parent
-        color: "#FFFFFF"
+        color: root.winBg
         radius: 12
         border.width: 1
-        border.color: "#E8E8E8"
+        border.color: root.lineColor
 
         ColumnLayout {
             anchors.fill: parent
@@ -153,7 +182,7 @@ Window {
                     text: qsTr("流量波动图")
                     font.pixelSize: 15
                     font.weight: Font.Bold
-                    color: "#333333"
+                    color: root.textPrimary
                 }
 
                 // 置顶按钮：28x28 圆形（与关闭按钮一致），位于关闭按钮左侧
@@ -167,7 +196,7 @@ Window {
                     height: 28
                     radius: 14
                     color: root.pinned ? Qt.rgba(0, 129 / 255, 1, 0.12)
-                                       : (pinMouse.containsMouse ? Qt.rgba(0, 0, 0, 0.06) : "transparent")
+                                       : (pinMouse.containsMouse ? root.pinHoverBg : "transparent")
 
                     // 置顶图标：Canvas 绘制"上箭头触顶"（⤒ 风格）——向上箭头指向顶部横杠，
                     // 是"置顶/移到顶部"最通用的视觉语言，与关闭按钮"×"形态区分明显
@@ -181,7 +210,7 @@ Window {
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.clearRect(0, 0, width, height)
-                            var c = root.pinned ? "#0081FF" : "#999999"
+                            var c = root.pinned ? "#0081FF" : root.axisTextColor
                             ctx.strokeStyle = c
                             ctx.fillStyle = c
                             ctx.lineCap = "round"
@@ -246,7 +275,7 @@ Window {
                         text: "×"
                         font.pixelSize: 20
                         font.weight: Font.Bold
-                        color: chartCloseMouse.containsMouse ? root.accentColor : "#666666"
+                        color: chartCloseMouse.containsMouse ? root.accentColor : root.textSecondary
                     }
 
                     MouseArea {
@@ -279,7 +308,7 @@ Window {
                     // applet 为空时兜底为 0，保证独立预览不报错
                     text: root.formatSpeed(root.applet ? root.applet.downloadSpeed : 0)
                     font.pixelSize: 12
-                    color: "#333333"
+                    color: root.textPrimary
                 }
 
                 Item { Layout.preferredWidth: 10 }
@@ -294,7 +323,7 @@ Window {
                 Text {
                     text: root.formatSpeed(root.applet ? root.applet.uploadSpeed : 0)
                     font.pixelSize: 12
-                    color: "#333333"
+                    color: root.textPrimary
                 }
 
                 Item { Layout.fillWidth: true }
@@ -303,7 +332,7 @@ Window {
                     text: (root.applet && root.applet.activeInterface
                            ? root.applet.activeInterface : "—") + " · 5min"
                     font.pixelSize: 12
-                    color: "#999999"
+                    color: root.textTertiary
                 }
             }
 
@@ -362,15 +391,15 @@ Window {
                     for (g = 0; g <= 4; g++) {
                         gy = pt + ph - (ph * g / 4)
                         // +0.5 让 1px 线条落在像素边界上，避免抗锯齿发虚
-                        // 基线（g=0）略深一档，其余 4 条网格线用规范色 #E5E5E5
-                        ctx.strokeStyle = g === 0 ? "#DDDDDD" : "#E5E5E5"
+                        // 基线（g=0）略深一档；网格与刻度颜色均随 isDarkMode 切换深浅
+                        ctx.strokeStyle = g === 0 ? root.gridBaselineColor : root.gridLineColor
                         ctx.lineWidth = 1
                         ctx.beginPath()
                         ctx.moveTo(pl, gy + 0.5)
                         ctx.lineTo(pl + pw, gy + 0.5)
                         ctx.stroke()
                         // 刻度标签右对齐于绘图区左侧
-                        ctx.fillStyle = "#999999"
+                        ctx.fillStyle = root.axisTextColor
                         ctx.textAlign = "right"
                         ctx.fillText(root.formatAxisValue(yMax * g / 4, unit), pl - 8, gy)
                     }
@@ -379,7 +408,7 @@ Window {
                     // 5 分钟窗口用 -5m/-4m/-3m/-2m/-1m/now 共 6 个标签，比 4 个三分点
                     // 的 -3m20s/-1m40s 更易读；循环按数组长度参数化，两端左/右对齐
                     var xLabels = ["-5m", "-4m", "-3m", "-2m", "-1m", "now"]
-                    ctx.fillStyle = "#999999"
+                    ctx.fillStyle = root.axisTextColor
                     ctx.textBaseline = "alphabetic"
                     for (i = 0; i < xLabels.length; i++) {
                         var lx = pl + pw * i / (xLabels.length - 1)
@@ -390,7 +419,7 @@ Window {
 
                     // ---- 空状态：画完空网格后中央提示，不画折线（规范 §5）----
                     if (n === 0) {
-                        ctx.fillStyle = "#999999"
+                        ctx.fillStyle = root.axisTextColor
                         ctx.font = "13px sans-serif"
                         ctx.textAlign = "center"
                         ctx.textBaseline = "middle"
@@ -466,7 +495,7 @@ Window {
                     if (hi >= 0 && hi < n) {
                         var hx = pl + ((dl[hi].x - tMin) / tRange) * pw
                         // 竖直辅助线：虚线，避免与实线折线混淆
-                        ctx.strokeStyle = "#BBBBBB"
+                        ctx.strokeStyle = root.hoverLineColor
                         ctx.lineWidth = 1
                         ctx.setLineDash([4, 3])
                         ctx.beginPath()
@@ -474,12 +503,12 @@ Window {
                         ctx.lineTo(hx, pt + ph)
                         ctx.stroke()
                         ctx.setLineDash([])
-                        // 圆点标记：白芯 + 2px 彩色描边，在折线上形成清晰锚点
+                        // 圆点标记：窗口底色芯 + 2px 彩色描边，在折线上形成清晰锚点
                         function drawDot(yVal, colorCss) {
                             var hy = pt + ph - (yVal / yMax) * ph
                             ctx.beginPath()
                             ctx.arc(hx, hy, 4, 0, 2 * Math.PI)
-                            ctx.fillStyle = "#FFFFFF"
+                            ctx.fillStyle = root.dotCoreColor
                             ctx.fill()
                             ctx.strokeStyle = colorCss
                             ctx.lineWidth = 2
@@ -553,7 +582,7 @@ Window {
                     text: root.hoverHint.length > 0
                           ? root.hoverHint : qsTr("鼠标移到曲线上查看详情")
                     font.pixelSize: 11
-                    color: root.hoverHint.length > 0 ? "#333333" : "#999999"
+                    color: root.hoverHint.length > 0 ? root.textPrimary : root.textTertiary
                 }
             }
         }

@@ -32,14 +32,17 @@ Control {
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
 
-    // 弹窗的颜色全部派生自 DockPalette.iconTextPalette，与任务栏颜色独立
-    // 设计原因：PanelPopup 不继承 AppletItem 的颜色属性，需要自行派生
-    property Palette basePalette: DockPalette.iconTextPalette
-    readonly property color primaryText: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.95)
-    readonly property color secondaryText: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.80)
-    readonly property color tertiaryText: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.65)
-    readonly property color cardBackground: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.06)
-    readonly property color cardBorder: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.10)
+    // 弹窗颜色派生自 DTK 系统调色板（windowText），而非 DockPalette.iconTextPalette。
+    // 设计原因：PanelPopup 背景跟随系统主题（深色模式下变黑），但 DockPalette.iconTextPalette
+    // 反映的是任务栏图标文字色，不随系统深色主题变化，导致深色模式下弹窗黑底黑字。
+    // DTK.palette.windowText 在深色模式下为浅色文字、浅色模式下为深色文字，与弹窗背景同步。
+    // 主题切换时 DTK.paletteChanged 信号自动触发属性绑定重新求值。
+    readonly property color baseTextColor: DTK.palette.windowText
+    readonly property color primaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.95)
+    readonly property color secondaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.80)
+    readonly property color tertiaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.65)
+    readonly property color cardBackground: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.06)
+    readonly property color cardBorder: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.10)
 
     // 强调色：下载蓝、上传绿，是面板的主视觉区分
     readonly property color accentBlue: Qt.rgba(20 / 255, 80 / 255, 160 / 255, 1)

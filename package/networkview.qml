@@ -105,14 +105,24 @@ AppletItem {
         }
     }
 
-    // 任务栏与面板的颜色全部派生自 DockPalette.iconTextPalette
-    // 这样在深色/浅色任务栏下自动适配，无需手动判断主题
-    property Palette basePalette: DockPalette.iconTextPalette
-    readonly property color primaryText: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.95)
-    readonly property color secondaryText: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.80)
-    readonly property color tertiaryText: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.65)
-    readonly property color cardBackground: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.06)
-    readonly property color cardBorder: Qt.rgba(basePalette.r, basePalette.g, basePalette.b, 0.10)
+    // 任务栏图标颜色派生自 DTK 系统调色板（windowText），跟随系统主题适配。
+    // 设计原因：原用 DockPalette.iconTextPalette，但实测其不随系统深色主题变化，
+    // 深色模式下返回深色文字（黑底黑字）、浅色模式下返回浅色文字（白底白字），方向相反。
+    // DTK.palette.windowText 在深色模式下为浅色、浅色模式下为深色，与任务栏背景匹配。
+    // 注意：仅用于任务栏图标区（speedTextColor 回退），弹窗和独立窗口各自派生颜色。
+    readonly property color baseTextColor: DTK.palette.windowText
+    readonly property color primaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.95)
+    readonly property color secondaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.80)
+    readonly property color tertiaryText: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.65)
+    readonly property color cardBackground: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.06)
+    readonly property color cardBorder: Qt.rgba(baseTextColor.r, baseTextColor.g, baseTextColor.b, 0.10)
+
+    // 深色模式检测：用 DTK 系统调色板的窗口背景亮度判定，而非 DockPalette。
+    // 设计原因：DockPalette.iconTextPalette 反映的是任务栏图标文字色，不随系统深色主题变化；
+    // DTK.palette.window 是系统主题的窗口背景色，深色模式下为深色（hslLightness < 0.5），
+    // 浅色模式下为浅色（hslLightness >= 0.5）。主题切换时 DTK.paletteChanged 自动触发重新求值。
+    // 检测结果通过属性注入各独立窗口（AboutWindow 等独立 Window 无法访问 dock 上下文的 DockPalette）
+    readonly property bool isDarkMode: DTK.palette.window.hslLightness < 0.5
 
     // 强调色：下载蓝、上传绿，是面板与任务栏的主视觉区分
     readonly property color accentBlue: Qt.rgba(20 / 255, 80 / 255, 160 / 255, 1)
@@ -135,7 +145,7 @@ AppletItem {
     readonly property color uploadValueColor: accentGreen
 
     // 任务栏网速数值字体色：用户自定义色优先（持久化），未设置时跟随系统主题
-    // 设计原因：primaryText 派生自 DockPalette，深浅色任务栏自动适配；
+    // 设计原因：primaryText 派生自 DTK.palette.windowText，深浅色系统主题自动适配；
     // 用户主动选色后覆盖，空串回退到 primaryText 保持自适应
     readonly property color speedTextColor: (applet && applet.textColor.length > 0) ? applet.textColor : primaryText
 
@@ -372,19 +382,23 @@ AppletItem {
     }
 
     // 关于窗口：抽取为独立组件 package/components/AboutWindow.qml
-    // 依赖通过属性传入：accentColor = root.accentRed，version 取自 C++ 后端 applet.version
+    // 依赖通过属性传入：accentColor = root.accentRed，version 取自 C++ 后端 applet.version，
+    // isDarkMode 取自上方 DockPalette 检测结果
     AboutWindow {
         id: aboutWindow
         accentColor: root.accentRed
         version: root.applet ? root.applet.version : "1.0"
+        isDarkMode: root.isDarkMode
     }
 
     // 流量波动图窗口：屏幕居中独立窗口，展示活动接口最近 30 分钟网速趋势
-    // 依赖通过属性传入：accentColor = root.accentRed，applet = root.applet
+    // 依赖通过属性传入：accentColor = root.accentRed，applet = root.applet，
+    // isDarkMode 取自上方 DockPalette 检测结果
     TrafficChartWindow {
         id: trafficChartWindow
         accentColor: root.accentRed
         applet: root.applet
+        isDarkMode: root.isDarkMode
     }
 
     // 设置窗口：独立顶层窗口，在桌面中间弹出
@@ -396,6 +410,7 @@ AppletItem {
         networkInterfaces: root.networkInterfaces
         activeInterface: root.activeInterface
         accentColor: root.accentRed
+        isDarkMode: root.isDarkMode
     }
 
     // 点击处理
