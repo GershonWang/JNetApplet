@@ -71,11 +71,9 @@
 ~~`NetworkInterface` 结构体解析了 `rxErrors`/`txErrors`/`rxDropped`/`txDropped`，但 `interfaceStats()` 输出时丢弃了这些字段。~~
 `interfaceStats()` 已随 #12 整体删除，不再有不完整的输出。结构体字段保留供未来使用。
 
-**15. README.md 和 AGENTS.md 严重过时**
-- 项目结构只列 `AboutWindow.qml`，实际有 5 个组件（缺 `NetworkPopup`、`SettingsWindow`、`TextColorPicker`、`TrafficChartWindow`）
-- README 功能特性未提及：设置窗口、字体颜色自定义、流量波动图、IPv6 显示
-- README 写"支持从弹窗一键卸载插件"，但卸载功能实际在设置窗口
-- AGENTS.md "Project structure" 同样过时
+**15. ~~README.md 和 AGENTS.md 严重过时~~ ✅ 已修复**
+~~项目结构只列 AboutWindow.qml，功能特性未提及设置窗口/字体颜色/流量波动图/IPv6/深色模式，README 写"从弹窗卸载"实际在设置窗口。~~
+已更新 README.md 和 AGENTS.md 的功能特性列表、项目结构（补全 6 个组件）、C++ Backend 属性列表（移除 interfaceStats，新增 ipv6Address/version/textColor/speedHistory 等）。
 
 **16. `qsTr()` 源字符串为中文，无翻译基础设施**
 QML 中 `qsTr("网络速度监控")` 等以中文为源串，但项目无 `.ts` 翻译文件、无 `lupdate`/`lrelease` 构建步骤、C++ 无翻译加载逻辑。`qsTr()` 实质为空操作。若仅面向中文用户可接受；若计划国际化，需补全 i18n 基础设施并以英文为源串。

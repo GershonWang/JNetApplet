@@ -15,14 +15,18 @@ for the UI. The C++ backend reads `/proc/net/dev` to monitor network traffic.
 
 ## Features
 
-- Real-time download/upload speed monitoring (1-second refresh)
-- Total data transfer statistics
-- Multiple network interface support with interface switching
+- Real-time download/upload speed monitoring (1-second refresh, real elapsed time)
+- Session cumulative download/upload traffic statistics
+- Multiple network interface support with interface switching (popup + settings)
 - Taskbar icon displays live speed (changes color at high speeds)
-- Hover tooltip shows speed summary
-- Click to open detailed popup
-- Popup shows active interface IP address, per-interface speed comparison and stats
-- One-click plugin uninstall from the popup
+- Customizable taskbar font color (follow system theme or pick from preset)
+- Hover tooltip shows interface name + IP address
+- Click to open detailed popup (speed, totals, interface chips)
+- Popup shows active interface IPv4/IPv6 address
+- Traffic chart window: 5-minute speed trend (download/upload dual line chart)
+- Settings window: interface selection, font color picker, one-click uninstall
+- Full dark mode support (taskbar icon, popup, all independent windows)
+- All interfaces sampled in background; switching interfaces shows history immediately
 
 ## Build & install
 
@@ -75,8 +79,13 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 │   ├── metadata.json.in           # Plugin metadata 模板（由 CMake 生成 metadata.json）
 │   ├── networkview.qml            # QML UI 主入口
 │   └── components/                # 拆分出的子组件
-│       └── AboutWindow.qml        # 关于窗口组件
-├── docs/                          # Design docs and implementation plans
+│       ├── NetCommon.qml          # 公共颜色与格式化函数
+│       ├── NetworkPopup.qml       # 左键弹窗内容
+│       ├── SettingsWindow.qml     # 设置窗口（接口/颜色/卸载）
+│       ├── TrafficChartWindow.qml # 流量波动图窗口
+│       ├── TextColorPicker.qml    # 字体颜色选择器
+│       └── AboutWindow.qml        # 关于窗口
+├── docs/                          # Design docs and review checklist
 └── AGENTS.md                      # This file
 ```
 
@@ -100,14 +109,16 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 ## C++ Backend (NetworkMonitorApplet)
 
 Inherits from `DApplet`, provides:
-- `downloadSpeed` / `uploadSpeed`: Current speed in bytes/sec
-- `totalDownload` / `totalUpload`: Total data transferred
+- `downloadSpeed` / `uploadSpeed`: Current speed in bytes/sec (real elapsed time)
+- `totalDownload` / `totalUpload`: Session cumulative traffic
 - `networkInterfaces`: List of available interfaces
-- `interfaceStats`: Per-interface statistics
-- `activeInterface`: Currently selected interface
-- `ipAddress`: IP address of the active interface
-- `refresh()`: Manually trigger stats update
-- `setActiveInterface(name)`: Switch active interface
+- `activeInterface`: Currently selected interface (persisted to `~/.config/jnetapplet/settings.ini`)
+- `ipAddress` / `ipv6Address`: IP address of the active interface
+- `version`: Plugin version (from metadata, fallback to `PROJECT_VERSION` macro)
+- `textColor`: Taskbar font color (empty = follow system theme, persisted)
+- `speedHistoryDownload` / `speedHistoryUpload`: Per-interface speed history (QPointF list, 5-min window)
+- `setActiveInterface(name)`: Switch active interface (validates against interface list)
+- `refresh()`: Internal timer callback (not Q_INVOKABLE, called by m_refreshTimer every second)
 
 ## Identifier correspondence (keep in sync when renaming)
 
