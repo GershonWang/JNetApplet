@@ -96,6 +96,16 @@
         <source>Dropped</source>
         <translation>丢包</translation>
     </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="317"/>
+        <source>Signal</source>
+        <translation>信号</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="566"/>
+        <source>Connections</source>
+        <translation>连接</translation>
+    </message>
 </context>
 <context>
     <name>NetCommon</name>
@@ -173,6 +183,11 @@
         <location filename="../package/components/SettingsWindow.qml" line="360"/>
         <source>Font Color</source>
         <translation>字体颜色</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="311"/>
+        <source>Refresh Interval</source>
+        <translation>刷新间隔</translation>
     </message>
     <message>
         <location filename="../package/components/SettingsWindow.qml" line="446"/>
