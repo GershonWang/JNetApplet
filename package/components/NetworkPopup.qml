@@ -132,7 +132,8 @@ Control {
         }
 
         // ==================== 分区1：接口信息 ====================
-        // 类型图标 + 接口名 + IPv4 一行，IPv6 截断显示一行
+        // 三行对称结构：行1 接口名（居中），行2 IPv4 地址行，行3 IPv6 地址行
+        // 地址行用固定宽度标签 + 地址 + 复制图标，两行结构对称不会错位
         // 外层 Item 固定高度 + 内层 ColumnLayout anchors.centerIn：
         // 无 IP 地址时内容在区域内垂直居中，避免单行内容贴顶导致网卡名偏上
         Item {
@@ -147,9 +148,7 @@ Control {
                 width: parent.width
                 spacing: 4
 
-                // 行1：类型图标 + 接口名 + · + IPv4
-                // 拆分为独立 Text 元素，使接口名用 primaryText 跟随用户 textColor，
-                // 图标和 IPv4 保持系统主题色（tertiaryText/secondaryText），层次分明
+                // 行1：类型图标 + 接口名（居中）
                 RowLayout {
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 4
@@ -167,61 +166,94 @@ Control {
                         font.pixelSize: Math.round(13 * popup.fontScale)
                         color: popup.primaryText
                     }
+                }
 
-                    // IPv4 地址 + 分隔点 + 复制图标
-                    RowLayout {
-                        spacing: 4
-                        visible: popup.ipAddress !== ""
+                // 行2：IPv4 标签 + 地址 + 复制图标
+                // 与行3 结构对称：标签固定宽度左对齐，地址左对齐，复制图标在右
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.maximumWidth: 320
+                    spacing: 6
+                    visible: popup.ipAddress !== ""
 
-                        Text {
-                            text: "·"
-                            font.pixelSize: Math.round(13 * popup.fontScale)
-                            color: popup.tertiaryText
+                    // IPv4 标签：固定宽度，与 IPv6 标签列对齐
+                    Text {
+                        text: qsTr("IPv4")
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
+                        Layout.preferredWidth: 32
+                        horizontalAlignment: Text.AlignLeft
+                    }
+
+                    // IPv4 地址：超长截断 + hover tooltip
+                    Text {
+                        text: popup.ipAddress
+                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        color: popup.secondaryText
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignLeft
+
+                        ToolTip.text: popup.ipAddress
+                        ToolTip.visible: ipv4Mouse.containsMouse && popup.ipAddress !== ""
+                        ToolTip.delay: 300
+
+                        MouseArea {
+                            id: ipv4Mouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.IBeamCursor
                         }
+                    }
 
-                        Text {
-                            text: popup.ipAddress
-                            font.pixelSize: Math.round(13 * popup.fontScale)
-                            color: popup.secondaryText
-                        }
+                    // 一键复制图标：点击复制 IPv4 到剪贴板，复制后短暂显示 ✓
+                    // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
+                    Text {
+                        text: popup.copiedField === "ipv4" ? "✓" : "⧉"
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.copiedField === "ipv4"
+                               ? popup.accentGreen
+                               : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText)
 
-                        // 一键复制图标：点击复制 IPv4 到剪贴板，复制后短暂显示 ✓
-                        Text {
-                            text: popup.copiedField === "ipv4" ? "✓" : "⧉"
-                            font.pixelSize: Math.round(11 * popup.fontScale)
-                            color: popup.copiedField === "ipv4"
-                                   ? popup.accentGreen
-                                   : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
-
-                            MouseArea {
-                                id: ipv4CopyMouse
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                hoverEnabled: true
-                                onClicked: {
-                                    popup.copyToClipboard(popup.ipAddress)
-                                    popup.copiedField = "ipv4"
-                                    copyFeedbackTimer.restart()
-                                }
+                        MouseArea {
+                            id: ipv4CopyMouse
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            hoverEnabled: true
+                            onClicked: {
+                                popup.copyToClipboard(popup.ipAddress)
+                                popup.copiedField = "ipv4"
+                                copyFeedbackTimer.restart()
                             }
                         }
                     }
                 }
 
-                // 行2：IPv6 地址 + 复制图标（超长截断 + hover tooltip 显示完整地址）
+                // 行3：IPv6 标签 + 地址 + 复制图标
+                // 与行2 结构对称：标签固定宽度左对齐，地址左对齐，复制图标在右
                 RowLayout {
                     Layout.alignment: Qt.AlignHCenter
                     Layout.maximumWidth: 320
-                    spacing: 4
+                    spacing: 6
                     visible: popup.ipv6Address !== ""
 
+                    // IPv6 标签：固定宽度，与 IPv4 标签列对齐
                     Text {
-                        text: qsTr("IPv6: ") + popup.ipv6Address
+                        text: qsTr("IPv6")
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
+                        Layout.preferredWidth: 32
+                        horizontalAlignment: Text.AlignLeft
+                    }
+
+                    // IPv6 地址：超长截断 + hover tooltip 显示完整地址
+                    Text {
+                        text: popup.ipv6Address
                         font.pixelSize: Math.round(12 * popup.fontScale)
                         color: popup.tertiaryText
                         elide: Text.ElideRight
                         Layout.fillWidth: true
-                        horizontalAlignment: Text.AlignRight
+                        horizontalAlignment: Text.AlignLeft
 
                         ToolTip.text: popup.ipv6Address
                         ToolTip.visible: ipv6Mouse.containsMouse && popup.ipv6Address !== ""
@@ -236,12 +268,13 @@ Control {
                     }
 
                     // 一键复制图标：点击复制 IPv6 到剪贴板，复制后短暂显示 ✓
+                    // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
                     Text {
                         text: popup.copiedField === "ipv6" ? "✓" : "⧉"
-                        font.pixelSize: Math.round(11 * popup.fontScale)
+                        font.pixelSize: Math.round(12 * popup.fontScale)
                         color: popup.copiedField === "ipv6"
                                ? popup.accentGreen
-                               : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
+                               : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText)
 
                         MouseArea {
                             id: ipv6CopyMouse
