@@ -368,13 +368,6 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
         m_txDropped = 0;
         emit packetStatsChanged();
 
-        // 接口切换后会话总量重置为 0，重新累加当前网卡流量
-        // 设计原因：用户期望切换后显示当前网卡的会话流量，而非所有网卡总和；
-        // 与包统计的重置逻辑一致，切换后各统计项都归零重新计算
-        m_totalDownload = 0;
-        m_totalUpload = 0;
-        emit totalChanged();
-
         // 持久化到配置文件，下次启动自动加载用户选择的网卡
         // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
         const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
@@ -541,10 +534,12 @@ void NetworkMonitorApplet::calculateSpeed()
         const qint64 txDeltaClamped = txDelta > 0 ? txDelta : 0;
         m_downloadSpeed = rxDeltaClamped / elapsedSec;
         m_uploadSpeed = txDeltaClamped / elapsedSec;
-        // 累加会话总量：总量 = 本次会话期间所有活动接口的流量总和
-        m_totalDownload += rxDeltaClamped;
-        m_totalUpload += txDeltaClamped;
-        // 累加日/月流量日志（仅活动接口，与总量口径一致，避免多接口重复计数）
+        // 会话总量：直接读取活动接口累计字节数（开机至今），而非累加差值
+        // 设计原因：用户期望"本次会话"显示当前网卡从开机起的累计流量，
+        // 切换网卡后立即显示新网卡的累计值，无流量网卡显示 0
+        m_totalDownload = currentRxBytes;
+        m_totalUpload = currentTxBytes;
+        // 累加日/月流量日志（仅活动接口增量，与速度计算口径一致）
         appendToTrafficLog(rxDeltaClamped, txDeltaClamped);
         m_lastRxBytes = currentRxBytes;
         m_lastTxBytes = currentTxBytes;
@@ -566,7 +561,16 @@ void NetworkMonitorApplet::calculateSpeed()
             m_txErrors = static_cast<quint64>(iface.txErrors);
             m_rxDropped = static_cast<quint64>(iface.rxDropped);
             m_txDropped = static_cast<quint64>(iface.txDropped);
-            emit packetStatsChanged();
+        emit packetStatsChanged();
+
+        // 接口切换后立即更新会话总量为新网卡的累计字节数（开机至今）
+        // 设计原因：会话总量改为读取活动接口累计值，切换后应立即显示新网卡数据，
+        // 无需等下一次 calculateSpeed（1 秒后）才更新
+        if (m_interfaces.contains(m_activeInterface)) {
+            m_totalDownload = m_interfaces[m_activeInterface].rxBytes;
+            m_totalUpload = m_interfaces[m_activeInterface].txBytes;
+            emit totalChanged();
+        }
         }
     }
 
