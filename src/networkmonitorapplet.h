@@ -16,6 +16,7 @@
 #include <QDateTime>
 #include <QColor>
 #include <QSettings>
+#include <QJsonObject>
 
 DS_BEGIN_NAMESPACE
 
@@ -84,6 +85,13 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QVariantList speedHistoryDownload READ speedHistoryDownload NOTIFY speedHistoryChanged)
     // 当前活动接口的上行速度历史采样点，结构同 speedHistoryDownload
     Q_PROPERTY(QVariantList speedHistoryUpload READ speedHistoryUpload NOTIFY speedHistoryChanged)
+    // 流量统计日志（JSON 对象），供 QML 流量统计窗口读取展示
+    // 结构：{"byDay": {日期: {接口: {rx, tx}}}, "byMonth": {月份: {接口: {rx, tx}}}}
+    // 设计原因：会话总量重启清零，用户无法了解长期趋势；按日/月聚合让用户看
+    // 每日使用量和月度汇总，按接口分让多网卡各自独立统计。
+    // 保存频率：累加每秒执行（内存操作），写盘与通知 QML 降频（每 30 秒一次），
+    // 避免每秒磁盘 IO 与 QML 重绘
+    Q_PROPERTY(QJsonObject trafficLog READ trafficLog NOTIFY trafficLogChanged)
 
 public:
     explicit NetworkMonitorApplet(QObject *parent = nullptr);
@@ -128,6 +136,8 @@ public:
     QString textColor() const;
     // 设置任务栏网速字体颜色，空串表示跟随系统主题
     void setTextColor(const QString &color);
+    // 返回流量统计日志（JSON 对象），结构见 trafficLog 属性注释，供 QML 流量统计窗口读取
+    QJsonObject trafficLog() const;
 
     // 定时器回调，由 m_refreshTimer 每秒调用。非 Q_INVOKABLE（QML 不应直接调用，
     // 否则会打破 1 秒定时间隔导致速度计算失真）
@@ -155,6 +165,8 @@ signals:
     void speedHistoryChanged();
     // 任务栏网速字体颜色变化时通知 QML 更新
     void textColorChanged();
+    // 流量统计日志变化时通知 QML 更新（降频，每 30 秒发射一次）
+    void trafficLogChanged();
 
 private:
     void readNetworkStats();
@@ -177,6 +189,16 @@ private:
     bool isPhysicalInterface(const QString &name) const;
     qint64 getActiveRxBytes() const;
     qint64 getActiveTxBytes() const;
+
+    // ---- 流量日志（日/月持久化）----
+    // 启动时从 traffic_log.json 加载日志；文件不存在或解析失败时降级为空结构，不崩溃
+    void loadTrafficLog();
+    // 将日志写入 traffic_log.json（先裁剪超期记录再写盘），供析构与降频保存调用
+    void saveTrafficLog();
+    // 将本次流量增量累加到当日/当月/当前活动接口的日志记录中（每秒调用，内存操作）
+    void appendToTrafficLog(qint64 rxDelta, qint64 txDelta);
+    // 裁剪超期记录：按日最多 90 天、按月最多 24 个月，超出删除最旧记录
+    void pruneTrafficLog();
 
     QTimer *m_refreshTimer;
     QMap<QString, NetworkInterface> m_interfaces;
@@ -252,6 +274,23 @@ private:
     mutable bool m_historyDirty;
     // 重建历史缓存：仅当 m_historyDirty 时由两个 getter 调用
     void rebuildHistoryCache() const;
+
+    // ---- 流量日志成员 ----
+    // 完整流量日志 JSON：{"byDay": {日期: {接口: {rx, tx}}}, "byMonth": {月份: {接口: {rx, tx}}}}
+    // 设计原因：会话总量重启清零，用户无法了解长期趋势；按日/月聚合让用户看
+    // 每日使用量和月度汇总，按接口分让多网卡各自独立统计
+    QJsonObject m_trafficLog;
+    // 日志文件路径（~/.config/jnetapplet/traffic_log.json）
+    QString m_trafficLogPath;
+    // 当前日期 "yyyy-MM-dd" 与月份 "yyyy-MM"，用于跨日/跨月检测
+    QString m_currentDate;
+    QString m_currentMonth;
+    // 降频保存计数器：每 30 秒（按刷新间隔折算）写盘一次并通知 QML，
+    // 避免每秒磁盘 IO 与 QML 重绘；析构函数再兜底保存一次
+    int m_trafficSaveCounter;
+    // 按日记录最多保留 90 天、按月最多保留 24 个月，超出自动裁剪最旧记录
+    static constexpr int MAX_DAY_ENTRIES = 90;
+    static constexpr int MAX_MONTH_ENTRIES = 24;
 };
 
 DS_END_NAMESPACE

@@ -374,6 +374,16 @@ AppletItem {
             }
         }
 
+        // 流量统计：屏幕居中独立窗口，展示按日/按月持久化的累计流量
+        Platform.MenuItem {
+            text: qsTr("Traffic Statistics")
+            onTriggered: {
+                trafficStatsWindow.show()
+                trafficStatsWindow.raise()
+                trafficStatsWindow.requestActivate()
+            }
+        }
+
         Platform.MenuSeparator {}
 
         Platform.MenuItem {
@@ -401,6 +411,16 @@ AppletItem {
     // isDarkMode 取自上方 DockPalette 检测结果
     TrafficChartWindow {
         id: trafficChartWindow
+        accentColor: root.accentRed
+        applet: root.applet
+        isDarkMode: root.isDarkMode
+    }
+
+    // 流量统计窗口：屏幕居中独立窗口，展示按日/按月持久化的累计流量
+    // 依赖通过属性传入：accentColor = root.accentRed，applet = root.applet，
+    // isDarkMode 取自上方 DockPalette 检测结果
+    TrafficStatsWindow {
+        id: trafficStatsWindow
         accentColor: root.accentRed
         applet: root.applet
         isDarkMode: root.isDarkMode

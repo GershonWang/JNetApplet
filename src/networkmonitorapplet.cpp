@@ -18,6 +18,10 @@
 #include <QLocale>
 #include <QCoreApplication>
 #include <QProcess>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QFileInfo>
+#include <QDate>
 
 DS_BEGIN_NAMESPACE
 
@@ -47,6 +51,7 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_firstUpdate(true)
     , m_textColor()
     , m_historyDirty(true)
+    , m_trafficSaveCounter(0)
 {
     // 从独立配置文件读取持久化的字体颜色
     // 设计原因：使用独立配置文件避免污染 dde-shell 的共享配置，
@@ -81,6 +86,10 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
 
 NetworkMonitorApplet::~NetworkMonitorApplet()
 {
+    // 析构时兜底保存流量日志，确保进程退出前最后一段累加数据不丢失
+    // 设计原因：降频保存每 30 秒才写一次盘，若用户在两次保存之间退出，
+    // 这段增量会丢失；析构保存保证数据完整性
+    saveTrafficLog();
 }
 
 bool NetworkMonitorApplet::load()
@@ -102,6 +111,15 @@ bool NetworkMonitorApplet::init()
     }
 
     detectInterfaces();
+    
+    // 初始化流量日志持久化
+    // 设计原因：日志与设置共用 ~/.config/jnetapplet 目录；
+    // 启动时记录当前日期/月份用于跨日跨月检测，并从 JSON 文件加载历史累计数据
+    m_trafficLogPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                       + QStringLiteral("/jnetapplet/traffic_log.json");
+    m_currentDate = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
+    m_currentMonth = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
+    loadTrafficLog();
     
     // 启动定时刷新
     m_refreshTimer = new QTimer(this);
@@ -260,6 +278,13 @@ void NetworkMonitorApplet::setTextColor(const QString &color)
     emit textColorChanged();
 }
 
+// 返回流量统计日志（JSON 对象），结构见 trafficLog 属性注释
+// QJsonObject 可直接暴露给 QML 作为 JS 对象读取，无需额外转换
+QJsonObject NetworkMonitorApplet::trafficLog() const
+{
+    return m_trafficLog;
+}
+
 // 返回当前活动接口的下行速度历史，转换为 QVariantList of QPointF 供 QML 使用
 // 设计原因：QPointF 仅携带 x/y 两个值，上传与下载分别对应两个列表；
 // 结果缓存于成员变量，仅当 m_historyDirty 时重建，避免 QML 每次读取都重新构造 300 个点
@@ -302,6 +327,18 @@ void NetworkMonitorApplet::rebuildHistoryCache() const
 void NetworkMonitorApplet::refresh()
 {
     readNetworkStats();
+
+    // 流量日志降频保存：每 30 秒写盘一次并通知 QML
+    // 设计原因：累加在 calculateSpeed 中每秒执行（纯内存操作开销低），
+    // 而写盘与 QML 重绘若每秒执行会造成不必要的磁盘 IO 与界面刷新；
+    // 计数器按刷新间隔折算（1s=30 次，2s=15 次，5s=6 次）保证实际每 30 秒保存一次
+    const int saveEveryMs = 30000;
+    const int saveThreshold = qMax(1, saveEveryMs / m_refreshInterval);
+    if (++m_trafficSaveCounter >= saveThreshold) {
+        m_trafficSaveCounter = 0;
+        saveTrafficLog();
+        emit trafficLogChanged();
+    }
 }
 
 void NetworkMonitorApplet::setActiveInterface(const QString &interface)
@@ -500,6 +537,8 @@ void NetworkMonitorApplet::calculateSpeed()
         // 累加会话总量：总量 = 本次会话期间所有活动接口的流量总和
         m_totalDownload += rxDeltaClamped;
         m_totalUpload += txDeltaClamped;
+        // 累加日/月流量日志（仅活动接口，与总量口径一致，避免多接口重复计数）
+        appendToTrafficLog(rxDeltaClamped, txDeltaClamped);
         m_lastRxBytes = currentRxBytes;
         m_lastTxBytes = currentTxBytes;
     }
@@ -804,6 +843,124 @@ bool NetworkMonitorApplet::isPhysicalInterface(const QString &name) const
 {
     return name.startsWith("wlp") || name.startsWith("wlan")
         || name.startsWith("enp") || name.startsWith("eth");
+}
+
+// ---- 流量日志（日/月持久化）----
+
+// 启动时从 traffic_log.json 加载流量日志
+// 优雅降级：文件不存在、读取失败或 JSON 解析失败时均使用空结构，不崩溃不抛异常；
+// 首次运行（文件不存在）时先创建空的 byDay/byMonth 结构，由后续保存写盘创建文件
+void NetworkMonitorApplet::loadTrafficLog()
+{
+    QFile file(m_trafficLogPath);
+    if (!file.exists()) {
+        m_trafficLog = QJsonObject();
+        m_trafficLog[QStringLiteral("byDay")] = QJsonObject();
+        m_trafficLog[QStringLiteral("byMonth")] = QJsonObject();
+        return;
+    }
+    if (file.open(QIODevice::ReadOnly)) {
+        QJsonParseError err;
+        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
+        file.close();
+        if (err.error == QJsonParseError::NoError && doc.isObject()) {
+            m_trafficLog = doc.object();
+        } else {
+            // 解析失败（如文件被外部写坏）：降级为空结构，避免后续累加异常
+            m_trafficLog = QJsonObject();
+            m_trafficLog[QStringLiteral("byDay")] = QJsonObject();
+            m_trafficLog[QStringLiteral("byMonth")] = QJsonObject();
+        }
+    }
+}
+
+// 将流量日志写入 traffic_log.json
+// 先裁剪超期记录再写盘，避免日志无限膨胀；
+// 写前 mkpath 确保目录存在（首次运行时目录尚未创建）
+void NetworkMonitorApplet::saveTrafficLog()
+{
+    // 测试等场景未初始化日志路径时直接跳过，避免对空路径 mkpath/写文件产生告警
+    if (m_trafficLogPath.isEmpty()) {
+        return;
+    }
+    pruneTrafficLog();
+    QDir dir;
+    dir.mkpath(QFileInfo(m_trafficLogPath).absolutePath());
+    QFile file(m_trafficLogPath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        // 用 Indented 缩进格式便于用户手动查看/调试日志文件
+        file.write(QJsonDocument(m_trafficLog).toJson(QJsonDocument::Indented));
+        file.close();
+    }
+}
+
+// 将本次流量增量累加到当日/当月/当前活动接口的日志记录中（每秒调用，纯内存操作）
+// 跨日/跨月检测：日期或月份与上次记录不同时切换当前记录，不累加到昨天的记录；
+// 只累加活动接口（与 m_totalDownload 口径一致），避免多接口重复计数
+void NetworkMonitorApplet::appendToTrafficLog(qint64 rxDelta, qint64 txDelta)
+{
+    if (rxDelta <= 0 && txDelta <= 0) {
+        return;
+    }
+    if (m_activeInterface.isEmpty()) {
+        return;
+    }
+
+    // 跨日/跨月检测：更新当前日期/月份，切换记录（旧记录保留不再累加）
+    const QString date = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
+    const QString month = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
+    m_currentDate = date;
+    m_currentMonth = month;
+
+    // 累加到按日记录：byDay[date][iface] = {rx, tx}
+    // 用 toVariant().toLongLong() 读取并写回 qint64，保留整数精度
+    //（直接赋值 double 会导致超过 2^53 的字节数精度丢失）
+    QJsonObject byDay = m_trafficLog.value(QStringLiteral("byDay")).toObject();
+    QJsonObject dayEntry = byDay.value(date).toObject();
+    QJsonObject ifaceDay = dayEntry.value(m_activeInterface).toObject();
+    ifaceDay[QStringLiteral("rx")] =
+        ifaceDay.value(QStringLiteral("rx")).toVariant().toLongLong() + rxDelta;
+    ifaceDay[QStringLiteral("tx")] =
+        ifaceDay.value(QStringLiteral("tx")).toVariant().toLongLong() + txDelta;
+    dayEntry[m_activeInterface] = ifaceDay;
+    byDay[date] = dayEntry;
+    m_trafficLog[QStringLiteral("byDay")] = byDay;
+
+    // 累加到按月记录：byMonth[month][iface] = {rx, tx}
+    QJsonObject byMonth = m_trafficLog.value(QStringLiteral("byMonth")).toObject();
+    QJsonObject monthEntry = byMonth.value(month).toObject();
+    QJsonObject ifaceMonth = monthEntry.value(m_activeInterface).toObject();
+    ifaceMonth[QStringLiteral("rx")] =
+        ifaceMonth.value(QStringLiteral("rx")).toVariant().toLongLong() + rxDelta;
+    ifaceMonth[QStringLiteral("tx")] =
+        ifaceMonth.value(QStringLiteral("tx")).toVariant().toLongLong() + txDelta;
+    monthEntry[m_activeInterface] = ifaceMonth;
+    byMonth[month] = monthEntry;
+    m_trafficLog[QStringLiteral("byMonth")] = byMonth;
+}
+
+// 裁剪超期记录：按日最多 90 天、按月最多 24 个月，超出删除最旧记录
+// 日期/月份均为 ISO 格式（"yyyy-MM-dd"/"yyyy-MM"），字典序即时间序，
+// 排序后取最小的超量个删除，保证始终保留最近的记录
+void NetworkMonitorApplet::pruneTrafficLog()
+{
+    QJsonObject byDay = m_trafficLog.value(QStringLiteral("byDay")).toObject();
+    QStringList dayKeys = byDay.keys();
+    dayKeys.sort();
+    while (dayKeys.size() > MAX_DAY_ENTRIES) {
+        byDay.remove(dayKeys.first());
+        dayKeys.removeFirst();
+    }
+    m_trafficLog[QStringLiteral("byDay")] = byDay;
+
+    QJsonObject byMonth = m_trafficLog.value(QStringLiteral("byMonth")).toObject();
+    QStringList monthKeys = byMonth.keys();
+    monthKeys.sort();
+    while (monthKeys.size() > MAX_MONTH_ENTRIES) {
+        byMonth.remove(monthKeys.first());
+        monthKeys.removeFirst();
+    }
+    m_trafficLog[QStringLiteral("byMonth")] = byMonth;
 }
 
 D_APPLET_CLASS(NetworkMonitorApplet)
