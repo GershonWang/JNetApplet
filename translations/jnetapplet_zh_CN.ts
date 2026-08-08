@@ -79,12 +79,12 @@
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="427"/>
         <source>Total</source>
-        <translation>总计</translation>
+        <translation>流量总计</translation>
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="474"/>
         <source>Packets</source>
-        <translation>包</translation>
+        <translation>包统计</translation>
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="483"/>

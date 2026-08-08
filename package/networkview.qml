@@ -320,7 +320,7 @@ AppletItem {
     PanelPopup {
         id: networkPopup
         width: 330
-        height: 250
+        height: 280
         popupX: DockPanelPositioner.x
         popupY: DockPanelPositioner.y
 
