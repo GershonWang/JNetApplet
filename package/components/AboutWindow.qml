@@ -74,9 +74,12 @@ Window {
                 color: "transparent"
 
                 // 拖动层：声明在关闭按钮之前（位于其下方），避免遮挡按钮点击与 hover
+                // 用 startSystemMove() 系统级窗口拖动（drag.target 对 Window 无效，
+                // 与 SettingsWindow/TrafficChartWindow 一致）
                 MouseArea {
                     anchors.fill: parent
-                    drag.target: root
+                    cursorShape: Qt.OpenHandCursor
+                    onPressed: root.startSystemMove()
                 }
 
                 Text {
