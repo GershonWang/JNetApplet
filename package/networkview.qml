@@ -264,8 +264,8 @@ AppletItem {
     // 弹窗内容由 NetworkPopup.qml 提供，传入 applet，内部自行派生颜色和数据
     PanelPopup {
         id: networkPopup
-        width: 360
-        height: 320
+        width: 330
+        height: 250
         popupX: DockPanelPositioner.x
         popupY: DockPanelPositioner.y
 
