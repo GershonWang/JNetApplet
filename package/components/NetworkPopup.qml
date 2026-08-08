@@ -454,7 +454,7 @@ Control {
             Item { Layout.fillWidth: true }
 
             Text {
-                text: qsTr("Total")
+                text: qsTr("Session Total")
                 font.pixelSize: 12
                 color: popup.tertiaryText
             }

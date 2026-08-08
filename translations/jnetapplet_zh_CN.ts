@@ -78,8 +78,8 @@
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="427"/>
-        <source>Total</source>
-        <translation>流量总计</translation>
+        <source>Session Total</source>
+        <translation>本次会话</translation>
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="474"/>
@@ -295,8 +295,13 @@
     </message>
     <message>
         <location filename="../package/components/TrafficStatsWindow.qml" line="202"/>
-        <source>Accumulated by interface</source>
-        <translation>按接口累计</translation>
+        <source>Today accumulated</source>
+        <translation>今日累计</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="214"/>
+        <source>This month accumulated</source>
+        <translation>本月累计</translation>
     </message>
     <message>
         <location filename="../package/components/TrafficStatsWindow.qml" line="218"/>

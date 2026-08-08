@@ -211,7 +211,7 @@ Window {
 
                 // 右侧数据说明：按接口累计
                 Text {
-                    text: qsTr("Accumulated by interface")
+                    text: root.currentTab === 0 ? qsTr("Today accumulated") : qsTr("This month accumulated")
                     font.pixelSize: 11
                     color: theme.textTertiary
                 }
