@@ -9,6 +9,8 @@
 // 对外依赖：applet（C++ 后端对象）、networkInterfaces（接口列表）、activeInterface（当前接口）、
 // accentColor（强调色）、isDarkMode（深色模式标记），由 networkview.qml 实例化时传入，
 // 触发方式为 show()/raise()/requestActivate()
+// 公共能力复用：主题色取自 WindowTheme（本窗口 winBg 浅色 #F5F5F5、lineColor 浅色
+// #E0E0E0 与其他窗口不同，通过覆盖 WindowTheme 的浅色对实现），标题栏/圆角卡片取自 TitleBar
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -21,6 +23,15 @@ Window {
     // 公共函数：interfaceIcon/interfaceDescription 已从本文件迁移至 NetCommon.qml，
     // 与 NetworkPopup 共享同一份实现，消除跨组件重复定义
     NetCommon { id: common }
+
+    // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅。
+    // 本窗口 winBg 浅色 #F5F5F5、lineColor 浅色 #E0E0E0 与默认值不同，在此覆盖
+    WindowTheme {
+        id: theme
+        isDarkMode: root.isDarkMode
+        lightWinBg: "#F5F5F5"
+        lightLineColor: "#E0E0E0"
+    }
 
     // 对外依赖：C++ 后端对象，用于获取/设置接口、字体颜色等
     property var applet: null
@@ -39,15 +50,8 @@ Window {
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
 
-    // ---- 主题感知颜色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
-    readonly property color winBg: isDarkMode ? "#202020" : "#F5F5F5"
-    readonly property color cardBg: isDarkMode ? "#2A2A2A" : "#FFFFFF"
-    readonly property color lineColor: isDarkMode ? "#383838" : "#E0E0E0"
-    readonly property color textPrimary: isDarkMode ? "#E0E0E0" : "#333333"
-    readonly property color textSecondary: isDarkMode ? "#AAAAAA" : "#666666"
-    readonly property color textTertiary: isDarkMode ? "#888888" : "#999999"
-    readonly property color iconGray: isDarkMode ? "#AAAAAA" : "#777777"
-    readonly property color hoverBg: isDarkMode ? "#353535" : "#F0F0F0"
+    // ---- 设置窗口特有颜色（不属于三窗口公共主题）----
+    // 命令显示区底色
     readonly property color codeBg: isDarkMode ? "#2A2A2A" : "#E8E8E8"
     // 选中态蓝色系：深色模式下背景压暗、文字改浅蓝，保证深色卡片上的对比度
     readonly property color selBg: isDarkMode ? "#1A3A5C" : "#E3F2FD"
@@ -83,76 +87,30 @@ Window {
     // 主容器：提供不透明背景（随 isDarkMode 切换深浅）+ 圆角 + 边框
     Rectangle {
         anchors.fill: parent
-        color: root.winBg
+        color: theme.winBg
         radius: 12
         border.width: 1
-        border.color: root.lineColor
+        border.color: theme.lineColor
 
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 0
             spacing: 0
 
-            // 自定义标题栏（可拖动）
-            Rectangle {
+            // 公共标题栏：标题文字 + 圆形关闭按钮，整栏可拖动
+            TitleBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
-                color: "transparent"
-
-                // 拖动层：声明在关闭按钮之前（位于其下方），避免遮挡按钮点击与 hover
-                // 用 startSystemMove() 系统级窗口拖动，由窗口管理器接管移动，
-                // 这是 frameless Window 的正确做法，pressed 即触发，丝滑无抖动
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.OpenHandCursor
-                    onPressed: root.startSystemMove()
-                }
-
-                // 标题文字
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Settings")
-                    font.pixelSize: 15
-                    font.weight: Font.Bold
-                    color: root.textPrimary
-                }
-
-                // 关闭按钮
-                Rectangle {
-                    id: closeButton
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28
-                    height: 28
-                    radius: 14
-                    color: closeMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : "transparent"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "×"
-                        font.pixelSize: 20
-                        font.weight: Font.Bold
-                        color: closeMouse.containsMouse ? accentColor : root.textSecondary
-                    }
-
-                    MouseArea {
-                        id: closeMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.hide()
-                    }
-                }
+                titleText: qsTr("Settings")
+                textColor: theme.textPrimary
+                secondaryTextColor: theme.textSecondary
+                closeHoverColor: root.accentColor
             }
 
             // 分隔线
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: root.lineColor
+                color: theme.lineColor
             }
 
             // 内容区域
@@ -170,7 +128,7 @@ Window {
                         text: qsTr("Network Interface")
                         font.pixelSize: 13
                         font.weight: Font.Bold
-                        color: root.textSecondary
+                        color: theme.textSecondary
                     }
 
                     // 接口列表容器：最多显示约 5 行（160px），超出部分垂直滚动
@@ -181,10 +139,10 @@ Window {
                         Layout.preferredHeight: networkInterfaces.length > 0
                             ? Math.min(ifaceColumn.implicitHeight, 160) + 20
                             : 80
-                        color: root.cardBg
+                        color: theme.cardBg
                         radius: 10
                         border.width: 1
-                        border.color: root.lineColor
+                        border.color: theme.lineColor
 
                         // 用 ScrollView 而非裸 Flickable：自带滚轮滚动支持，
                         // 且滚动条显示时自动让出内容宽度，不会遮挡行内文字
@@ -209,8 +167,8 @@ Window {
                                     implicitWidth: 4
                                     radius: 2
                                     // 按压/悬停加深、默认稍淡，保证滚动条在卡片背景上可见
-                                    color: ifaceScrollBar.pressed ? root.textSecondary
-                                          : (ifaceScrollBar.hovered ? root.textSecondary : root.textTertiary)
+                                    color: ifaceScrollBar.pressed ? theme.textSecondary
+                                          : (ifaceScrollBar.hovered ? theme.textSecondary : theme.textTertiary)
                                 }
                             }
 
@@ -239,7 +197,7 @@ Window {
                                         // 背景优先级：选中 > hover；选中行 hover 时稍加深以保留交互反馈
                                         color: isActive
                                                ? (hovered ? root.selBgHover : root.selBg)
-                                               : (hovered ? root.hoverBg : "transparent")
+                                               : (hovered ? theme.hoverBg : "transparent")
                                         // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动
                                         border.width: 1
                                         border.color: isActive ? root.selBorder : "transparent"
@@ -267,7 +225,7 @@ Window {
                                                 horizontalAlignment: Text.AlignHCenter
                                                 text: common.interfaceIcon(modelData)
                                                 font.pixelSize: 14
-                                                color: ifaceRow.isActive ? ifaceRow.activeColor : root.iconGray
+                                                color: ifaceRow.isActive ? ifaceRow.activeColor : theme.iconGray
                                             }
 
                                             // 自绘单选圆点：替代 RadioButton 作纯视觉指示器，
@@ -281,7 +239,7 @@ Window {
                                                 color: "transparent"
                                                 border.width: 2
                                                 border.color: ifaceRow.isActive ? ifaceRow.activeColor
-                                                              : (ifaceRow.hovered ? root.textSecondary : root.textTertiary)
+                                                              : (ifaceRow.hovered ? theme.textSecondary : theme.textTertiary)
 
                                                 Rectangle {
                                                     anchors.centerIn: parent
@@ -300,7 +258,7 @@ Window {
                                                 text: modelData
                                                 font.pixelSize: 13
                                                 font.weight: ifaceRow.isActive ? Font.Medium : Font.Normal
-                                                color: ifaceRow.isActive ? ifaceRow.activeColor : root.textPrimary
+                                                color: ifaceRow.isActive ? ifaceRow.activeColor : theme.textPrimary
                                                 elide: Text.ElideRight
                                             }
 
@@ -309,7 +267,7 @@ Window {
                                                 Layout.alignment: Qt.AlignVCenter
                                                 text: common.interfaceDescription(modelData)
                                                 font.pixelSize: 12
-                                                color: root.textTertiary
+                                                color: theme.textTertiary
                                             }
                                         }
                                     }
@@ -322,7 +280,7 @@ Window {
                             anchors.centerIn: parent
                             text: qsTr("No network interface detected")
                             font.pixelSize: 12
-                            color: root.textTertiary
+                            color: theme.textTertiary
                             visible: networkInterfaces.length === 0
                         }
                     }
@@ -334,7 +292,7 @@ Window {
                         text: qsTr("Font Color")
                         font.pixelSize: 13
                         font.weight: Font.Bold
-                        color: root.textSecondary
+                        color: theme.textSecondary
                     }
 
                     TextColorPicker {
@@ -353,7 +311,7 @@ Window {
                         text: qsTr("Refresh Interval")
                         font.pixelSize: 13
                         font.weight: Font.Bold
-                        color: root.textSecondary
+                        color: theme.textSecondary
                     }
 
                     // 三个间隔选项按钮：1 秒 / 2 秒 / 5 秒
@@ -371,17 +329,17 @@ Window {
                                 radius: 8
                                 // 选中态蓝色填充边框，未选中态卡片背景，hover 态加深
                                 color: applet && applet.refreshInterval === modelData
-                                       ? root.selBg : (intervalMouse.containsMouse ? root.hoverBg : root.cardBg)
+                                       ? root.selBg : (intervalMouse.containsMouse ? theme.hoverBg : theme.cardBg)
                                 border.width: 1
                                 border.color: applet && applet.refreshInterval === modelData
-                                              ? root.selBorder : root.lineColor
+                                              ? root.selBorder : theme.lineColor
 
                                 Text {
                                     anchors.centerIn: parent
                                     text: (modelData / 1000) + "s"
                                     font.pixelSize: 13
                                     color: applet && applet.refreshInterval === modelData
-                                           ? root.selText : root.textPrimary
+                                           ? root.selText : theme.textPrimary
                                 }
 
                                 MouseArea {
@@ -455,10 +413,10 @@ Window {
         y: (root.height - height) / 2
 
         background: Rectangle {
-            color: root.winBg
+            color: theme.winBg
             radius: 12
             border.width: 1
-            border.color: root.lineColor
+            border.color: theme.lineColor
         }
 
         contentItem: ColumnLayout {
@@ -477,7 +435,7 @@ Window {
             Text {
                 text: qsTr("The following command uninstalls the plugin and restarts dde-shell. Please copy and run it in terminal:")
                 font.pixelSize: 12
-                color: root.textPrimary
+                color: theme.textPrimary
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
@@ -497,7 +455,7 @@ Window {
                     text: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
                     font.pixelSize: 10
                     font.family: "monospace"
-                    color: root.textSecondary
+                    color: theme.textSecondary
                     wrapMode: Text.WordWrap
                 }
             }
@@ -513,16 +471,16 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
-                    color: cancelUninstallMouse.containsMouse ? root.hoverBg : root.cardBg
+                    color: cancelUninstallMouse.containsMouse ? theme.hoverBg : theme.cardBg
                     radius: 8
                     border.width: 1
-                    border.color: root.lineColor
+                    border.color: theme.lineColor
 
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("Cancel")
                         font.pixelSize: 13
-                        color: root.textPrimary
+                        color: theme.textPrimary
                     }
 
                     MouseArea {

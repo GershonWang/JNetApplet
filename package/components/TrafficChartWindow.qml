@@ -13,6 +13,8 @@
 // - 数据通过属性注入：applet 即 networkview.qml 的 root.applet（C++ 后端对象），
 //   为 null 时组件可独立预览（Canvas 显示"暂无历史数据"空状态）
 // 触发方式：右键菜单"流量波动图" -> show()/raise()/requestActivate()
+// 公共能力复用：主题色取自 WindowTheme，标题栏（含置顶/关闭按钮）取自 TitleBar，
+// 消除三窗口样板重复
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
@@ -24,6 +26,12 @@ Window {
     // 公共格式化函数：集中定义于同目录 NetCommon.qml，
     // 与 networkview.qml、NetworkPopup 共享同一份实现，消除跨组件重复定义
     NetCommon { id: common }
+
+    // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅
+    WindowTheme {
+        id: theme
+        isDarkMode: root.isDarkMode
+    }
 
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
@@ -39,16 +47,10 @@ Window {
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
 
-    // ---- 主题感知颜色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
-    readonly property color winBg: isDarkMode ? "#202020" : "#FFFFFF"
-    readonly property color lineColor: isDarkMode ? "#383838" : "#E8E8E8"
-    readonly property color textPrimary: isDarkMode ? "#E0E0E0" : "#333333"
-    readonly property color textSecondary: isDarkMode ? "#AAAAAA" : "#666666"
-    readonly property color textTertiary: isDarkMode ? "#888888" : "#999999"
-    // 置顶按钮 hover 底色：浅色用淡黑、深色用淡白，保证两种卡片背景上均可见
+    // 置顶按钮 hover 底色（本窗口特有）：浅色用淡黑、深色用淡白，保证两种卡片背景上均可见
     readonly property color pinHoverBg: isDarkMode ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)
 
-    // 图表绘制色：声明为 string 供 Canvas 2D 上下文直接使用
+    // 图表绘制色（本窗口特有）：声明为 string 供 Canvas 2D 上下文直接使用
     //（QML color 类型含 alpha 时序列化为 #AARRGGBB，Canvas 无法正确解析，故不用 color 类型）
     readonly property string gridBaselineColor: isDarkMode ? "#383838" : "#DDDDDD"
     readonly property string gridLineColor: isDarkMode ? "#2A2A2A" : "#E5E5E5"
@@ -148,47 +150,29 @@ Window {
     // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边（与 AboutWindow 一致）
     Rectangle {
         anchors.fill: parent
-        color: root.winBg
+        color: theme.winBg
         radius: 12
         border.width: 1
-        border.color: root.lineColor
+        border.color: theme.lineColor
 
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
 
-            // 自定义标题栏：左侧"流量波动图"标题 + 右侧置顶/关闭按钮，整栏可拖动窗口
-            Rectangle {
+            // 公共标题栏：标题文字 + 置顶/关闭按钮，整栏可拖动。
+            // 置顶按钮通过 TitleBar 的额外按钮槽（extraActions）注入，逻辑仍在本窗口
+            TitleBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
-                color: "transparent"
-
-                // 拖动层：声明在关闭/置顶按钮之前（位于其下方），避免遮挡按钮点击与 hover
-                // 注意：drag.target 只对 Item 生效，对 Window 无效（原实现拖动不工作）；
-                // 改用 startSystemMove() 系统级窗口拖动，这是 frameless Window 的正确做法，
-                // pressed 即触发，由窗口管理器接管移动，不干扰按钮的 hover/click
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.OpenHandCursor
-                    onPressed: root.startSystemMove()
-                }
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Traffic Chart")
-                    font.pixelSize: 15
-                    font.weight: Font.Bold
-                    color: root.textPrimary
-                }
+                titleText: qsTr("Traffic Chart")
+                textColor: theme.textPrimary
+                secondaryTextColor: theme.textSecondary
+                closeHoverColor: root.accentColor
 
                 // 置顶按钮：28x28 圆形（与关闭按钮一致），位于关闭按钮左侧
                 // 三态视觉：未置顶=灰色图钉轮廓；置顶=deepin 蓝填充 + 淡蓝底；
                 // hover=淡灰底（置顶时淡蓝底优先）
                 Rectangle {
-                    anchors.right: chartCloseButton.left
-                    anchors.rightMargin: 4
+                    anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     width: 28
                     height: 28
@@ -256,34 +240,6 @@ Window {
                         onClicked: root.pinned = !root.pinned
                     }
                 }
-
-                // 关闭按钮：28x28 圆形，hover 时淡红底 + 红色 ×（颜色由 accentColor 决定）
-                Rectangle {
-                    id: chartCloseButton
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28
-                    height: 28
-                    radius: 14
-                    color: chartCloseMouse.containsMouse ? Qt.rgba(220 / 255, 38 / 255, 38 / 255, 0.15) : "transparent"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "×"
-                        font.pixelSize: 20
-                        font.weight: Font.Bold
-                        color: chartCloseMouse.containsMouse ? root.accentColor : root.textSecondary
-                    }
-
-                    MouseArea {
-                        id: chartCloseMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.hide()
-                    }
-                }
             }
 
             // 顶部状态条：实时下行/上行速度（箭头颜色与折线一致，兼作图例）
@@ -306,7 +262,7 @@ Window {
                     // applet 为空时兜底为 0，保证独立预览不报错
                     text: common.formatSpeed(root.applet ? root.applet.downloadSpeed : 0)
                     font.pixelSize: 12
-                    color: root.textPrimary
+                    color: theme.textPrimary
                 }
 
                 Item { Layout.preferredWidth: 10 }
@@ -321,7 +277,7 @@ Window {
                 Text {
                     text: common.formatSpeed(root.applet ? root.applet.uploadSpeed : 0)
                     font.pixelSize: 12
-                    color: root.textPrimary
+                    color: theme.textPrimary
                 }
 
                 Item { Layout.fillWidth: true }
@@ -330,7 +286,7 @@ Window {
                     text: (root.applet && root.applet.activeInterface
                            ? root.applet.activeInterface : "—") + " · 5min"
                     font.pixelSize: 12
-                    color: root.textTertiary
+                    color: theme.textTertiary
                 }
             }
 
@@ -592,7 +548,7 @@ Window {
                     text: root.hoverHint.length > 0
                           ? root.hoverHint : qsTr("Hover over the curve for details")
                     font.pixelSize: 11
-                    color: root.hoverHint.length > 0 ? root.textPrimary : root.textTertiary
+                    color: root.hoverHint.length > 0 ? theme.textPrimary : theme.textTertiary
                 }
             }
         }

@@ -8,12 +8,20 @@
 // 深/浅主题由 isDarkMode 切换（networkview.qml 依据 DockPalette 检测任务栏深浅后传入），
 // 默认浅色，保证组件独立预览时与原版视觉一致
 // 对外依赖：accentColor、isDarkMode，由 networkview.qml 实例化时传入，触发方式为 show()/raise()/requestActivate()
+// 公共能力复用：主题色取自 WindowTheme，标题栏/圆角卡片取自 TitleBar，消除三窗口样板重复
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import "."
 
 Window {
     id: root
+
+    // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅
+    WindowTheme {
+        id: theme
+        isDarkMode: root.isDarkMode
+    }
 
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
@@ -26,14 +34,6 @@ Window {
     // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
-
-    // ---- 主题感知颜色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
-    readonly property color winBg: isDarkMode ? "#202020" : "#FFFFFF"
-    readonly property color cardBg: isDarkMode ? "#2A2A2A" : "#FFFFFF"
-    readonly property color lineColor: isDarkMode ? "#383838" : "#E8E8E8"
-    readonly property color textPrimary: isDarkMode ? "#E0E0E0" : "#333333"
-    readonly property color textSecondary: isDarkMode ? "#AAAAAA" : "#666666"
-    readonly property color textTertiary: isDarkMode ? "#888888" : "#999999"
 
     // 复制成功状态标记：true 时复制图标变绿并显示"已复制"提示，
     // 2 秒后由 copyResetTimer 复位
@@ -58,66 +58,22 @@ Window {
     // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边
     Rectangle {
         anchors.fill: parent
-        color: root.winBg
+        color: theme.winBg
         radius: 12
         border.width: 1
-        border.color: root.lineColor
+        border.color: theme.lineColor
 
         ColumnLayout {
             anchors.fill: parent
             spacing: 0
 
-            // 自定义标题栏：左侧"关于"标题 + 右侧圆形关闭按钮，整栏可拖动窗口
-            Rectangle {
+            // 公共标题栏：标题文字 + 圆形关闭按钮，整栏可拖动
+            TitleBar {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
-                color: "transparent"
-
-                // 拖动层：声明在关闭按钮之前（位于其下方），避免遮挡按钮点击与 hover
-                // 用 startSystemMove() 系统级窗口拖动（drag.target 对 Window 无效，
-                // 与 SettingsWindow/TrafficChartWindow 一致）
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.OpenHandCursor
-                    onPressed: root.startSystemMove()
-                }
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 16
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("About")
-                    font.pixelSize: 15
-                    font.weight: Font.Bold
-                    color: root.textPrimary
-                }
-
-                // 关闭按钮：28x28 圆形，hover 时淡红底 + 红色 ×（颜色由 accentColor 决定）
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28
-                    height: 28
-                    radius: 14
-                    color: aboutCloseMouse.containsMouse ? Qt.rgba(220 / 255, 38 / 255, 38 / 255, 0.15) : "transparent"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "×"
-                        font.pixelSize: 20
-                        font.weight: Font.Bold
-                        color: aboutCloseMouse.containsMouse ? accentColor : root.textSecondary
-                    }
-
-                    MouseArea {
-                        id: aboutCloseMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.hide()
-                    }
-                }
+                titleText: qsTr("About")
+                textColor: theme.textPrimary
+                secondaryTextColor: theme.textSecondary
+                closeHoverColor: root.accentColor
             }
 
             // 标题区上方间距
@@ -136,7 +92,7 @@ Window {
                     text: qsTr("Network Speed Monitor")
                     font.pixelSize: 18
                     font.weight: Font.Bold
-                    color: root.textPrimary
+                    color: theme.textPrimary
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                 }
@@ -144,7 +100,7 @@ Window {
                 Text {
                     text: "JNetApplet"
                     font.pixelSize: 12
-                    color: root.textTertiary
+                    color: theme.textTertiary
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                 }
@@ -161,7 +117,7 @@ Window {
                 Layout.leftMargin: 24
                 Layout.rightMargin: 24
                 Layout.preferredHeight: 1
-                color: root.lineColor
+                color: theme.lineColor
             }
 
             // 信息区上方间距
@@ -192,7 +148,7 @@ Window {
                     Text {
                         text: version
                         font.pixelSize: 12
-                        color: root.textPrimary
+                        color: theme.textPrimary
                         Layout.fillWidth: true
                     }
                 }
@@ -213,7 +169,7 @@ Window {
                     Text {
                         text: "Jokul"
                         font.pixelSize: 12
-                        color: root.textPrimary
+                        color: theme.textPrimary
                         Layout.fillWidth: true
                     }
                 }
@@ -234,7 +190,7 @@ Window {
                     Text {
                         text: qsTr("Monitor network speed and traffic")
                         font.pixelSize: 12
-                        color: root.textPrimary
+                        color: theme.textPrimary
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                     }
@@ -256,7 +212,7 @@ Window {
                     Text {
                         text: "git.jokul.space/Jokul/JNetApplet"
                         font.pixelSize: 11
-                        color: root.textTertiary
+                        color: theme.textTertiary
                         Layout.fillWidth: true
                         wrapMode: Text.WrapAnywhere
                     }
@@ -277,7 +233,7 @@ Window {
                             width: copiedHintText.implicitWidth + 10
                             height: 18
                             radius: 4
-                            color: root.cardBg
+                            color: theme.cardBg
                             border.width: 1
                             border.color: "#22A34A"
 
@@ -313,9 +269,9 @@ Window {
                             width: 10
                             height: 10
                             radius: 2
-                            color: root.cardBg
+                            color: theme.cardBg
                             border.width: 1
-                            border.color: copyRepoMouse.containsMouse ? root.textPrimary : root.textTertiary
+                            border.color: copyRepoMouse.containsMouse ? theme.textPrimary : theme.textTertiary
                         }
 
                         // 前层矩形（左上），复制成功时边框短暂变绿
@@ -325,9 +281,9 @@ Window {
                             width: 10
                             height: 10
                             radius: 2
-                            color: root.cardBg
+                            color: theme.cardBg
                             border.width: 1
-                            border.color: copied ? "#22A34A" : (copyRepoMouse.containsMouse ? root.textPrimary : root.textTertiary)
+                            border.color: copied ? "#22A34A" : (copyRepoMouse.containsMouse ? theme.textPrimary : theme.textTertiary)
                         }
                     }
                 }
