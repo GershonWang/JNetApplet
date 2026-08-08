@@ -13,9 +13,14 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import "."
 
 Window {
     id: root
+
+    // 公共函数：interfaceIcon/interfaceDescription 已从本文件迁移至 NetCommon.qml，
+    // 与 NetworkPopup 共享同一份实现，消除跨组件重复定义
+    NetCommon { id: common }
 
     // 对外依赖：C++ 后端对象，用于获取/设置接口、字体颜色等
     property var applet: null
@@ -65,37 +70,6 @@ Window {
     modality: Qt.NonModal
     // 窗口透明：让圆角外的区域不显示，由内部 Rectangle 提供可见背景
     color: "transparent"
-
-    // 根据接口名返回类型描述，用于设置窗口网络接口列表
-    // 设计原因：用户面对多个网口时难以仅凭 enp3s0/wlp3s0 等命名判断用途，
-    // 加一行类型说明（有线/无线/VPN 等）降低认知负担
-    function interfaceDescription(name) {
-        if (name === "lo") return qsTr("Loopback")
-        if (name === "Meta") return qsTr("Virtual Interface")
-        if (/^enp|^eth/.test(name)) return qsTr("Wired Network")
-        if (/^wlp|^wlan/.test(name)) return qsTr("Wireless Network")
-        if (/^docker|^veth/.test(name)) return qsTr("Container Network")
-        if (/^br/.test(name)) return qsTr("Bridge")
-        if (/^tun|^tap/.test(name)) return qsTr("VPN")
-        if (/^virbr/.test(name)) return qsTr("Virtual Bridge")
-        return qsTr("Other")
-    }
-
-    // 根据接口名返回类型图标（Unicode 符号），用于网络接口列表每行左侧
-    // 设计原因：项目未引入图标库，用 Text 渲染 Unicode 符号（与 networkview.qml 的 ↓↑ 一致）；
-    // 所选符号均为 DejaVu/Noto 等常见字体覆盖的单色字形，避免彩色 emoji 破坏浅色主题观感，
-    // 匹配规则与 interfaceDescription 保持一致
-    function interfaceIcon(name) {
-        if (name === "lo") return "↻"               // 本地回环：循环箭头
-        if (name === "Meta") return "▢"             // 虚拟接口：空心方块
-        if (/^enp|^eth/.test(name)) return "⇄"      // 有线网络：双向链路
-        if (/^wlp|^wlan/.test(name)) return "∿"     // 无线网络：信号波形
-        if (/^docker|^veth/.test(name)) return "▣"  // 容器网络：盒中盒
-        if (/^br/.test(name)) return "⋈"            // 桥接：连接（蝴蝶结形）
-        if (/^tun|^tap/.test(name)) return "⚿"      // VPN：钥匙
-        if (/^virbr/.test(name)) return "⋈"         // 虚拟桥接：同桥接
-        return "◉"                                  // 其他：通用网络节点
-    }
 
     // 显示时居中到当前屏幕（任务栏所在屏幕）
     onVisibleChanged: {
@@ -291,7 +265,7 @@ Window {
                                                 Layout.alignment: Qt.AlignVCenter
                                                 Layout.preferredWidth: 20
                                                 horizontalAlignment: Text.AlignHCenter
-                                                text: interfaceIcon(modelData)
+                                                text: common.interfaceIcon(modelData)
                                                 font.pixelSize: 14
                                                 color: ifaceRow.isActive ? ifaceRow.activeColor : root.iconGray
                                             }
@@ -333,7 +307,7 @@ Window {
                                             // 接口类型描述：右对齐显示，与接口名分居两侧
                                             Text {
                                                 Layout.alignment: Qt.AlignVCenter
-                                                text: interfaceDescription(modelData)
+                                                text: common.interfaceDescription(modelData)
                                                 font.pixelSize: 12
                                                 color: root.textTertiary
                                             }
