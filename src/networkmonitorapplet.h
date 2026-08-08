@@ -147,6 +147,10 @@ private:
     // 总量
     qint64 m_totalDownload;
     qint64 m_totalUpload;
+
+    // IP 地址检测降频计数器：IP 变化频率极低，每 5 次 refresh 才检测一次
+    // 初始化 4 使首次 refresh 立即检测，避免启动后 IP 显示延迟
+    int m_ipDetectCounter;
     
     bool m_ready;
     bool m_firstUpdate;
@@ -160,6 +164,16 @@ private:
     QHash<QString, QVector<SpeedSample>> m_speedHistory;
     // 每个接口最多保留的采样点数：5 分钟 × 60 秒 = 300
     static constexpr int MAX_HISTORY_SAMPLES = 300;
+
+    // 历史 QVariantList 缓存：避免 QML 每次读取都重新构造 300 个 QPointF
+    // 设计原因：Canvas 每秒读取一次 + hover 时也读取，逐个 append 开销可观；
+    // 用 dirty 标记懒重建，仅当追加采样点或切换接口后重建一次
+    // 注意：getter 为 const，故缓存与 dirty 标记声明为 mutable
+    mutable QVariantList m_cachedHistoryDl;
+    mutable QVariantList m_cachedHistoryUpload;
+    mutable bool m_historyDirty;
+    // 重建历史缓存：仅当 m_historyDirty 时由两个 getter 调用
+    void rebuildHistoryCache() const;
 };
 
 DS_END_NAMESPACE

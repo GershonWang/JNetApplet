@@ -30,9 +30,11 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_uploadSpeed(0)
     , m_totalDownload(0)
     , m_totalUpload(0)
+    , m_ipDetectCounter(4)
     , m_ready(false)
     , m_firstUpdate(true)
     , m_textColor()
+    , m_historyDirty(true)
 {
     // 从独立配置文件读取持久化的字体颜色
     // 设计原因：使用独立配置文件避免污染 dde-shell 的共享配置，
@@ -191,34 +193,42 @@ void NetworkMonitorApplet::setTextColor(const QString &color)
 }
 
 // 返回当前活动接口的下行速度历史，转换为 QVariantList of QPointF 供 QML 使用
-// 设计原因：QPointF 仅携带 x/y 两个值，上传与下载分别对应两个列表
+// 设计原因：QPointF 仅携带 x/y 两个值，上传与下载分别对应两个列表；
+// 结果缓存于成员变量，仅当 m_historyDirty 时重建，避免 QML 每次读取都重新构造 300 个点
 QVariantList NetworkMonitorApplet::speedHistoryDownload() const
 {
-    QVariantList list;
-    if (m_activeInterface.isEmpty() || !m_speedHistory.contains(m_activeInterface)) {
-        return list;
+    if (m_historyDirty) {
+        rebuildHistoryCache();
     }
-    const QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
-    list.reserve(samples.size());
-    for (const SpeedSample &s : samples) {
-        list.append(QPointF(s.timestamp, s.downloadSpeed));
-    }
-    return list;
+    return m_cachedHistoryDl;
 }
 
 // 返回当前活动接口的上行速度历史，结构同 speedHistoryDownload
 QVariantList NetworkMonitorApplet::speedHistoryUpload() const
 {
-    QVariantList list;
-    if (m_activeInterface.isEmpty() || !m_speedHistory.contains(m_activeInterface)) {
-        return list;
+    if (m_historyDirty) {
+        rebuildHistoryCache();
     }
-    const QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
-    list.reserve(samples.size());
-    for (const SpeedSample &s : samples) {
-        list.append(QPointF(s.timestamp, s.uploadSpeed));
+    return m_cachedHistoryUpload;
+}
+
+// 重建上下行历史缓存（一次遍历同时填充两个列表）
+// 仅当 dirty 时由两个 getter 调用，避免重复构建；
+// 单 dirty 标记 + 一次重建双缓存，保证先后读取两个列表时数据一致
+void NetworkMonitorApplet::rebuildHistoryCache() const
+{
+    m_cachedHistoryDl.clear();
+    m_cachedHistoryUpload.clear();
+    if (!m_activeInterface.isEmpty() && m_speedHistory.contains(m_activeInterface)) {
+        const QVector<SpeedSample> &samples = m_speedHistory[m_activeInterface];
+        m_cachedHistoryDl.reserve(samples.size());
+        m_cachedHistoryUpload.reserve(samples.size());
+        for (const SpeedSample &s : samples) {
+            m_cachedHistoryDl.append(QPointF(s.timestamp, s.downloadSpeed));
+            m_cachedHistoryUpload.append(QPointF(s.timestamp, s.uploadSpeed));
+        }
     }
-    return list;
+    m_historyDirty = false;
 }
 
 void NetworkMonitorApplet::refresh()
@@ -239,6 +249,9 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
     if (m_activeInterface != interface) {
         m_activeInterface = interface;
         m_firstUpdate = true;
+
+        // 接口切换后历史数据变化，标记脏缓存让趋势图立即重建
+        m_historyDirty = true;
 
         // 持久化到配置文件，下次启动自动加载用户选择的网卡
         // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
@@ -276,7 +289,8 @@ void NetworkMonitorApplet::readNetworkStats()
         if (line.isEmpty()) continue;
         
         // 格式: "interface: rx_bytes rx_packets rx_errors rx_dropped ... tx_bytes tx_packets tx_errors tx_dropped ..."
-        QRegularExpression re("^([^:]+):\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)");
+        // static const 仅首次调用时编译正则一次，后续复用，避免每秒对每行重复编译
+        static const QRegularExpression re("^([^:]+):\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)\\s+(\\d+)");
         QRegularExpressionMatch match = re.match(line);
         
         if (match.hasMatch()) {
@@ -357,8 +371,13 @@ void NetworkMonitorApplet::readNetworkStats()
     }
     
     calculateSpeed();
-    // 每次刷新都检测 IP，以应对 DHCP 续约等 IP 变更场景
-    detectIpAddress();
+    // IP 地址变化频率极低（DHCP 续约/网络切换等），降频至每 5 秒检测一次，
+    // 减少每秒 QNetworkInterface::interfaceFromName 的系统查询开销
+    // 计数器每次 refresh 递增，达到 5 时归零并执行检测
+    if (++m_ipDetectCounter >= 5) {
+        m_ipDetectCounter = 0;
+        detectIpAddress();
+    }
 }
 
 void NetworkMonitorApplet::calculateSpeed()
@@ -368,6 +387,13 @@ void NetworkMonitorApplet::calculateSpeed()
     const qint64 nowSec = QDateTime::currentSecsSinceEpoch();
     const double elapsedSec = (nowMs - m_lastTimestampMs) / 1000.0;
     m_lastTimestampMs = nowMs;
+
+    // 记录旧值用于 dirty 比较：网络空闲时速度/总量可能不变，
+    // 仅在真正变化时才发射信号，避免 QML 每秒无效重绘
+    const double oldDownload = m_downloadSpeed;
+    const double oldUpload = m_uploadSpeed;
+    const qint64 oldTotalDownload = m_totalDownload;
+    const qint64 oldTotalUpload = m_totalUpload;
 
     // ---- 活动接口速度计算（用于任务栏显示和总量累加）----
     if (m_firstUpdate) {
@@ -426,11 +452,18 @@ void NetworkMonitorApplet::calculateSpeed()
             m_lastRxBytesByIface[name] = iface.rxBytes;
             m_lastTxBytesByIface[name] = iface.txBytes;
         }
+        // 历史采样点已追加，标记脏缓存，QML 下次读取时重建
+        m_historyDirty = true;
         emit speedHistoryChanged();
     }
 
-    emit speedChanged();
-    emit totalChanged();
+    // 仅在速度/总量实际变化时发射信号，避免空闲时每秒触发 QML 无效重绘
+    if (m_downloadSpeed != oldDownload || m_uploadSpeed != oldUpload) {
+        emit speedChanged();
+    }
+    if (m_totalDownload != oldTotalDownload || m_totalUpload != oldTotalUpload) {
+        emit totalChanged();
+    }
 }
 
 void NetworkMonitorApplet::detectInterfaces()
