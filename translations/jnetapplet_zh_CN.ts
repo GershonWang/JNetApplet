@@ -53,33 +53,81 @@
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="129"/>
-        <source>IPv4: </source>
-        <translation>IPv4：</translation>
+        <source>No network interface detected</source>
+        <translation>未检测到网络接口</translation>
     </message>
     <message>
-        <location filename="../package/components/NetworkPopup.qml" line="138"/>
-        <source>IPv6: </source>
-        <translation>IPv6：</translation>
+        <location filename="../package/components/NetworkPopup.qml" line="181"/>
+        <source>IPv4</source>
+        <translation>IPv4</translation>
     </message>
     <message>
-        <location filename="../package/components/NetworkPopup.qml" line="190"/>
+        <location filename="../package/components/NetworkPopup.qml" line="242"/>
+        <source>IPv6</source>
+        <translation>IPv6</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="324"/>
         <source>Download</source>
         <translation>下载</translation>
     </message>
     <message>
-        <location filename="../package/components/NetworkPopup.qml" line="247"/>
+        <location filename="../package/components/NetworkPopup.qml" line="373"/>
         <source>Upload</source>
         <translation>上传</translation>
     </message>
     <message>
-        <location filename="../package/components/NetworkPopup.qml" line="282"/>
+        <location filename="../package/components/NetworkPopup.qml" line="427"/>
         <source>Total</source>
         <translation>总计</translation>
     </message>
+</context>
+<context>
+    <name>NetCommon</name>
     <message>
-        <location filename="../package/components/NetworkPopup.qml" line="459"/>
-        <source>No network interface detected</source>
-        <translation>未检测到网络接口</translation>
+        <location filename="../package/components/NetCommon.qml" line="102"/>
+        <source>Loopback</source>
+        <translation>本地回环</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="103"/>
+        <source>Virtual Interface</source>
+        <translation>虚拟接口</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="104"/>
+        <source>Wired Network</source>
+        <translation>有线网络</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="105"/>
+        <source>Wireless Network</source>
+        <translation>无线网络</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="106"/>
+        <source>Container Network</source>
+        <translation>容器网络</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="107"/>
+        <source>Bridge</source>
+        <translation>桥接</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="108"/>
+        <source>VPN</source>
+        <translation>VPN</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="109"/>
+        <source>Virtual Bridge</source>
+        <translation>虚拟桥接</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetCommon.qml" line="110"/>
+        <source>Other</source>
+        <translation>其他</translation>
     </message>
 </context>
 <context>
@@ -90,51 +138,6 @@
         <location filename="../package/components/SettingsWindow.qml" line="560"/>
         <source>Uninstall Plugin</source>
         <translation>卸载插件</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="73"/>
-        <source>Loopback</source>
-        <translation>本地回环</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="74"/>
-        <source>Virtual Interface</source>
-        <translation>虚拟接口</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="75"/>
-        <source>Wired Network</source>
-        <translation>有线网络</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="76"/>
-        <source>Wireless Network</source>
-        <translation>无线网络</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="77"/>
-        <source>Container Network</source>
-        <translation>容器网络</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="78"/>
-        <source>Bridge</source>
-        <translation>桥接</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="79"/>
-        <source>VPN</source>
-        <translation>VPN</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="80"/>
-        <source>Virtual Bridge</source>
-        <translation>虚拟桥接</translation>
-    </message>
-    <message>
-        <location filename="../package/components/SettingsWindow.qml" line="81"/>
-        <source>Other</source>
-        <translation>其他</translation>
     </message>
     <message>
         <location filename="../package/components/SettingsWindow.qml" line="142"/>
