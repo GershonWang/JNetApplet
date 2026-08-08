@@ -172,14 +172,14 @@ Control {
                     // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
                     Text {
                         text: popup.activeInterface
-                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        font.pixelSize: 13
                         color: popup.primaryText
                     }
 
                     // 链路协商速率：speed>=1000 显示 Gbps，否则 Mbps；无速率时隐藏
                     Text {
                         text: popup.linkSpeed > 0 ? "· " + common.formatLinkSpeed(popup.linkSpeed) : ""
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.tertiaryText
                         visible: popup.linkSpeed > 0
                     }
@@ -316,7 +316,7 @@ Control {
 
                     Text {
                         text: qsTr("Signal") + " " + popup.wifiSignal.toFixed(0) + " dBm"
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.tertiaryText
                     }
                 }
@@ -565,7 +565,7 @@ Control {
 
             Text {
                 text: qsTr("Connections") + " " + popup.tcpConnections.toFixed(0)
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 color: popup.tertiaryText
             }
 
