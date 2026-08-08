@@ -103,8 +103,8 @@
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="566"/>
-        <source>Connections</source>
-        <translation>连接</translation>
+        <source>TCP Connections</source>
+        <translation>TCP 连接</translation>
     </message>
 </context>
 <context>

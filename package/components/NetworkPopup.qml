@@ -563,7 +563,7 @@ Control {
             Item { Layout.fillWidth: true }
 
             Text {
-                text: qsTr("Connections") + " " + popup.tcpConnections.toFixed(0)
+                text: qsTr("TCP Connections") + " " + popup.tcpConnections.toFixed(0)
                 font.pixelSize: 12
                 color: popup.tertiaryText
             }
