@@ -122,64 +122,71 @@ Control {
 
         // ==================== 分区1：接口信息 ====================
         // 类型图标 + 接口名 + IPv4 一行，IPv6 截断显示一行
-        ColumnLayout {
+        // 外层 Item 固定高度 + 内层 ColumnLayout anchors.centerIn：
+        // 无 IP 地址时内容在区域内垂直居中，避免单行内容贴顶导致网卡名偏上
+        Item {
             Layout.fillWidth: true
-            // 最小高度防止无 IP 地址时区域塌陷导致间距比例失调
-            Layout.minimumHeight: 40
-            spacing: 4
+            // preferredHeight 40 为无 IP 时的最小高度；有 IP/IPv6 时内容自然撑高
+            Layout.preferredHeight: Math.max(40, ifaceCol.implicitHeight)
             visible: popup.ready
 
-            // 行1：类型图标 + 接口名 + · + IPv4
-            // 拆分为独立 Text 元素，使接口名用 primaryText 跟随用户 textColor，
-            // 图标和 IPv4 保持系统主题色（tertiaryText/secondaryText），层次分明
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
+            ColumnLayout {
+                id: ifaceCol
+                anchors.centerIn: parent
+                width: parent.width
                 spacing: 4
 
-                // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
+                // 行1：类型图标 + 接口名 + · + IPv4
+                // 拆分为独立 Text 元素，使接口名用 primaryText 跟随用户 textColor，
+                // 图标和 IPv4 保持系统主题色（tertiaryText/secondaryText），层次分明
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 4
+
+                    // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
+                    Text {
+                        text: common.interfaceIcon(popup.activeInterface)
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
+                    }
+
+                    // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
+                    Text {
+                        text: popup.activeInterface
+                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        color: popup.primaryText
+                    }
+
+                    // IPv4 地址：次要色，与接口名区分层次
+                    Text {
+                        text: popup.ipAddress ? "·  " + popup.ipAddress : ""
+                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        color: popup.secondaryText
+                        visible: popup.ipAddress !== ""
+                    }
+                }
+
+                // 行2：IPv6 地址（超长截断 + hover tooltip 显示完整地址）
                 Text {
-                    text: common.interfaceIcon(popup.activeInterface)
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.maximumWidth: 300
+                    horizontalAlignment: Text.AlignHCenter
                     font.pixelSize: Math.round(12 * popup.fontScale)
                     color: popup.tertiaryText
-                }
+                    visible: popup.ipv6Address !== ""
+                    text: popup.ipv6Address ? qsTr("IPv6: ") + popup.ipv6Address : ""
+                    elide: Text.ElideRight
 
-                // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
-                Text {
-                    text: popup.activeInterface
-                    font.pixelSize: Math.round(13 * popup.fontScale)
-                    color: popup.primaryText
-                }
+                    ToolTip.text: popup.ipv6Address
+                    ToolTip.visible: ipv6Mouse.containsMouse && popup.ipv6Address !== ""
+                    ToolTip.delay: 300
 
-                // IPv4 地址：次要色，与接口名区分层次
-                Text {
-                    text: popup.ipAddress ? "·  " + popup.ipAddress : ""
-                    font.pixelSize: Math.round(13 * popup.fontScale)
-                    color: popup.secondaryText
-                    visible: popup.ipAddress !== ""
-                }
-            }
-
-            // 行2：IPv6 地址（超长截断 + hover tooltip 显示完整地址）
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.fillWidth: true
-                Layout.maximumWidth: 300
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: Math.round(12 * popup.fontScale)
-                color: popup.tertiaryText
-                visible: popup.ipv6Address !== ""
-                text: popup.ipv6Address ? qsTr("IPv6: ") + popup.ipv6Address : ""
-                elide: Text.ElideRight
-
-                ToolTip.text: popup.ipv6Address
-                ToolTip.visible: ipv6Mouse.containsMouse && popup.ipv6Address !== ""
-                ToolTip.delay: 300
-
-                MouseArea {
-                    id: ipv6Mouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.IBeamCursor
+                    MouseArea {
+                        id: ipv6Mouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.IBeamCursor
+                    }
                 }
             }
         }
