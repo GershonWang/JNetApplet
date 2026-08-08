@@ -79,4 +79,49 @@ QtObject {
             return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB"
         }
     }
+
+    // 根据接口名返回类型图标（Unicode 符号），用于网络接口列表和弹窗接口信息区
+    // 设计原因：项目未引入图标库，用 Text 渲染 Unicode 符号（与 ↓↑ 一致）；
+    // 所选符号均为 DejaVu/Noto 等常见字体覆盖的单色字形，避免彩色 emoji 破坏浅色主题观感
+    function interfaceIcon(name) {
+        if (name === "lo") return "↻"               // 本地回环：循环箭头
+        if (name === "Meta") return "▢"             // 虚拟接口：空心方块
+        if (/^enp|^eth/.test(name)) return "⇄"      // 有线网络：双向链路
+        if (/^wlp|^wlan/.test(name)) return "∿"     // 无线网络：信号波形
+        if (/^docker|^veth/.test(name)) return "▣"  // 容器网络：盒中盒
+        if (/^br/.test(name)) return "⋈"            // 桥接：连接
+        if (/^tun|^tap/.test(name)) return "⚿"      // VPN：钥匙
+        if (/^virbr/.test(name)) return "⋈"         // 虚拟桥接：同桥接
+        return "◉"                                  // 其他：通用网络节点
+    }
+
+    // 根据接口名返回类型描述，用于设置窗口网络接口列表和弹窗 tooltip
+    // 设计原因：用户面对多个网口时难以仅凭 enp3s0/wlp3s0 等命名判断用途，
+    // 加一行类型说明（有线/无线/VPN 等）降低认知负担
+    function interfaceDescription(name) {
+        if (name === "lo") return qsTr("Loopback")
+        if (name === "Meta") return qsTr("Virtual Interface")
+        if (/^enp|^eth/.test(name)) return qsTr("Wired Network")
+        if (/^wlp|^wlan/.test(name)) return qsTr("Wireless Network")
+        if (/^docker|^veth/.test(name)) return qsTr("Container Network")
+        if (/^br/.test(name)) return qsTr("Bridge")
+        if (/^tun|^tap/.test(name)) return qsTr("VPN")
+        if (/^virbr/.test(name)) return qsTr("Virtual Bridge")
+        return qsTr("Other")
+    }
+
+    // 拆分速度字符串为数值部分：formatSpeed 返回 "4.11 KB/s"，本函数返回 "4.11"
+    // 设计原因：弹窗速度区需将数值（大号粗体）与单位（小号）拆分显示以增强层次感
+    function formatSpeedValue(bytesPerSec) {
+        var str = formatSpeed(bytesPerSec)
+        var idx = str.indexOf(' ')
+        return idx < 0 ? str : str.substring(0, idx)
+    }
+
+    // 拆分速度字符串为单位部分：formatSpeed 返回 "4.11 KB/s"，本函数返回 "KB/s"
+    function formatSpeedUnit(bytesPerSec) {
+        var str = formatSpeed(bytesPerSec)
+        var idx = str.indexOf(' ')
+        return idx < 0 ? "" : str.substring(idx + 1)
+    }
 }
