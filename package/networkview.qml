@@ -280,6 +280,7 @@ AppletItem {
         NetworkPopup {
             id: popupContent
             applet: root.applet
+            common: common
             anchors.fill: parent
         }
 

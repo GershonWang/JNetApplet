@@ -22,11 +22,14 @@ import "."
 Control {
     id: popup
 
-    // 公共颜色与格式化函数：集中定义于同目录 NetCommon.qml
-    NetCommon { id: common }
-
     // C++ 后端对象，提供速度/接口/IP 等所有数据
     property var applet: null
+
+    // 公共颜色与格式化函数：由 networkview.qml 传入 dock 上下文的 NetCommon 实例
+    // 设计原因：PanelPopup 是独立窗口上下文，在此上下文求值 DTK.palette.windowText
+    // 深色模式下返回深色文字（与 dock 面板上下文不同），导致深底深字；
+    // 传入 dock 上下文的 common 实例，颜色在 dock 面板上下文求值，深色模式正确返回浅色文字
+    property var common: null
 
     readonly property bool ready: applet ? applet.ready : false
     readonly property real downloadSpeed: applet ? applet.downloadSpeed : 0
@@ -121,6 +124,8 @@ Control {
         // 类型图标 + 接口名 + IPv4 一行，IPv6 截断显示一行
         ColumnLayout {
             Layout.fillWidth: true
+            // 最小高度防止无 IP 地址时区域塌陷导致间距比例失调
+            Layout.minimumHeight: 40
             spacing: 4
             visible: popup.ready
 
