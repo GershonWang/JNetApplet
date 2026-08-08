@@ -51,6 +51,13 @@ Control {
     readonly property real rxDropped: applet ? (applet.rxDropped || 0) : 0
     readonly property real txDropped: applet ? (applet.txDropped || 0) : 0
 
+    // 活动接口的链路协商速率（Mbps），由 C++ 后端低频检测；0 表示不可用
+    readonly property int linkSpeed: applet ? (applet.linkSpeed || 0) : 0
+    // 当前活动接口的 TCP ESTABLISHED 连接数，由 C++ 后端每秒统计
+    readonly property int tcpConnections: applet ? (applet.tcpConnections || 0) : 0
+    // 活动接口的 WiFi 信号强度（dBm，负值），由 C++ 后端低频检测；0 表示不可用
+    readonly property int wifiSignal: applet ? (applet.wifiSignal || 0) : 0
+
     // 用户自定义字体色：非空时覆盖 primaryText，空串回退 DTK 调色板派生
     // 仅作用于主要文字（接口名、速度数值、累计数值、chip 未选中文字）
     // secondaryText/tertiaryText/强调色不跟随，保持系统主题层次不崩
@@ -141,7 +148,7 @@ Control {
         // 内容用 anchors.top 顶部对齐，接口名行始终在顶部同一垂直位置
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 60
+            Layout.preferredHeight: 76
             visible: popup.ready
 
             ColumnLayout {
@@ -165,9 +172,18 @@ Control {
                     // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
                     Text {
                         text: popup.activeInterface
-                        font.pixelSize: 13
+                        font.pixelSize: Math.round(13 * popup.fontScale)
                         color: popup.primaryText
                     }
+
+                    // 链路协商速率：speed>=1000 显示 Gbps，否则 Mbps；无速率时隐藏
+                    Text {
+                        text: popup.linkSpeed > 0 ? "· " + common.formatLinkSpeed(popup.linkSpeed) : ""
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
+                        visible: popup.linkSpeed > 0
+                    }
+                }
                 }
 
                 // 行2：IPv4 标签 + 地址 + 复制图标
@@ -289,6 +305,19 @@ Control {
                                 copyFeedbackTimer.restart()
                             }
                         }
+                    }
+                }
+
+                // 行4：WiFi 信号强度（dBm），仅无线接口有信号时显示
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 6
+                    visible: popup.wifiSignal < 0
+
+                    Text {
+                        text: qsTr("Signal") + " " + popup.wifiSignal.toFixed(0) + " dBm"
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
                     }
                 }
             }
@@ -520,6 +549,24 @@ Control {
                 font.pixelSize: 12
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
+        // TCP 连接数：仅在连接数>0 时显示，紧跟包统计下方
+        // 设计原因：连接数反映当前网络会话活跃度，是用户关心的即时信息
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            visible: popup.ready && popup.tcpConnections > 0
+
+            Item { Layout.fillWidth: true }
+
+            Text {
+                text: qsTr("Connections") + " " + popup.tcpConnections.toFixed(0)
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
             }
 
             Item { Layout.fillWidth: true }

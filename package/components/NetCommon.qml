@@ -124,4 +124,13 @@ QtObject {
         var idx = str.indexOf(' ')
         return idx < 0 ? "" : str.substring(idx + 1)
     }
+
+    // 格式化链路协商速率（Mbps 输入）：>=1000 显示 Gbps（保留 1 位小数），否则显示 Mbps
+    // 设计原因：有线常见 1000/2500 Mbps，无线常见 866 Mbps，按阈值切换单位更易读
+    function formatLinkSpeed(mbps) {
+        if (mbps >= 1000) {
+            return (mbps / 1000).toFixed(1) + " Gbps"
+        }
+        return mbps.toFixed(0) + " Mbps"
+    }
 }

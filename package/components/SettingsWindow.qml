@@ -59,11 +59,11 @@ Window {
     property string uninstallButtonText: qsTr("Uninstall Plugin")
 
     width: 350
-    height: 390
+    height: 450
     minimumWidth: 350
     maximumWidth: 350
-    minimumHeight: 390
-    maximumHeight: 390
+    minimumHeight: 450
+    maximumHeight: 450
     visible: false
     flags: Qt.FramelessWindowHint | Qt.Window
     // NonModal：不阻塞桌面其他区域，用户可同时操作任务栏
@@ -343,6 +343,56 @@ Window {
                         // 深色模式标记向下传递：TextColorPicker 内部色板卡片同样主题感知
                         isDarkMode: root.isDarkMode
                         onColorSelected: if (applet) applet.textColor = color
+                    }
+
+                    // 刷新间隔选择区：1 秒 / 2 秒 / 5 秒
+                    // 设计原因：用户可能觉得每秒刷新开销大或过于频繁，提供更长的间隔选项；
+                    // 选择结果通过 applet.refreshInterval 持久化并即时生效，
+                    // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
+                    Text {
+                        text: qsTr("Refresh Interval")
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        color: root.textSecondary
+                    }
+
+                    // 三个间隔选项按钮：1 秒 / 2 秒 / 5 秒
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Repeater {
+                            model: [1000, 2000, 5000]
+
+                            Rectangle {
+                                id: intervalOption
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 34
+                                radius: 8
+                                // 选中态蓝色填充边框，未选中态卡片背景，hover 态加深
+                                color: applet && applet.refreshInterval === modelData
+                                       ? root.selBg : (intervalMouse.containsMouse ? root.hoverBg : root.cardBg)
+                                border.width: 1
+                                border.color: applet && applet.refreshInterval === modelData
+                                              ? root.selBorder : root.lineColor
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: (modelData / 1000) + "s"
+                                    font.pixelSize: 13
+                                    color: applet && applet.refreshInterval === modelData
+                                           ? root.selText : root.textPrimary
+                                }
+
+                                MouseArea {
+                                    id: intervalMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: if (applet) applet.refreshInterval = modelData
+                                }
+                            }
+                        }
                     }
 
                     Item { Layout.preferredHeight: 4 }

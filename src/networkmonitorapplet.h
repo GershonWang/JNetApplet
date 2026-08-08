@@ -65,6 +65,15 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(quint64 txErrors READ txErrors NOTIFY packetStatsChanged)
     Q_PROPERTY(quint64 rxDropped READ rxDropped NOTIFY packetStatsChanged)
     Q_PROPERTY(quint64 txDropped READ txDropped NOTIFY packetStatsChanged)
+    // 活动接口的链路协商速率（Mbps）：有线读 /sys/class/net/<iface>/speed，
+    // 无线读失败时降级解析 `iw dev link` 的 bitrate；0 表示不可用
+    Q_PROPERTY(int linkSpeed READ linkSpeed NOTIFY linkSpeedChanged)
+    // 刷新间隔（毫秒），默认 1000，用户在设置窗口选择后持久化并即时生效
+    Q_PROPERTY(int refreshInterval READ refreshInterval WRITE setRefreshInterval NOTIFY refreshIntervalChanged)
+    // 当前活动接口的 TCP ESTABLISHED 连接数，供弹窗展示
+    Q_PROPERTY(int tcpConnections READ tcpConnections NOTIFY tcpConnectionsChanged)
+    // 活动接口的 WiFi 信号强度（dBm，负值如 -65），非无线接口或不可用时为 0
+    Q_PROPERTY(int wifiSignal READ wifiSignal NOTIFY wifiSignalChanged)
     // 插件版本号，从 dde-shell 元数据读取，版本唯一源为 CMakeLists.txt project(VERSION)
     Q_PROPERTY(QString version READ version CONSTANT)
     // 任务栏网速数值字体颜色，空串表示跟随系统主题（由 QML 回退到 primaryText），
@@ -99,6 +108,16 @@ public:
     quint64 txErrors() const;
     quint64 rxDropped() const;
     quint64 txDropped() const;
+    // 返回活动接口的链路协商速率（Mbps），0 表示不可用
+    int linkSpeed() const;
+    // 返回刷新间隔（毫秒）
+    int refreshInterval() const;
+    // 设置刷新间隔（毫秒），校验后持久化并即时生效
+    void setRefreshInterval(int ms);
+    // 返回当前活动接口的 TCP ESTABLISHED 连接数
+    int tcpConnections() const;
+    // 返回活动接口的 WiFi 信号强度（dBm），0 表示不可用
+    int wifiSignal() const;
     // 返回当前活动接口的下行速度历史（QPointF 列表），供 QML 趋势图绘制
     QVariantList speedHistoryDownload() const;
     // 返回当前活动接口的上行速度历史（QPointF 列表），供 QML 趋势图绘制
@@ -125,6 +144,14 @@ signals:
     void ipv6AddressChanged();
     // 活动接口包统计（收发包/错误/丢包）变化时通知 QML 更新
     void packetStatsChanged();
+    // 活动接口链路速率变化时通知 QML 更新
+    void linkSpeedChanged();
+    // 刷新间隔变化时通知 QML 更新
+    void refreshIntervalChanged();
+    // TCP ESTABLISHED 连接数变化时通知 QML 更新
+    void tcpConnectionsChanged();
+    // WiFi 信号强度变化时通知 QML 更新
+    void wifiSignalChanged();
     void speedHistoryChanged();
     // 任务栏网速字体颜色变化时通知 QML 更新
     void textColorChanged();
@@ -135,6 +162,16 @@ private:
     void detectInterfaces();
     // 检测活动接口的 IPv4 与 IPv6 地址，变化时分别发射对应信号
     void detectIpAddress();
+    // 低频统计检测：链路速率与 WiFi 信号（每 5 秒），变化时发射对应信号
+    void detectLowFreqStats();
+    // 读取指定接口的链路协商速率（Mbps），无线读 speed 失败时降级解析 iw bitrate
+    int detectLinkSpeed(const QString &iface);
+    // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
+    int parseIwBitrate(const QString &output) const;
+    // 统计 /proc/net/tcp 与 tcp6 中 ESTABLISHED（状态 01）的连接数
+    int countTcpConnections() const;
+    // 读取指定接口的 WiFi 信号强度（dBm），非无线接口或不可用时返回 0
+    int detectWifiSignal(const QString &iface);
     // 判断是否为物理网卡（无线 wlp/wlan，有线 enp/eth），
     // 用于自动选择时优先真实网卡而非虚拟代理接口（如 Meta/tun0）
     bool isPhysicalInterface(const QString &name) const;
@@ -177,6 +214,18 @@ private:
     // IP 地址检测降频计数器：IP 变化频率极低，每 5 次 refresh 才检测一次
     // 初始化 4 使首次 refresh 立即检测，避免启动后 IP 显示延迟
     int m_ipDetectCounter;
+
+    // 活动接口链路协商速率（Mbps），0 表示不可用
+    int m_linkSpeed;
+    // 刷新间隔（毫秒），默认 1000，可配置并持久化
+    int m_refreshInterval;
+    // 当前活动接口的 TCP ESTABLISHED 连接数
+    int m_tcpConnections;
+    // 活动接口的 WiFi 信号强度（dBm），0 表示不可用
+    int m_wifiSignal;
+    // 低频统计检测计数器：链路速率/WiFi 信号每 5 次 refresh 检测一次
+    // 初始化 4 使首次 refresh 立即检测
+    int m_lowFreqCounter;
     
     bool m_ready;
     bool m_firstUpdate;

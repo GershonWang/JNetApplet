@@ -17,6 +17,7 @@
 #include <QTranslator>
 #include <QLocale>
 #include <QCoreApplication>
+#include <QProcess>
 
 DS_BEGIN_NAMESPACE
 
@@ -36,6 +37,11 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_txErrors(0)
     , m_rxDropped(0)
     , m_txDropped(0)
+    , m_linkSpeed(0)
+    , m_refreshInterval(1000)
+    , m_tcpConnections(0)
+    , m_wifiSignal(0)
+    , m_lowFreqCounter(4)
     , m_ipDetectCounter(4)
     , m_ready(false)
     , m_firstUpdate(true)
@@ -62,6 +68,14 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     // 若保存的接口已不存在（如 USB 网卡拔出），readNetworkStats 会清空并回退到自动选择
     if (settings.contains(QStringLiteral("activeInterface"))) {
         m_activeInterface = settings.value(QStringLiteral("activeInterface")).toString();
+    }
+
+    // 从配置文件读取持久化的刷新间隔（毫秒），仅接受 1/2/5 秒合法值
+    if (settings.contains(QStringLiteral("refreshInterval"))) {
+        const int iv = settings.value(QStringLiteral("refreshInterval")).toInt();
+        if (iv == 1000 || iv == 2000 || iv == 5000) {
+            m_refreshInterval = iv;
+        }
     }
 }
 
@@ -92,7 +106,8 @@ bool NetworkMonitorApplet::init()
     // 启动定时刷新
     m_refreshTimer = new QTimer(this);
     connect(m_refreshTimer, &QTimer::timeout, this, &NetworkMonitorApplet::refresh);
-    m_refreshTimer->start(1000); // 每秒刷新一次
+    // 用持久化的刷新间隔启动（默认 1000ms = 1 秒）
+    m_refreshTimer->start(m_refreshInterval);
     
     // 初始读取
     readNetworkStats();
@@ -155,6 +170,44 @@ quint64 NetworkMonitorApplet::rxErrors() const { return m_rxErrors; }
 quint64 NetworkMonitorApplet::txErrors() const { return m_txErrors; }
 quint64 NetworkMonitorApplet::rxDropped() const { return m_rxDropped; }
 quint64 NetworkMonitorApplet::txDropped() const { return m_txDropped; }
+
+// 返回活动接口的链路协商速率（Mbps），0 表示不可用
+int NetworkMonitorApplet::linkSpeed() const { return m_linkSpeed; }
+
+// 返回刷新间隔（毫秒）
+int NetworkMonitorApplet::refreshInterval() const { return m_refreshInterval; }
+
+// 设置刷新间隔（毫秒），校验后持久化并即时生效
+// 设计原因：仅接受 1/2/5 秒，避免非法值破坏刷新频率；
+// 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
+void NetworkMonitorApplet::setRefreshInterval(int ms)
+{
+    if (ms != 1000 && ms != 2000 && ms != 5000) {
+        return;
+    }
+    if (m_refreshInterval == ms) {
+        return;
+    }
+    m_refreshInterval = ms;
+    if (m_refreshTimer) {
+        m_refreshTimer->start(m_refreshInterval);
+    }
+
+    // 持久化到独立配置文件，重启后仍生效
+    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+                               + QStringLiteral("/jnetapplet/settings.ini");
+    QSettings settings(configPath, QSettings::IniFormat);
+    settings.setValue(QStringLiteral("refreshInterval"), m_refreshInterval);
+    settings.sync();
+
+    emit refreshIntervalChanged();
+}
+
+// 返回当前活动接口的 TCP ESTABLISHED 连接数
+int NetworkMonitorApplet::tcpConnections() const { return m_tcpConnections; }
+
+// 返回活动接口的 WiFi 信号强度（dBm），0 表示不可用
+int NetworkMonitorApplet::wifiSignal() const { return m_wifiSignal; }
 
 // 返回插件版本号，从 dde-shell 插件元数据（metadata.json）读取
 // 版本唯一源为 CMakeLists.txt 的 project(VERSION)，经 configure_file 写入 metadata.json，
@@ -291,6 +344,8 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
         emit speedHistoryChanged();
         // 接口切换后立即检测新接口的 IP 地址
         detectIpAddress();
+        // 接口切换后立即读取新接口的链路速率与 WiFi 信号
+        detectLowFreqStats();
     }
 }
 
@@ -403,6 +458,11 @@ void NetworkMonitorApplet::readNetworkStats()
         m_ipDetectCounter = 0;
         detectIpAddress();
     }
+    // 链路速率与 WiFi 信号同样变化频率低，每 5 秒检测一次
+    if (++m_lowFreqCounter >= 5) {
+        m_lowFreqCounter = 0;
+        detectLowFreqStats();
+    }
 }
 
 void NetworkMonitorApplet::calculateSpeed()
@@ -462,6 +522,14 @@ void NetworkMonitorApplet::calculateSpeed()
             m_txDropped = static_cast<quint64>(iface.txDropped);
             emit packetStatsChanged();
         }
+    }
+
+    // ---- TCP 连接数（每秒统计）----
+    // /proc/net/tcp 与 tcp6 文件很小，遍历开销低；仅在连接数变化时发射信号
+    const int conns = countTcpConnections();
+    if (m_tcpConnections != conns) {
+        m_tcpConnections = conns;
+        emit tcpConnectionsChanged();
     }
 
     // ---- 为所有接口采集速度历史（非仅活动接口）----
@@ -585,6 +653,147 @@ void NetworkMonitorApplet::detectIpAddress()
         m_ipv6Address = newIpv6;
         emit ipv6AddressChanged();
     }
+}
+
+// 低频统计检测：链路速率与 WiFi 信号（每 5 秒或接口切换时），变化时发射对应信号
+// 设计原因：这两项数据变化频率极低（协商速率/信号强度基本稳定），
+// 无需每秒读取，降频降低系统调用与文件读取开销
+void NetworkMonitorApplet::detectLowFreqStats()
+{
+    if (!m_activeInterface.isEmpty()) {
+        const int speed = detectLinkSpeed(m_activeInterface);
+        if (m_linkSpeed != speed) {
+            m_linkSpeed = speed;
+            emit linkSpeedChanged();
+        }
+        const int sig = detectWifiSignal(m_activeInterface);
+        if (m_wifiSignal != sig) {
+            m_wifiSignal = sig;
+            emit wifiSignalChanged();
+        }
+    } else {
+        // 无活动接口时归零，避免显示上一接口的残留数据
+        if (m_linkSpeed != 0) {
+            m_linkSpeed = 0;
+            emit linkSpeedChanged();
+        }
+        if (m_wifiSignal != 0) {
+            m_wifiSignal = 0;
+            emit wifiSignalChanged();
+        }
+    }
+}
+
+// 读取指定接口的链路协商速率（Mbps）
+// 有线：直接读 /sys/class/net/<iface>/speed（Mbps）
+// 无线：speed 文件常返回错误（EINVAL），降级执行 `iw dev <iface> link` 解析 bitrate
+// 任何一步失败都返回 0（表示不可用），不抛出不记录
+int NetworkMonitorApplet::detectLinkSpeed(const QString &iface)
+{
+    // 尝试 /sys/class/net/<iface>/speed
+    QFile f(QStringLiteral("/sys/class/net/%1/speed").arg(iface));
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QString val = QString::fromLatin1(f.readAll()).trimmed();
+        f.close();
+        bool ok = false;
+        const int speed = val.toInt(&ok);
+        if (ok && speed >= 0) {
+            return speed;
+        }
+    }
+
+    // 无线网卡降级：解析 iw dev link 的 bitrate
+    if (iface.startsWith("wlp") || iface.startsWith("wlan")) {
+        QProcess proc;
+        proc.start(QStringLiteral("iw"), {QStringLiteral("dev"), iface, QStringLiteral("link")});
+        if (proc.waitForFinished(1000)) {
+            const int br = parseIwBitrate(QString::fromUtf8(proc.readAllStandardOutput()));
+            if (br > 0) {
+                return br;
+            }
+        }
+    }
+    return 0;
+}
+
+// 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
+// 输出形如 "    bitrate: 866.7 MBit/s"，也兼容 "Gbit/s"（换算为 Mbps）
+int NetworkMonitorApplet::parseIwBitrate(const QString &output) const
+{
+    static const QRegularExpression re("bitrate:\\s*([\\d.]+)\\s*(M|G)bit/s");
+    QRegularExpressionMatch m = re.match(output);
+    if (!m.hasMatch()) {
+        return 0;
+    }
+    const double val = m.captured(1).toDouble();
+    const bool isGigabit = m.captured(2) == QLatin1String("G");
+    return isGigabit ? qRound(val * 1000.0) : qRound(val);
+}
+
+// 统计 /proc/net/tcp 与 /proc/net/tcp6 中 ESTABLISHED（状态 01）的连接数
+// 文件第 4 列（st）为连接状态码，01 表示 ESTABLISHED；
+// 任一文件读取失败时跳过，不因单个文件缺失而失败
+int NetworkMonitorApplet::countTcpConnections() const
+{
+    int count = 0;
+    const QStringList paths = {QStringLiteral("/proc/net/tcp"), QStringLiteral("/proc/net/tcp6")};
+    for (const QString &path : paths) {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+        QTextStream stream(&f);
+        // 跳过标题行
+        stream.readLine();
+        while (!stream.atEnd()) {
+            const QString line = stream.readLine().trimmed();
+            if (line.isEmpty()) {
+                continue;
+            }
+            const QStringList parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            if (parts.size() > 3 && parts[3] == QLatin1String("01")) {
+                ++count;
+            }
+        }
+        f.close();
+    }
+    return count;
+}
+
+// 读取指定接口的 WiFi 信号强度（dBm）
+// 仅无线接口（wlp/wlan）有效；/proc/net/wireless 桌面环境可能不存在（返回 0）
+// 该文件每行形如 "wlp3s0: 60.  -65.  -256  0 ..."，level（dBm）为第 3 个数值字段
+int NetworkMonitorApplet::detectWifiSignal(const QString &iface)
+{
+    if (!iface.startsWith("wlp") && !iface.startsWith("wlan")) {
+        return 0;
+    }
+    QFile f(QStringLiteral("/proc/net/wireless"));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return 0;
+    }
+    QTextStream stream(&f);
+    // 跳过前两行标题
+    stream.readLine();
+    stream.readLine();
+    int sig = 0;
+    while (!stream.atEnd()) {
+        const QString line = stream.readLine().trimmed();
+        if (line.isEmpty()) {
+            continue;
+        }
+        const QStringList parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+        if (parts.size() > 3 && parts[0].startsWith(iface)) {
+            bool ok = false;
+            const double level = parts[3].toDouble(&ok);
+            if (ok) {
+                sig = qRound(level);
+            }
+            break;
+        }
+    }
+    f.close();
+    return sig;
 }
 
 // 判断是否为物理网卡
