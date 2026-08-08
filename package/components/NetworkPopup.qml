@@ -69,6 +69,9 @@ Control {
     readonly property real fontScale: (applet && applet.fontScale !== undefined)
         ? applet.fontScale : 1.0
 
+    // 复制反馈状态：记录刚复制的字段（"ipv4"/"ipv6"/""），用于图标切换为 ✓
+    property string copiedField: ""
+
     // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
     // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
     // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
@@ -90,6 +93,14 @@ Control {
     // 供外部调用：popup 打开时滚动到活动 chip
     function scrollToActiveChip(animated) {
         chipFlickable.scrollToActiveChip(animated)
+    }
+
+    // 一键复制：用隐藏 TextEdit 的 selectAll()+copy() 写入系统剪贴板
+    // QML 无直接剪贴板 API，此为项目既定模式（SettingsWindow/AboutWindow 同模式）
+    function copyToClipboard(text) {
+        clipboardHelper.text = text
+        clipboardHelper.selectAll()
+        clipboardHelper.copy()
     }
 
     padding: 12
@@ -157,35 +168,92 @@ Control {
                         color: popup.primaryText
                     }
 
-                    // IPv4 地址：次要色，与接口名区分层次
-                    Text {
-                        text: popup.ipAddress ? "·  " + popup.ipAddress : ""
-                        font.pixelSize: Math.round(13 * popup.fontScale)
-                        color: popup.secondaryText
+                    // IPv4 地址 + 分隔点 + 复制图标
+                    RowLayout {
+                        spacing: 4
                         visible: popup.ipAddress !== ""
+
+                        Text {
+                            text: "·"
+                            font.pixelSize: Math.round(13 * popup.fontScale)
+                            color: popup.tertiaryText
+                        }
+
+                        Text {
+                            text: popup.ipAddress
+                            font.pixelSize: Math.round(13 * popup.fontScale)
+                            color: popup.secondaryText
+                        }
+
+                        // 一键复制图标：点击复制 IPv4 到剪贴板，复制后短暂显示 ✓
+                        Text {
+                            text: popup.copiedField === "ipv4" ? "✓" : "⧉"
+                            font.pixelSize: Math.round(11 * popup.fontScale)
+                            color: popup.copiedField === "ipv4"
+                                   ? popup.accentGreen
+                                   : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
+
+                            MouseArea {
+                                id: ipv4CopyMouse
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                hoverEnabled: true
+                                onClicked: {
+                                    popup.copyToClipboard(popup.ipAddress)
+                                    popup.copiedField = "ipv4"
+                                    copyFeedbackTimer.restart()
+                                }
+                            }
+                        }
                     }
                 }
 
-                // 行2：IPv6 地址（超长截断 + hover tooltip 显示完整地址）
-                Text {
+                // 行2：IPv6 地址 + 复制图标（超长截断 + hover tooltip 显示完整地址）
+                RowLayout {
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.maximumWidth: 300
-                    horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: Math.round(12 * popup.fontScale)
-                    color: popup.tertiaryText
+                    Layout.maximumWidth: 320
+                    spacing: 4
                     visible: popup.ipv6Address !== ""
-                    text: popup.ipv6Address ? qsTr("IPv6: ") + popup.ipv6Address : ""
-                    elide: Text.ElideRight
 
-                    ToolTip.text: popup.ipv6Address
-                    ToolTip.visible: ipv6Mouse.containsMouse && popup.ipv6Address !== ""
-                    ToolTip.delay: 300
+                    Text {
+                        text: qsTr("IPv6: ") + popup.ipv6Address
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignRight
 
-                    MouseArea {
-                        id: ipv6Mouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.IBeamCursor
+                        ToolTip.text: popup.ipv6Address
+                        ToolTip.visible: ipv6Mouse.containsMouse && popup.ipv6Address !== ""
+                        ToolTip.delay: 300
+
+                        MouseArea {
+                            id: ipv6Mouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.IBeamCursor
+                        }
+                    }
+
+                    // 一键复制图标：点击复制 IPv6 到剪贴板，复制后短暂显示 ✓
+                    Text {
+                        text: popup.copiedField === "ipv6" ? "✓" : "⧉"
+                        font.pixelSize: Math.round(11 * popup.fontScale)
+                        color: popup.copiedField === "ipv6"
+                               ? popup.accentGreen
+                               : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
+
+                        MouseArea {
+                            id: ipv6CopyMouse
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            hoverEnabled: true
+                            onClicked: {
+                                popup.copyToClipboard(popup.ipv6Address)
+                                popup.copiedField = "ipv6"
+                                copyFeedbackTimer.restart()
+                            }
+                        }
                     }
                 }
             }
@@ -504,5 +572,21 @@ Control {
 
         // 填充剩余空间，将内容推至顶部
         Item { Layout.fillHeight: true }
+    }
+
+    // 隐藏的 TextEdit 用于复制 IP 地址到剪贴板
+    // QML 没有直接剪贴板 API，用 TextEdit.selectAll()+copy() 实现
+    //（与 SettingsWindow/AboutWindow 中 clipboardHelper 同模式）
+    TextEdit {
+        id: clipboardHelper
+        visible: false
+        text: ""
+    }
+
+    // 复制反馈定时器：2 秒后将 copiedField 清空，图标从 ✓ 恢复为 ⧉
+    Timer {
+        id: copyFeedbackTimer
+        interval: 2000
+        onTriggered: popup.copiedField = ""
     }
 }
