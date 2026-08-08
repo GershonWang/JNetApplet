@@ -81,6 +81,21 @@
         <source>Total</source>
         <translation>总计</translation>
     </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="474"/>
+        <source>Packets</source>
+        <translation>包</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="483"/>
+        <source>Errors</source>
+        <translation>错误</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="494"/>
+        <source>Dropped</source>
+        <translation>丢包</translation>
+    </message>
 </context>
 <context>
     <name>NetCommon</name>

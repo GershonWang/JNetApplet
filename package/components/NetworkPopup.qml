@@ -300,38 +300,6 @@ Control {
             }
         }
 
-        // 包统计：收发包 + 错误/丢包（累计值，自开机起）
-        // 设计原因：包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载；
-        // 箭头遵循应用惯例：↓=接收(rx)、↑=发送(tx)，与弹窗速度区/累计区一致
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 6
-            visible: popup.ready
-
-            // 收发包总数：始终显示，格式 "包 {rx}↓ {tx}↑"
-            Text {
-                text: "包 " + popup.rxPackets.toFixed(0) + "↓ " + popup.txPackets.toFixed(0) + "↑"
-                font.pixelSize: Math.round(12 * popup.fontScale)
-                color: popup.tertiaryText
-            }
-
-            // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
-            Text {
-                text: "错误 " + popup.rxErrors.toFixed(0) + "/" + popup.txErrors.toFixed(0)
-                font.pixelSize: Math.round(12 * popup.fontScale)
-                color: popup.tertiaryText
-                visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
-            }
-
-            // 丢包数：仅在存在错误或丢包时显示，格式 "丢包 {rxD}/{txD}"
-            Text {
-                text: "丢包 " + popup.rxDropped.toFixed(0) + "/" + popup.txDropped.toFixed(0)
-                font.pixelSize: Math.round(12 * popup.fontScale)
-                color: popup.tertiaryText
-                visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
-            }
-        }
-
         // 分隔线1
         Rectangle {
             Layout.fillWidth: true
@@ -493,6 +461,43 @@ Control {
                 text: common.formatTotal(popup.totalUpload)
                 font.pixelSize: Math.round(13 * popup.fontScale)
                 color: popup.primaryText
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
+        // 包统计：收发包 + 错误/丢包（累计值，自开机起），紧接累计流量下方
+        // 设计原因：包统计与流量统计同属"累计数据"，放一起信息归属清晰；
+        // 包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载；
+        // 箭头遵循应用惯例：↓=接收(rx)、↑=发送(tx)，与总计行一致
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            visible: popup.ready
+
+            Item { Layout.fillWidth: true }
+
+            // 收发包总数：始终显示，格式 "包 {rx}↓ {tx}↑"
+            Text {
+                text: qsTr("Packets") + " " + popup.rxPackets.toFixed(0) + "↓ " + popup.txPackets.toFixed(0) + "↑"
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
+            }
+
+            // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
+            Text {
+                text: qsTr("Errors") + " " + popup.rxErrors.toFixed(0) + "/" + popup.txErrors.toFixed(0)
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
+                visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
+            }
+
+            // 丢包数：仅在存在错误或丢包时显示，格式 "丢包 {rxD}/{txD}"
+            Text {
+                text: qsTr("Dropped") + " " + popup.rxDropped.toFixed(0) + "/" + popup.txDropped.toFixed(0)
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
+                visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
             }
 
             Item { Layout.fillWidth: true }
