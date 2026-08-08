@@ -379,7 +379,9 @@ Window {
                         if (dl[i].y > vMax) vMax = dl[i].y
                         if (i < ul.length && ul[i].y > vMax) vMax = ul[i].y
                     }
-                    var yMax = vMax <= 0 ? 1024 : root.niceCeil(vMax * 1.2)
+                    // Y 轴下限 8KB：纯空闲时微小波动也有 KB 级刻度可辨，
+                    // 避免一格都撑不满；8KB 兼顾空闲可读性与小流量不溢出
+                    var yMax = vMax <= 0 ? 8192 : Math.max(8192, root.niceCeil(vMax * 1.2))
                     var unit = root.axisUnit(yMax)
 
                     // ---- 水平网格线与 Y 轴刻度（[0, yMax] 均分 4 段）----
@@ -451,6 +453,16 @@ Window {
                     // 绘制一条序列折线：先填充线下淡色区域增强可读性，再描边 2px 主线
                     // lineCap/lineJoin 用 round 使折线端点与转角圆润
                     // 注意每次 stroke/fill 前必须 beginPath()，避免与上一段路径串连
+                    // 5 点滑动平均（±2 样本）：抑制 1 秒采样的亚秒混叠尖峰，
+                    // 使曲线反映趋势而非瞬时脉冲；hover 提示仍显示原始值供诊断
+                    function smoothY(data, idx) {
+                        var sum = 0, cnt = 0
+                        for (var k = Math.max(0, idx - 2); k <= Math.min(data.length - 1, idx + 2); k++) {
+                            sum += data[k].y
+                            cnt++
+                        }
+                        return cnt > 0 ? sum / cnt : data[idx].y
+                    }
                     function drawSeries(data, colorCss, fillCss) {
                         var m = data.length
                         if (m === 0) return
@@ -459,7 +471,7 @@ Window {
                         ctx.beginPath()
                         for (j = 0; j < m; j++) {
                             px = pl + ((data[j].x - tMin) / tRange) * pw
-                            py = pt + ph - (data[j].y / yMax) * ph
+                            py = pt + ph - (smoothY(data, j) / yMax) * ph
                             if (j === 0) ctx.moveTo(px, py)
                             else ctx.lineTo(px, py)
                         }
@@ -472,7 +484,7 @@ Window {
                         ctx.beginPath()
                         for (j = 0; j < m; j++) {
                             px = pl + ((data[j].x - tMin) / tRange) * pw
-                            py = pt + ph - (data[j].y / yMax) * ph
+                            py = pt + ph - (smoothY(data, j) / yMax) * ph
                             if (j === 0) ctx.moveTo(px, py)
                             else ctx.lineTo(px, py)
                         }
