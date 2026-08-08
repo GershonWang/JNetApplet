@@ -8,7 +8,7 @@
 // 由 networkview.qml 的 PanelPopup 实例化，传入 applet 属性
 // 毛玻璃背景、圆角、阴影由 PanelPopup 自动提供，本组件不自绘背景
 // 颜色与格式化函数统一取自同目录 NetCommon.qml（common.xxx），数据由 applet 提供
-// 可配置适配：primaryText 跟随用户 textColor、fontScale 预留字号缩放扩展点
+// 可配置适配：primaryText 跟随用户 textColor
 // 设计原因：PanelPopup 是 dock 上下文类型，不能作为独立组件根元素，
 // 因此本组件用 Control 作为根，由 networkview.qml 的 PanelPopup 包裹
 
@@ -71,12 +71,6 @@ Control {
     // 上传值颜色：固定绿色，不做高速警示
     readonly property color uploadValueColor: common.uploadValueColor
 
-    // 字号缩放因子：默认 1.0，后续 C++ 后端新增 applet.fontScale 后自动绑定
-    // 所有字号 = 基准字号 × fontScale，实现全局字号调节
-    // 当前 applet.fontScale 尚不存在，恒为 1.0，视觉无变化
-    readonly property real fontScale: (applet && applet.fontScale !== undefined)
-        ? applet.fontScale : 1.0
-
     // 复制反馈状态：记录刚复制的字段（"ipv4"/"ipv6"/""），用于图标切换为 ✓
     property string copiedField: ""
 
@@ -126,14 +120,14 @@ Control {
 
             Text {
                 text: "⚠"
-                font.pixelSize: Math.round(40 * popup.fontScale)
+                font.pixelSize: 40
                 color: popup.tertiaryText
                 Layout.alignment: Qt.AlignHCenter
             }
 
             Text {
                 text: qsTr("No network interface detected")
-                font.pixelSize: Math.round(14 * popup.fontScale)
+                font.pixelSize: 14
                 color: popup.secondaryText
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -164,14 +158,14 @@ Control {
                     // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
                     Text {
                         text: common.interfaceIcon(popup.activeInterface)
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.tertiaryText
                     }
 
                     // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
                     Text {
                         text: popup.activeInterface
-                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        font.pixelSize: 13
                         color: popup.primaryText
                     }
                 }
@@ -187,7 +181,7 @@ Control {
                     // IPv4 标签：固定宽度，与 IPv6 标签列对齐
                     Text {
                         text: qsTr("IPv4")
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.tertiaryText
                         Layout.preferredWidth: 32
                         horizontalAlignment: Text.AlignLeft
@@ -196,7 +190,7 @@ Control {
                     // IPv4 地址：超长截断 + hover tooltip
                     Text {
                         text: popup.ipAddress
-                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        font.pixelSize: 13
                         color: popup.secondaryText
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -218,7 +212,7 @@ Control {
                     // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
                     Text {
                         text: popup.copiedField === "ipv4" ? "✓" : "⧉"
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.copiedField === "ipv4"
                                ? popup.accentGreen
                                : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText)
@@ -248,7 +242,7 @@ Control {
                     // IPv6 标签：固定宽度，与 IPv4 标签列对齐
                     Text {
                         text: qsTr("IPv6")
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.tertiaryText
                         Layout.preferredWidth: 32
                         horizontalAlignment: Text.AlignLeft
@@ -257,7 +251,7 @@ Control {
                     // IPv6 地址：超长截断 + hover tooltip 显示完整地址
                     Text {
                         text: popup.ipv6Address
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.tertiaryText
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -279,7 +273,7 @@ Control {
                     // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
                     Text {
                         text: popup.copiedField === "ipv6" ? "✓" : "⧉"
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.copiedField === "ipv6"
                                ? popup.accentGreen
                                : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText)
@@ -330,7 +324,7 @@ Control {
                     // 下载标签
                     Text {
                         text: qsTr("Download")
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -342,21 +336,21 @@ Control {
 
                         Text {
                             text: "↓"
-                            font.pixelSize: Math.round(24 * popup.fontScale)
+                            font.pixelSize: 24
                             font.weight: Font.Bold
                             color: common.downloadValueColor(popup.downloadSpeed)
                         }
 
                         Text {
                             text: common.formatSpeedValue(popup.downloadSpeed)
-                            font.pixelSize: Math.round(24 * popup.fontScale)
+                            font.pixelSize: 24
                             font.weight: Font.Bold
                             color: common.downloadValueColor(popup.downloadSpeed)
                         }
 
                         Text {
                             text: common.formatSpeedUnit(popup.downloadSpeed)
-                            font.pixelSize: Math.round(13 * popup.fontScale)
+                            font.pixelSize: 13
                             color: common.downloadValueColor(popup.downloadSpeed)
                             Layout.alignment: Qt.AlignBaseline
                         }
@@ -379,7 +373,7 @@ Control {
                     // 上传标签
                     Text {
                         text: qsTr("Upload")
-                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        font.pixelSize: 12
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -391,21 +385,21 @@ Control {
 
                         Text {
                             text: "↑"
-                            font.pixelSize: Math.round(24 * popup.fontScale)
+                            font.pixelSize: 24
                             font.weight: Font.Bold
                             color: popup.uploadValueColor
                         }
 
                         Text {
                             text: common.formatSpeedValue(popup.uploadSpeed)
-                            font.pixelSize: Math.round(24 * popup.fontScale)
+                            font.pixelSize: 24
                             font.weight: Font.Bold
                             color: popup.uploadValueColor
                         }
 
                         Text {
                             text: common.formatSpeedUnit(popup.uploadSpeed)
-                            font.pixelSize: Math.round(13 * popup.fontScale)
+                            font.pixelSize: 13
                             color: popup.uploadValueColor
                             Layout.alignment: Qt.AlignBaseline
                         }
@@ -433,33 +427,33 @@ Control {
 
             Text {
                 text: qsTr("Total")
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 color: popup.tertiaryText
             }
 
             Text {
                 text: "↓"
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 font.weight: Font.Bold
                 color: popup.accentBlue
             }
 
             Text {
                 text: common.formatTotal(popup.totalDownload)
-                font.pixelSize: Math.round(13 * popup.fontScale)
+                font.pixelSize: 13
                 color: popup.primaryText
             }
 
             Text {
                 text: "↑"
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 font.weight: Font.Bold
                 color: popup.accentGreen
             }
 
             Text {
                 text: common.formatTotal(popup.totalUpload)
-                font.pixelSize: Math.round(13 * popup.fontScale)
+                font.pixelSize: 13
                 color: popup.primaryText
             }
 
@@ -480,42 +474,42 @@ Control {
             // 包统计标签（与"流量总计"标签对齐）
             Text {
                 text: qsTr("Packets")
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 color: popup.tertiaryText
             }
 
             // 接收包数：蓝色下箭头（与流量总计行下载箭头一致）
             Text {
                 text: "↓"
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 font.weight: Font.Bold
                 color: popup.accentBlue
             }
 
             Text {
                 text: popup.rxPackets.toFixed(0)
-                font.pixelSize: Math.round(13 * popup.fontScale)
+                font.pixelSize: 13
                 color: popup.primaryText
             }
 
             // 发送包数：绿色上箭头（与流量总计行上传箭头一致）
             Text {
                 text: "↑"
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 font.weight: Font.Bold
                 color: popup.accentGreen
             }
 
             Text {
                 text: popup.txPackets.toFixed(0)
-                font.pixelSize: Math.round(13 * popup.fontScale)
+                font.pixelSize: 13
                 color: popup.primaryText
             }
 
             // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
             Text {
                 text: qsTr("Errors") + " " + popup.rxErrors.toFixed(0) + "/" + popup.txErrors.toFixed(0)
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
             }
@@ -523,7 +517,7 @@ Control {
             // 丢包数：仅在存在错误或丢包时显示，格式 "丢包 {rxD}/{txD}"
             Text {
                 text: qsTr("Dropped") + " " + popup.rxDropped.toFixed(0) + "/" + popup.txDropped.toFixed(0)
-                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.pixelSize: 12
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
             }
@@ -639,7 +633,7 @@ Control {
                             id: chipText
                             anchors.centerIn: parent
                             text: modelData
-                            font.pixelSize: Math.round(12 * popup.fontScale)
+                            font.pixelSize: 12
                             font.weight: modelData === popup.activeInterface ? Font.Bold : Font.Normal
                             color: modelData === popup.activeInterface
                                    ? "white"
