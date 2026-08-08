@@ -43,6 +43,14 @@ Control {
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
 
+    // 活动接口的收发包/错误/丢包累计统计（自开机起），由 C++ 后端持续更新
+    readonly property real rxPackets: applet ? (applet.rxPackets || 0) : 0
+    readonly property real txPackets: applet ? (applet.txPackets || 0) : 0
+    readonly property real rxErrors: applet ? (applet.rxErrors || 0) : 0
+    readonly property real txErrors: applet ? (applet.txErrors || 0) : 0
+    readonly property real rxDropped: applet ? (applet.rxDropped || 0) : 0
+    readonly property real txDropped: applet ? (applet.txDropped || 0) : 0
+
     // 用户自定义字体色：非空时覆盖 primaryText，空串回退 DTK 调色板派生
     // 仅作用于主要文字（接口名、速度数值、累计数值、chip 未选中文字）
     // secondaryText/tertiaryText/强调色不跟随，保持系统主题层次不崩
@@ -289,6 +297,38 @@ Control {
                         }
                     }
                 }
+            }
+        }
+
+        // 包统计：收发包 + 错误/丢包（累计值，自开机起）
+        // 设计原因：包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载；
+        // 箭头遵循应用惯例：↓=接收(rx)、↑=发送(tx)，与弹窗速度区/累计区一致
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            spacing: 6
+            visible: popup.ready
+
+            // 收发包总数：始终显示，格式 "包 {rx}↓ {tx}↑"
+            Text {
+                text: "包 " + popup.rxPackets.toFixed(0) + "↓ " + popup.txPackets.toFixed(0) + "↑"
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
+            }
+
+            // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
+            Text {
+                text: "错误 " + popup.rxErrors.toFixed(0) + "/" + popup.txErrors.toFixed(0)
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
+                visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
+            }
+
+            // 丢包数：仅在存在错误或丢包时显示，格式 "丢包 {rxD}/{txD}"
+            Text {
+                text: "丢包 " + popup.rxDropped.toFixed(0) + "/" + popup.txDropped.toFixed(0)
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                color: popup.tertiaryText
+                visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
             }
         }
 

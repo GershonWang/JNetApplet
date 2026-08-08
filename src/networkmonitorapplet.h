@@ -57,6 +57,14 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QString ipAddress READ ipAddress NOTIFY ipAddressChanged)
     // 活动接口的 IPv6 全球地址（已过滤 link-local 和 loopback），供 QML 显示
     Q_PROPERTY(QString ipv6Address READ ipv6Address NOTIFY ipv6AddressChanged)
+    // 活动接口的收发包/错误/丢包累计统计（自开机起累计值），供弹窗接口信息区展示
+    // 全部用 quint64 类型，QML 侧可直接读取；任一值变化时统一发射 packetStatsChanged
+    Q_PROPERTY(quint64 rxPackets READ rxPackets NOTIFY packetStatsChanged)
+    Q_PROPERTY(quint64 txPackets READ txPackets NOTIFY packetStatsChanged)
+    Q_PROPERTY(quint64 rxErrors READ rxErrors NOTIFY packetStatsChanged)
+    Q_PROPERTY(quint64 txErrors READ txErrors NOTIFY packetStatsChanged)
+    Q_PROPERTY(quint64 rxDropped READ rxDropped NOTIFY packetStatsChanged)
+    Q_PROPERTY(quint64 txDropped READ txDropped NOTIFY packetStatsChanged)
     // 插件版本号，从 dde-shell 元数据读取，版本唯一源为 CMakeLists.txt project(VERSION)
     Q_PROPERTY(QString version READ version CONSTANT)
     // 任务栏网速数值字体颜色，空串表示跟随系统主题（由 QML 回退到 primaryText），
@@ -84,6 +92,13 @@ public:
     QString activeInterface() const;
     QString ipAddress() const;
     QString ipv6Address() const;
+    // 返回活动接口的收发包/错误/丢包累计值（自开机起），供弹窗接口信息区展示
+    quint64 rxPackets() const;
+    quint64 txPackets() const;
+    quint64 rxErrors() const;
+    quint64 txErrors() const;
+    quint64 rxDropped() const;
+    quint64 txDropped() const;
     // 返回当前活动接口的下行速度历史（QPointF 列表），供 QML 趋势图绘制
     QVariantList speedHistoryDownload() const;
     // 返回当前活动接口的上行速度历史（QPointF 列表），供 QML 趋势图绘制
@@ -108,6 +123,8 @@ signals:
     void activeInterfaceChanged();
     void ipAddressChanged();
     void ipv6AddressChanged();
+    // 活动接口包统计（收发包/错误/丢包）变化时通知 QML 更新
+    void packetStatsChanged();
     void speedHistoryChanged();
     // 任务栏网速字体颜色变化时通知 QML 更新
     void textColorChanged();
@@ -147,6 +164,15 @@ private:
     // 总量
     qint64 m_totalDownload;
     qint64 m_totalUpload;
+
+    // 活动接口包统计缓存（自开机起累计值），供弹窗接口信息区展示
+    // 设计原因：/proc/net/dev 已解析包计数但此前直接丢弃，现缓存并暴露给 QML
+    quint64 m_rxPackets;
+    quint64 m_txPackets;
+    quint64 m_rxErrors;
+    quint64 m_txErrors;
+    quint64 m_rxDropped;
+    quint64 m_txDropped;
 
     // IP 地址检测降频计数器：IP 变化频率极低，每 5 次 refresh 才检测一次
     // 初始化 4 使首次 refresh 立即检测，避免启动后 IP 显示延迟

@@ -30,6 +30,12 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_uploadSpeed(0)
     , m_totalDownload(0)
     , m_totalUpload(0)
+    , m_rxPackets(0)
+    , m_txPackets(0)
+    , m_rxErrors(0)
+    , m_txErrors(0)
+    , m_rxDropped(0)
+    , m_txDropped(0)
     , m_ipDetectCounter(4)
     , m_ready(false)
     , m_firstUpdate(true)
@@ -140,6 +146,15 @@ QString NetworkMonitorApplet::ipv6Address() const
 {
     return m_ipv6Address;
 }
+
+// ---- 活动接口包统计 getter（累计值，自开机起）----
+// 供弹窗接口信息区展示收发包/错误/丢包数
+quint64 NetworkMonitorApplet::rxPackets() const { return m_rxPackets; }
+quint64 NetworkMonitorApplet::txPackets() const { return m_txPackets; }
+quint64 NetworkMonitorApplet::rxErrors() const { return m_rxErrors; }
+quint64 NetworkMonitorApplet::txErrors() const { return m_txErrors; }
+quint64 NetworkMonitorApplet::rxDropped() const { return m_rxDropped; }
+quint64 NetworkMonitorApplet::txDropped() const { return m_txDropped; }
 
 // 返回插件版本号，从 dde-shell 插件元数据（metadata.json）读取
 // 版本唯一源为 CMakeLists.txt 的 project(VERSION)，经 configure_file 写入 metadata.json，
@@ -252,6 +267,16 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
 
         // 接口切换后历史数据变化，标记脏缓存让趋势图立即重建
         m_historyDirty = true;
+
+        // 接口切换后包统计指向新接口，旧值不再有效，重置并通知 QML
+        // 设计原因：包统计为各接口独立的累计值，切换后应显示新接口的数据
+        m_rxPackets = 0;
+        m_txPackets = 0;
+        m_rxErrors = 0;
+        m_txErrors = 0;
+        m_rxDropped = 0;
+        m_txDropped = 0;
+        emit packetStatsChanged();
 
         // 持久化到配置文件，下次启动自动加载用户选择的网卡
         // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
@@ -417,6 +442,26 @@ void NetworkMonitorApplet::calculateSpeed()
         m_totalUpload += txDeltaClamped;
         m_lastRxBytes = currentRxBytes;
         m_lastTxBytes = currentTxBytes;
+    }
+
+    // ---- 活动接口包统计（累计值，自开机起）----
+    // 直接从当前活动接口读取收发包/错误/丢包计数，任一值变化时发射 packetStatsChanged
+    if (!m_activeInterface.isEmpty() && m_interfaces.contains(m_activeInterface)) {
+        const NetworkInterface &iface = m_interfaces[m_activeInterface];
+        if (m_rxPackets != static_cast<quint64>(iface.rxPackets)
+            || m_txPackets != static_cast<quint64>(iface.txPackets)
+            || m_rxErrors != static_cast<quint64>(iface.rxErrors)
+            || m_txErrors != static_cast<quint64>(iface.txErrors)
+            || m_rxDropped != static_cast<quint64>(iface.rxDropped)
+            || m_txDropped != static_cast<quint64>(iface.txDropped)) {
+            m_rxPackets = static_cast<quint64>(iface.rxPackets);
+            m_txPackets = static_cast<quint64>(iface.txPackets);
+            m_rxErrors = static_cast<quint64>(iface.rxErrors);
+            m_txErrors = static_cast<quint64>(iface.txErrors);
+            m_rxDropped = static_cast<quint64>(iface.rxDropped);
+            m_txDropped = static_cast<quint64>(iface.txDropped);
+            emit packetStatsChanged();
+        }
     }
 
     // ---- 为所有接口采集速度历史（非仅活动接口）----
