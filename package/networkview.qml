@@ -116,18 +116,30 @@ AppletItem {
     // 用户主动选色后覆盖，空串回退到 primaryText 保持自适应
     readonly property color speedTextColor: (applet && applet.textColor.length > 0) ? applet.textColor : primaryText
 
-    // 任务栏图标区：双行紧凑数值，箭头与数值紧贴、左对齐
-    // 设计原因：箭头与数值作为一组固定在左侧，数值左对齐紧贴箭头；
+    // 任务栏图标区：双行紧凑数值，箭头与数值紧贴
+    // 设计原因：箭头与数值作为一组固定在左侧；
     // 不给每行固定高度，让 RowLayout 按内容自然高度排列，
     // 整组垂直居中于 dock 区域，避免两行间出现过大间隙
-    // 小数点对齐：整数部分右对齐固定宽度，小数部分左对齐，
-    // 整数位数不同时小数点仍垂直对齐
+    // 小数点对齐：整数部分右对齐到两行最大整数宽度，小数部分左对齐，
+    // 整数位数不同时小数点仍垂直对齐；箭头与数值间距固定不随位数变化
     Column {
+        id: horizontalSpeed
         visible: !root.isVerticalDock
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: 4
+        anchors.right: parent.right
+        anchors.rightMargin: 4
         spacing: 0
+
+        // 两行整数部分的最大字符数：动态计算，整数短的行补占位到此宽度
+        property int maxIntDigits: Math.max(
+            root.formatSpeedIntPart(root.downloadSpeed).length,
+            root.formatSpeedIntPart(root.uploadSpeed).length
+        )
+        // 整数部分固定宽度：按最大字符数 × 单字符宽度估算
+        // 单字符宽度约为 dockSize * 0.14（数值字号的 ~55%）
+        property real intPartWidth: maxIntDigits * root.dockSize * 0.14
 
         // 下载速度行
         RowLayout {
@@ -140,14 +152,14 @@ AppletItem {
                 Layout.alignment: Qt.AlignVCenter
             }
 
-            // 整数部分：右对齐固定宽度，与小数点对齐
+            // 整数部分：右对齐到两行最大整数宽度，短的补占位
             Text {
                 text: root.formatSpeedIntPart(root.downloadSpeed)
                 font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
                 color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: root.dockSize * 0.55
+                Layout.preferredWidth: horizontalSpeed.intPartWidth
                 horizontalAlignment: Text.AlignRight
             }
 
@@ -173,14 +185,14 @@ AppletItem {
                 Layout.alignment: Qt.AlignVCenter
             }
 
-            // 整数部分：右对齐固定宽度，与小数点对齐
+            // 整数部分：右对齐到两行最大整数宽度，短的补占位
             Text {
                 text: root.formatSpeedIntPart(root.uploadSpeed)
                 font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
                 color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
-                Layout.preferredWidth: root.dockSize * 0.55
+                Layout.preferredWidth: horizontalSpeed.intPartWidth
                 horizontalAlignment: Text.AlignRight
             }
 
