@@ -45,7 +45,7 @@ Control {
     // secondaryText/tertiaryText/强调色不跟随，保持系统主题层次不崩
     readonly property string userTextColor: applet ? (applet.textColor || "") : ""
     readonly property color primaryText: userTextColor.length > 0
-        ? Qt.rgba(userTextColor.r, userTextColor.g, userTextColor.b, 0.95)
+        ? Qt.rgba(Qt.color(userTextColor).r, Qt.color(userTextColor).g, Qt.color(userTextColor).b, 0.95)
         : common.primaryText
 
     // 次要/三级文字与卡片边框仍从 common 取 DTK 派生值，不跟随用户色
