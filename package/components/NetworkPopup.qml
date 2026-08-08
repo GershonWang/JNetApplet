@@ -467,21 +467,49 @@ Control {
         }
 
         // 包统计：收发包 + 错误/丢包（累计值，自开机起），紧接累计流量下方
-        // 设计原因：包统计与流量统计同属"累计数据"，放一起信息归属清晰；
-        // 包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载；
-        // 箭头遵循应用惯例：↓=接收(rx)、↑=发送(tx)，与总计行一致
+        // 布局与流量总计行一致：标签 + ↓蓝粗 + 数值 + ↑绿粗 + 数值，拆分为独立 Text
+        // 设计原因：包统计与流量统计同属"累计数据"，放一起信息归属清晰且视觉对称；
+        // 包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: 8
             visible: popup.ready
 
             Item { Layout.fillWidth: true }
 
-            // 收发包总数：始终显示，格式 "包 {rx}↓ {tx}↑"
+            // 包统计标签（与"流量总计"标签对齐）
             Text {
-                text: qsTr("Packets") + " " + popup.rxPackets.toFixed(0) + "↓ " + popup.txPackets.toFixed(0) + "↑"
+                text: qsTr("Packets")
                 font.pixelSize: Math.round(12 * popup.fontScale)
                 color: popup.tertiaryText
+            }
+
+            // 接收包数：蓝色下箭头（与流量总计行下载箭头一致）
+            Text {
+                text: "↓"
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.weight: Font.Bold
+                color: popup.accentBlue
+            }
+
+            Text {
+                text: popup.rxPackets.toFixed(0)
+                font.pixelSize: Math.round(13 * popup.fontScale)
+                color: popup.primaryText
+            }
+
+            // 发送包数：绿色上箭头（与流量总计行上传箭头一致）
+            Text {
+                text: "↑"
+                font.pixelSize: Math.round(12 * popup.fontScale)
+                font.weight: Font.Bold
+                color: popup.accentGreen
+            }
+
+            Text {
+                text: popup.txPackets.toFixed(0)
+                font.pixelSize: Math.round(13 * popup.fontScale)
+                color: popup.primaryText
             }
 
             // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
