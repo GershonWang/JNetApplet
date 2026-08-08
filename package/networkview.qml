@@ -77,6 +77,23 @@ AppletItem {
         }
     }
 
+    // 拆分速度字符串为整数部分：formatSpeedShort("194.07K") -> "194"
+    // 用于任务栏双行数值小数点对齐：整数部分右对齐，小数部分左对齐，
+    // 整数位数不同时小数点仍垂直对齐
+    function formatSpeedIntPart(bytesPerSec) {
+        var str = formatSpeedShort(bytesPerSec)
+        var idx = str.indexOf('.')
+        return idx < 0 ? str : str.substring(0, idx)
+    }
+
+    // 拆分速度字符串为小数+单位部分：formatSpeedShort("194.07K") -> ".07K"
+    // 与 formatSpeedIntPart 配合，分别渲染实现小数点对齐
+    function formatSpeedDecimalPart(bytesPerSec) {
+        var str = formatSpeedShort(bytesPerSec)
+        var idx = str.indexOf('.')
+        return idx < 0 ? "" : str.substring(idx)
+    }
+
     // 带单位的速度/总量格式化函数（formatSpeed / formatTotal）已移至 NetCommon，
     // 本文件未直接使用；弹窗与图表窗口经 common.formatSpeed / common.formatTotal 调用
 
@@ -103,6 +120,8 @@ AppletItem {
     // 设计原因：箭头与数值作为一组固定在左侧，数值左对齐紧贴箭头；
     // 不给每行固定高度，让 RowLayout 按内容自然高度排列，
     // 整组垂直居中于 dock 区域，避免两行间出现过大间隙
+    // 小数点对齐：整数部分右对齐固定宽度，小数部分左对齐，
+    // 整数位数不同时小数点仍垂直对齐
     Column {
         visible: !root.isVerticalDock
         anchors.verticalCenter: parent.verticalCenter
@@ -121,8 +140,20 @@ AppletItem {
                 Layout.alignment: Qt.AlignVCenter
             }
 
+            // 整数部分：右对齐固定宽度，与小数点对齐
             Text {
-                text: root.formatSpeedShort(root.downloadSpeed)
+                text: root.formatSpeedIntPart(root.downloadSpeed)
+                font.pixelSize: root.dockSize * 0.25
+                font.weight: Font.Medium
+                color: root.speedTextColor
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: root.dockSize * 0.55
+                horizontalAlignment: Text.AlignRight
+            }
+
+            // 小数+单位部分：左对齐，紧跟整数部分
+            Text {
+                text: root.formatSpeedDecimalPart(root.downloadSpeed)
                 font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
                 color: root.speedTextColor
@@ -142,8 +173,20 @@ AppletItem {
                 Layout.alignment: Qt.AlignVCenter
             }
 
+            // 整数部分：右对齐固定宽度，与小数点对齐
             Text {
-                text: root.formatSpeedShort(root.uploadSpeed)
+                text: root.formatSpeedIntPart(root.uploadSpeed)
+                font.pixelSize: root.dockSize * 0.25
+                font.weight: Font.Medium
+                color: root.speedTextColor
+                Layout.alignment: Qt.AlignVCenter
+                Layout.preferredWidth: root.dockSize * 0.55
+                horizontalAlignment: Text.AlignRight
+            }
+
+            // 小数+单位部分：左对齐，紧跟整数部分
+            Text {
+                text: root.formatSpeedDecimalPart(root.uploadSpeed)
                 font.pixelSize: root.dockSize * 0.25
                 font.weight: Font.Medium
                 color: root.speedTextColor
