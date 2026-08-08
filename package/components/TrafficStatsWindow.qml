@@ -107,14 +107,14 @@ Window {
             // 避免多显示器下窗口出现在非预期屏幕
             x = Screen.virtualX + (Screen.width - width) / 2
             y = Screen.virtualY + (Screen.height - height) / 2
+            // 窗口显示时立即刷新一次，确保数据最新
+            buildStatsModel()
         }
     }
 
     // 切换 tab 或首次创建时重建表格模型
     onCurrentTabChanged: buildStatsModel()
     Component.onCompleted: buildStatsModel()
-    // 窗口显示时立即刷新一次，确保数据最新
-    onVisibleChanged: if (visible) buildStatsModel()
 
     // 定时刷新：窗口可见时每 5 秒重建表格，不依赖 C++ 30 秒信号
     // 设计原因：C++ 降频 30 秒通知，用户打开窗口期间看不到实时更新；
