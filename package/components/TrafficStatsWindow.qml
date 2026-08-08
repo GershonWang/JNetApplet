@@ -94,7 +94,7 @@ Window {
         root.totals = { rx: tRx, tx: tTx, total: tRx + tTx }
     }
 
-    width: 560
+    width: 620
     height: 440
     visible: false
     flags: Qt.FramelessWindowHint | Qt.Window
@@ -113,6 +113,18 @@ Window {
     // 切换 tab 或首次创建时重建表格模型
     onCurrentTabChanged: buildStatsModel()
     Component.onCompleted: buildStatsModel()
+    // 窗口显示时立即刷新一次，确保数据最新
+    onVisibleChanged: if (visible) buildStatsModel()
+
+    // 定时刷新：窗口可见时每 5 秒重建表格，不依赖 C++ 30 秒信号
+    // 设计原因：C++ 降频 30 秒通知，用户打开窗口期间看不到实时更新；
+    // 窗口可见时主动 5 秒刷新，关闭时停止，兼顾实时性与性能
+    Timer {
+        interval: 5000
+        repeat: true
+        running: root.visible
+        onTriggered: buildStatsModel()
+    }
 
     // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边
     Rectangle {

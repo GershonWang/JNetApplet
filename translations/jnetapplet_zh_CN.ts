@@ -270,5 +270,68 @@
         <source>About</source>
         <translation>关于</translation>
     </message>
+    <message>
+        <location filename="../package/networkview.qml" line="314"/>
+        <source>Traffic Statistics</source>
+        <translation>流量统计</translation>
+    </message>
+</context>
+<context>
+    <name>TrafficStatsWindow</name>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="132"/>
+        <source>Traffic Statistics</source>
+        <translation>流量统计</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="158"/>
+        <source>By Day</source>
+        <translation>按日</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="184"/>
+        <source>By Month</source>
+        <translation>按月</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="202"/>
+        <source>Accumulated by interface</source>
+        <translation>按接口累计</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="218"/>
+        <source>Date</source>
+        <translation>日期</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="218"/>
+        <source>Month</source>
+        <translation>月份</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="225"/>
+        <source>Interface</source>
+        <translation>接口</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="232"/>
+        <source>Download</source>
+        <translation>下载</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="239"/>
+        <source>Upload</source>
+        <translation>上传</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="246"/>
+        <source>Total</source>
+        <translation>总计</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="283"/>
+        <source>No traffic records yet</source>
+        <translation>暂无流量记录</translation>
+    </message>
 </context>
 </TS>
