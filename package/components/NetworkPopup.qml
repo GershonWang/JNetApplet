@@ -125,17 +125,32 @@ Control {
             visible: popup.ready
 
             // 行1：类型图标 + 接口名 + · + IPv4
-            Text {
+            // 拆分为独立 Text 元素，使接口名用 primaryText 跟随用户 textColor，
+            // 图标和 IPv4 保持系统主题色（tertiaryText/secondaryText），层次分明
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: Math.round(13 * popup.fontScale)
-                color: popup.secondaryText
-                text: {
-                    var icon = common.interfaceIcon(popup.activeInterface)
-                    var parts = icon + " " + popup.activeInterface
-                    if (popup.ipAddress) parts += "  ·  " + popup.ipAddress
-                    return parts
+                spacing: 4
+
+                // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
+                Text {
+                    text: common.interfaceIcon(popup.activeInterface)
+                    font.pixelSize: Math.round(12 * popup.fontScale)
+                    color: popup.tertiaryText
+                }
+
+                // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
+                Text {
+                    text: popup.activeInterface
+                    font.pixelSize: Math.round(13 * popup.fontScale)
+                    color: popup.primaryText
+                }
+
+                // IPv4 地址：次要色，与接口名区分层次
+                Text {
+                    text: popup.ipAddress ? "·  " + popup.ipAddress : ""
+                    font.pixelSize: Math.round(13 * popup.fontScale)
+                    color: popup.secondaryText
+                    visible: popup.ipAddress !== ""
                 }
             }
 
