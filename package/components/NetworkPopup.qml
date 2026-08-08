@@ -134,33 +134,39 @@ Control {
         // ==================== 分区1：接口信息 ====================
         // 三行对称结构：行1 接口名（居中），行2 IPv4 地址行，行3 IPv6 地址行
         // 地址行用固定宽度标签 + 地址 + 复制图标，两行结构对称不会错位
-        // 直接用 ColumnLayout 内容自然撑高、顶部对齐：
-        // 无论有无 IP 地址，接口名行始终在顶部同一垂直位置，切换网卡不跳动
-        ColumnLayout {
-            id: ifaceCol
+        // 固定区域高度（按最多 3 行：接口名 16px + IPv4 16px + IPv6 16px + 间距 8px ≈ 56px）：
+        // 无论有无 IP 地址，区域高度恒定，弹窗整体高度不随网卡切换跳动；
+        // 内容用 anchors.top 顶部对齐，接口名行始终在顶部同一垂直位置
+        Item {
             Layout.fillWidth: true
-            spacing: 4
+            Layout.preferredHeight: 60
             visible: popup.ready
 
-            // 行1：类型图标 + 接口名（居中）
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
+            ColumnLayout {
+                id: ifaceCol
+                anchors.top: parent.top
+                width: parent.width
                 spacing: 4
 
-                // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
-                Text {
-                    text: common.interfaceIcon(popup.activeInterface)
-                    font.pixelSize: Math.round(12 * popup.fontScale)
-                    color: popup.tertiaryText
-                }
+                // 行1：类型图标 + 接口名（居中）
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 4
 
-                // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
-                Text {
-                    text: popup.activeInterface
-                    font.pixelSize: Math.round(13 * popup.fontScale)
-                    color: popup.primaryText
+                    // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
+                    Text {
+                        text: common.interfaceIcon(popup.activeInterface)
+                        font.pixelSize: Math.round(12 * popup.fontScale)
+                        color: popup.tertiaryText
+                    }
+
+                    // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
+                    Text {
+                        text: popup.activeInterface
+                        font.pixelSize: Math.round(13 * popup.fontScale)
+                        color: popup.primaryText
+                    }
                 }
-            }
 
                 // 行2：IPv4 标签 + 地址 + 复制图标
                 // 与行3 结构对称：标签固定宽度左对齐，地址左对齐，复制图标在右
@@ -283,6 +289,7 @@ Control {
                         }
                     }
                 }
+            }
         }
 
         // 分隔线1
