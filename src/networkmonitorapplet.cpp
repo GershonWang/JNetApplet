@@ -368,6 +368,13 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
         m_txDropped = 0;
         emit packetStatsChanged();
 
+        // 接口切换后会话总量重置为 0，重新累加当前网卡流量
+        // 设计原因：用户期望切换后显示当前网卡的会话流量，而非所有网卡总和；
+        // 与包统计的重置逻辑一致，切换后各统计项都归零重新计算
+        m_totalDownload = 0;
+        m_totalUpload = 0;
+        emit totalChanged();
+
         // 持久化到配置文件，下次启动自动加载用户选择的网卡
         // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
         const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
