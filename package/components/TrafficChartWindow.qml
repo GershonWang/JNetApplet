@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-// 流量波动图窗口：屏幕居中的独立顶层窗口，展示当前活动接口最近 5 分钟的
-// 网速趋势（下载/上传双折线图），随 C++ 后端 speedHistoryChanged 信号每秒动态刷新
+// 流量波动图窗口：屏幕居中的独立顶层窗口，展示当前活动接口最近 1/5/30 分钟（可切换）
+// 的网速趋势（下载/上传双折线图），随 C++ 后端 speedHistoryChanged 信号每秒动态刷新
 // 设计要点：
 // - 视觉风格复用 AboutWindow.qml（圆角卡片 12px、1px 边框、44px 标题栏、
 //   28x28 圆形关闭按钮 hover 淡红底）；深/浅主题由 isDarkMode 切换
@@ -66,6 +66,31 @@ Window {
     // Hover 提示文本：非空时底部提示条显示该内容，为空显示默认引导语
     // 格式："14:23:05  ↓856.00 KB/s  ↑120.00 KB/s"
     property string hoverHint: ""
+
+    // 时间窗口选择（秒）：60=1分钟, 300=5分钟, 1800=30分钟
+    // 纯 QML 展示层选择——后端已存够 30 分钟历史（MAX_HISTORY_SAMPLES=1800），
+    // 这里仅决定 X 轴绘制范围与标签，不改变后端采集行为
+    property int timeWindowSec: 300
+
+    // 时间窗口选项列表：由 (label, seconds) 键值对组成，供顶部状态条选择器遍历
+    // 及绘制逻辑按 timeWindowSec 反查标签/刻度使用
+    property var timeWindows: [
+        { label: "1m",  seconds: 60 },
+        { label: "5m",  seconds: 300 },
+        { label: "30m", seconds: 1800 }
+    ]
+
+    // 依据当前 timeWindowSec 反查 X 轴刻度标签数组：
+    // 设计原因：不同时间窗口下刻度粒度不同，1 分钟用 15 秒间隔、5 分钟用 1 分钟间隔、
+    // 30 分钟用 5 分钟间隔，保证标签数量适中（5~7 个）且刻度易读
+    readonly property var xAxisLabels: {
+        if (timeWindowSec <= 60)     return ["-1m", "-45s", "-30s", "-15s", "now"]
+        if (timeWindowSec <= 300)    return ["-5m", "-4m", "-3m", "-2m", "-1m", "now"]
+        return ["-30m", "-25m", "-20m", "-15m", "-10m", "-5m", "now"]
+    }
+
+    // 顶部状态条右侧的时间窗口标签文本（如 "· 5min"），随 timeWindowSec 动态显示
+    readonly property string timeWindowLabel: "· " + (timeWindowSec / 60) + "min"
 
     // 窗口置顶状态：true 时 flags 附加 Qt.WindowStaysOnTopHint，窗口保持在
     // 所有非置顶窗口之上（便于边下载大文件边观察曲线）；由标题栏图钉按钮切换
@@ -282,9 +307,55 @@ Window {
 
                 Item { Layout.fillWidth: true }
 
+                // 时间窗口选择器：三个小按钮 1m / 5m / 30m，当前选中项用 accentBlue 高亮
+                // 设计原因：时间窗口切换是图表最常用的操作，直接置于顶部状态条便于快速切换；
+                // 用比接口 chip 更小的尺寸（22x18）避免挤占状态条空间
+                Repeater {
+                    model: root.timeWindows
+
+                    Rectangle {
+                        required property var modelData
+                        property bool isSelected: root.timeWindowSec === modelData.seconds
+
+                        width: 24
+                        height: 18
+                        radius: 4
+                        // 选中态：蓝色填充+白字；未选中态：透明背景+浅边框，hover 边框变蓝
+                        color: isSelected ? common.accentBlue : "transparent"
+                        border.width: 1
+                        border.color: isSelected
+                                       ? common.accentBlue
+                                       : (mouse.containsMouse ? common.accentBlue : theme.lineColor)
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            font.pixelSize: 10
+                            font.weight: isSelected ? Font.Bold : Font.Normal
+                            color: isSelected ? "white" : (mouse.containsMouse ? common.accentBlue : theme.textSecondary)
+                        }
+
+                        MouseArea {
+                            id: mouse
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            hoverEnabled: true
+                            onClicked: {
+                                if (root.timeWindowSec !== modelData.seconds) {
+                                    root.timeWindowSec = modelData.seconds
+                                    // 时间窗口变化后：清空 Hover（坐标系已变），并重绘图表
+                                    root.hoverIndex = -1
+                                    root.hoverHint = ""
+                                    canvas.requestPaint()
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Text {
                     text: (root.applet && root.applet.activeInterface
-                           ? root.applet.activeInterface : "—") + " · 5min"
+                           ? root.applet.activeInterface : "—") + " " + root.timeWindowLabel
                     font.pixelSize: 12
                     color: theme.textTertiary
                 }
@@ -322,11 +393,12 @@ Window {
                     var n = dl.length
 
                     // ---- Y 轴上限计算（动态适应最近活动）----
-                    // 使用最近 60 秒的数据计算 Y 轴上限，而非全量 5 分钟缓冲。
+                    // 使用最近 60 秒的数据计算 Y 轴上限，而非全量历史缓冲。
                     // 设计原因：若使用全量缓冲，当历史中存在大流量峰值（如 12MB/s 下载）时，
                     // 即使当前网速已降至 KB/s 级别，Y 轴仍保持高位，导致当前曲线被压到底部
                     // 无法观察波动。改用 60 秒窗口后，峰值滑出窗口时 Y 轴自动缩小，
-                    // 始终为当前活动提供合适的显示比例。
+                    // 始终为当前活动提供合适的显示比例。30 分钟视图下 60 秒窗口仍合理
+                    //（关注近期活动），故不随 timeWindowSec 变化。
                     var vMax = 0
                     var i
                     var recentWindow = 60  // 秒，Y 轴基于最近 1 分钟的活动计算
@@ -360,10 +432,11 @@ Window {
                         ctx.fillText(root.formatAxisValue(yMax * g / 4, unit), pl - 8, gy)
                     }
 
-                    // ---- X 轴刻度：每分钟一个标签，均布于绘图区 ----
-                    // 5 分钟窗口用 -5m/-4m/-3m/-2m/-1m/now 共 6 个标签，比 4 个三分点
-                    // 的 -3m20s/-1m40s 更易读；循环按数组长度参数化，两端左/右对齐
-                    var xLabels = ["-5m", "-4m", "-3m", "-2m", "-1m", "now"]
+                    // ---- X 轴刻度：按时间窗口参数化，均布于绘图区 ----
+                    // 标签数组由 root.xAxisLabels 依据 timeWindowSec 动态生成
+                    // （1 分钟用 15 秒间隔 5 个标签，5 分钟用 1 分钟间隔 6 个，
+                    // 30 分钟用 5 分钟间隔 7 个）；循环按数组长度参数化，两端左/右对齐
+                    var xLabels = root.xAxisLabels
                     ctx.fillStyle = root.axisTextColor
                     ctx.textBaseline = "alphabetic"
                     for (i = 0; i < xLabels.length; i++) {
@@ -384,15 +457,16 @@ Window {
                     }
 
                     // ---- 折线绘制 ----
-                    // X 轴固定为 5 分钟窗口 [tMax-300, tMax]：右缘始终对齐"now"，
-                    // 数据不足 5 分钟时曲线从右侧向左生长，左侧留空网格。
+                    // X 轴为可配置窗口 [tMax-timeWindowSec, tMax]：右缘始终对齐"now"，
+                    // 数据不足时间窗口时曲线从右侧向左生长，左侧留空网格。
                     // 设计原因：若按实际数据范围 [dl[0].x, tMax] 映射，刚启动时仅有
-                    // 几秒数据会被拉伸到整个绘图宽度，X 轴标签 -5m/-4m/... 与实际范围
-                    // 严重不符，用户看到的是"几秒趋势图"而非"5 分钟趋势图"。
-                    // 300 = 5 分钟 × 60 秒，与 C++ MAX_HISTORY_SAMPLES 一致
+                    // 几秒数据会被拉伸到整个绘图宽度，X 轴标签与实际范围严重不符，
+                    // 用户看到的是"几秒趋势图"而非"时间窗口趋势图"。
+                    // tRange 取 timeWindowSec（60/300/1800），对应 1/5/30 分钟窗口，
+                    // 与 C++ MAX_HISTORY_SAMPLES（1800）保证 30 分钟窗口下数据充足
                     var tMax = dl[n - 1].x
-                    var tMin = tMax - 300
-                    var tRange = 300
+                    var tRange = root.timeWindowSec
+                    var tMin = tMax - tRange
 
                     // 单点边界：只有 1 个采样点时无法连线，画一个圆点。
                     // 固定窗口下单点对齐 now（右缘），而非居中
@@ -487,7 +561,7 @@ Window {
 
                 // Hover 交互层：横向移动时按 mouseX 反查最近采样点
                 // 设计原因：采样点按时间均匀分布（1Hz），先由 X 坐标线性反推时间戳，
-                // 再线性扫描找最近点；300 点上限下扫描开销可忽略，无需二分
+                // 再线性扫描找最近点；1800 点上限下扫描开销仍可忽略，无需二分
                 MouseArea {
                     id: chartHover
                     anchors.fill: parent
@@ -501,11 +575,11 @@ Window {
                         var pl = root.chartMarginLeft
                         var pw = width - pl - root.chartMarginRight
                         if (pw <= 0) return
-                        // X 轴用与绘制一致的固定 5 分钟窗口 [tMax-300, tMax] 反推时间戳，
+                        // X 轴用与绘制一致的可配置窗口 [tMax-timeWindowSec, tMax] 反推时间戳，
                         // 保证 Hover 辅助线与折线上的采样点严格对齐
                         var tMax = dl[n - 1].x
-                        var tMin = tMax - 300
-                        var tRange = 300
+                        var tRange = root.timeWindowSec
+                        var tMin = tMax - tRange
                         // 将 mouseX 限制在绘图区内，再线性反推时间戳
                         var clampedX = Math.max(pl, Math.min(mouse.x, pl + pw))
                         var target = tMin + (clampedX - pl) / pw * tRange

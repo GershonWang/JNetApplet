@@ -237,8 +237,11 @@ private:
     // 速度历史环形缓冲：每个接口独立维护一份，key 为接口名
     // 设计原因：接口切换时趋势图不出现跳变，切回时仍能看到该接口历史
     QHash<QString, QVector<SpeedSample>> m_speedHistory;
-    // 每个接口最多保留的采样点数：5 分钟 × 60 秒 = 300
-    static constexpr int MAX_HISTORY_SAMPLES = 300;
+    // 每个接口最多保留的采样点数：30 分钟 × 60 秒 = 1800
+    // 设计原因：流量波动图支持 1/5/30 分钟时间窗口切换，需在展示层选择显示范围，
+    // 故后端需存够 30 分钟的历史数据；时间窗口选择是纯 QML 展示层行为，后端只需
+    // 提供足够长的历史缓冲，无需新增 Q_PROPERTY
+    static constexpr int MAX_HISTORY_SAMPLES = 1800;
 
     // 历史 QVariantList 缓存：避免 QML 每次读取都重新构造 300 个 QPointF
     // 设计原因：Canvas 每秒读取一次 + hover 时也读取，逐个 append 开销可观；
