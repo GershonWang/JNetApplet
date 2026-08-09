@@ -363,8 +363,13 @@
     </message>
     <message>
         <location filename="../package/components/TcpConnectionsWindow.qml" line="191"/>
-        <source>Refreshes every 5 seconds</source>
-        <translation>每 5 秒刷新</translation>
+        <source>Refreshes every </source>
+        <translation>每 </translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="190"/>
+        <source> seconds</source>
+        <translation> 秒刷新</translation>
     </message>
     <message>
         <location filename="../package/components/TcpConnectionsWindow.qml" line="204"/>

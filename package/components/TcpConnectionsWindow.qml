@@ -187,7 +187,7 @@ Window {
                 Item { Layout.fillWidth: true }
 
                 Text {
-                    text: qsTr("Refreshes every 5 seconds")
+                    text: qsTr("Refreshes every ") + ((root.applet ? root.applet.refreshInterval : 1000) / 1000) + qsTr(" seconds")
                     font.pixelSize: 11
                     color: theme.textTertiary
                 }
