@@ -355,15 +355,6 @@ AppletItem {
     Platform.Menu {
         id: contextMenu
 
-        Platform.MenuItem {
-            text: qsTr("Settings")
-            onTriggered: {
-                settingsWindow.show()
-                settingsWindow.raise()
-                settingsWindow.requestActivate()
-            }
-        }
-
         // 流量波动图：屏幕居中独立窗口，展示活动接口最近 30 分钟网速趋势
         Platform.MenuItem {
             text: qsTr("Traffic Chart")
@@ -391,6 +382,15 @@ AppletItem {
                 tcpConnectionsWindow.show()
                 tcpConnectionsWindow.raise()
                 tcpConnectionsWindow.requestActivate()
+            }
+        }
+
+        Platform.MenuItem {
+            text: qsTr("Settings")
+            onTriggered: {
+                settingsWindow.show()
+                settingsWindow.raise()
+                settingsWindow.requestActivate()
             }
         }
 
