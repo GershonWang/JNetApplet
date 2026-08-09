@@ -116,11 +116,11 @@ Window {
     onCurrentTabChanged: buildStatsModel()
     Component.onCompleted: buildStatsModel()
 
-    // 定时刷新：窗口可见时每 5 秒重建表格，不依赖 C++ 30 秒信号
+    // 定时刷新：窗口可见时按刷新间隔的 5 倍重建表格，不依赖 C++ 30 秒信号
     // 设计原因：C++ 降频 30 秒通知，用户打开窗口期间看不到实时更新；
-    // 窗口可见时主动 5 秒刷新，关闭时停止，兼顾实时性与性能
+    // 窗口可见时主动刷新，间隔跟随设置中的刷新间隔（5 倍降频），关闭时停止
     Timer {
-        interval: 5000
+        interval: (root.applet ? root.applet.refreshInterval : 1000) * 5
         repeat: true
         running: root.visible
         onTriggered: buildStatsModel()

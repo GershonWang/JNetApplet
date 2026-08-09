@@ -275,6 +275,11 @@
         <source>Traffic Statistics</source>
         <translation>流量统计</translation>
     </message>
+    <message>
+        <location filename="../package/networkview.qml" line="389"/>
+        <source>TCP Connections</source>
+        <translation>TCP 连接</translation>
+    </message>
 </context>
 <context>
     <name>TrafficStatsWindow</name>
