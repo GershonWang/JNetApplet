@@ -545,11 +545,11 @@ void NetworkMonitorApplet::calculateSpeed()
         const qint64 txDeltaClamped = txDelta > 0 ? txDelta : 0;
         m_downloadSpeed = rxDeltaClamped / elapsedSec;
         m_uploadSpeed = txDeltaClamped / elapsedSec;
-        // 会话总量：直接读取活动接口累计字节数（开机至今），而非累加差值
-        // 设计原因：用户期望"本次会话"显示当前网卡从开机起的累计流量，
-        // 切换网卡后立即显示新网卡的累计值，无流量网卡显示 0
-        m_totalDownload = currentRxBytes;
-        m_totalUpload = currentTxBytes;
+        // 会话总量：累加差值（dde-shell 启动至今的流量），重启清零
+        // 设计原因：用户期望"本次会话"是本次 dde-shell 运行期间的流量，
+        // 与流量统计窗口的"今日累计"（从0点起）区分，数值不会超过今日累计
+        m_totalDownload += rxDeltaClamped;
+        m_totalUpload += txDeltaClamped;
         // 累加日/月流量日志（仅活动接口增量，与速度计算口径一致）
         appendToTrafficLog(rxDeltaClamped, txDeltaClamped);
         m_lastRxBytes = currentRxBytes;
@@ -573,15 +573,6 @@ void NetworkMonitorApplet::calculateSpeed()
             m_rxDropped = static_cast<quint64>(iface.rxDropped);
             m_txDropped = static_cast<quint64>(iface.txDropped);
         emit packetStatsChanged();
-
-        // 接口切换后立即更新会话总量为新网卡的累计字节数（开机至今）
-        // 设计原因：会话总量改为读取活动接口累计值，切换后应立即显示新网卡数据，
-        // 无需等下一次 calculateSpeed（1 秒后）才更新
-        if (m_interfaces.contains(m_activeInterface)) {
-            m_totalDownload = m_interfaces[m_activeInterface].rxBytes;
-            m_totalUpload = m_interfaces[m_activeInterface].txBytes;
-            emit totalChanged();
-        }
         }
     }
 
