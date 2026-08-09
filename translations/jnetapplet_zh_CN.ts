@@ -339,4 +339,67 @@
         <translation>暂无流量记录</translation>
     </message>
 </context>
+<context>
+    <name>TcpConnectionsWindow</name>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="132"/>
+        <source>TCP Connections</source>
+        <translation>TCP 连接</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="148"/>
+        <source>Active connections: </source>
+        <translation>活跃连接：</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="159"/>
+        <source>Search address, port, process...</source>
+        <translation>搜索地址、端口、进程...</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="191"/>
+        <source>Refreshes every 5 seconds</source>
+        <translation>每 5 秒刷新</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="204"/>
+        <source>Local Address:Port</source>
+        <translation>本地地址:端口</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="211"/>
+        <source>Remote Address:Port</source>
+        <translation>远程地址:端口</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="218"/>
+        <source>State</source>
+        <translation>状态</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="225"/>
+        <source>Process</source>
+        <translation>进程</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="265"/>
+        <source>No active TCP connections</source>
+        <translation>无活跃 TCP 连接</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="265"/>
+        <source>No matching connections</source>
+        <translation>无匹配连接</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="340"/>
+        <source>Total: </source>
+        <translation>共计：</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="340"/>
+        <source> connections</source>
+        <translation> 个连接</translation>
+    </message>
+</context>
 </TS>
