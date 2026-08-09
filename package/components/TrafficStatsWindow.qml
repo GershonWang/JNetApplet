@@ -120,7 +120,7 @@ Window {
     // 设计原因：C++ 降频 30 秒通知，用户打开窗口期间看不到实时更新；
     // 窗口可见时主动刷新，间隔跟随设置中的刷新间隔（5 倍降频），关闭时停止
     Timer {
-        interval: (root.applet ? root.applet.refreshInterval : 1000) * 5
+        interval: root.applet ? root.applet.refreshInterval : 1000
         repeat: true
         running: root.visible
         onTriggered: buildStatsModel()

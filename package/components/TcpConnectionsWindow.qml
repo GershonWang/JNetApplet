@@ -109,7 +109,7 @@ Window {
     // 定时刷新：窗口可见时按刷新间隔的 5 倍重建清单（与 C++ 后端降频周期一致），
     // 不依赖 C++ 信号；关闭时停止，兼顾实时性与性能
     Timer {
-        interval: (root.applet ? root.applet.refreshInterval : 1000) * 5
+        interval: root.applet ? root.applet.refreshInterval : 1000
         repeat: true
         running: root.visible
         onTriggered: refreshModel()
