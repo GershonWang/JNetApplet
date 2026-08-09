@@ -17,6 +17,7 @@
 // 触发方式：右键菜单"TCP 连接清单" -> show()/raise()/requestActivate()
 // 公共能力复用：主题色取自 WindowTheme，标题栏（含关闭按钮）取自 TitleBar
 import QtQuick 2.15
+import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import "."
@@ -45,6 +46,29 @@ Window {
     // 表格模型：由 refreshModel() 生成的连接记录数组，每项
     // {localAddress, localPort, remoteAddress, remotePort, state, processName}
     property var connModel: []
+
+    // 搜索关键字：非空时筛选匹配本地/远程地址、端口、进程名的连接
+    property string searchText: ""
+
+    // 筛选后的模型：searchText 为空时返回全部，否则按关键字过滤
+    // 匹配字段：localAddress/localPort/remoteAddress/remotePort/processName
+    readonly property var filteredModel: {
+        var list = root.connModel
+        if (root.searchText.length === 0) return list
+        var key = root.searchText.toLowerCase()
+        var result = []
+        for (var i = 0; i < list.length; i++) {
+            var c = list[i]
+            if (String(c.localAddress).toLowerCase().indexOf(key) >= 0
+                || String(c.localPort).indexOf(key) >= 0
+                || String(c.remoteAddress).toLowerCase().indexOf(key) >= 0
+                || String(c.remotePort).indexOf(key) >= 0
+                || String(c.processName).toLowerCase().indexOf(key) >= 0) {
+                result.push(c)
+            }
+        }
+        return result
+    }
 
     // 当前连接总数，底部汇总与顶部状态条共用
     property int connCount: 0
@@ -112,7 +136,7 @@ Window {
                 closeHoverColor: root.accentColor
             }
 
-            // 顶部状态条：当前连接数 + 刷新间隔说明
+            // 顶部状态条：当前连接数 + 搜索框 + 刷新间隔说明
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 34
@@ -121,11 +145,42 @@ Window {
                 spacing: 8
 
                 Text {
-                    // 动态刷新连接总数，与底部汇总一致
-                    text: qsTr("Active connections: ") + root.connCount
+                    // 动态刷新连接总数，显示筛选后数量/总数
+                    text: qsTr("Active connections: ") + root.filteredModel.length + "/" + root.connCount
                     font.pixelSize: 12
                     font.weight: Font.Medium
                     color: theme.textPrimary
+                }
+
+                // 搜索框：输入关键字筛选匹配地址/端口/进程名的连接
+                TextField {
+                    Layout.preferredWidth: 200
+                    placeholderText: qsTr("Search address, port, process...")
+                    font.pixelSize: 12
+                    color: theme.textPrimary
+                    selectByMouse: true
+                    text: root.searchText
+                    onTextChanged: root.searchText = text
+                    // 清除按钮：有输入时显示 ×，点击清空搜索
+                    rightItem: Rectangle {
+                        visible: root.searchText.length > 0
+                        width: 20; height: 20
+                        radius: 10
+                        color: clearSearchMouse.containsMouse ? theme.hoverBg : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "×"
+                            font.pixelSize: 14
+                            color: clearSearchMouse.containsMouse ? root.accentColor : theme.textTertiary
+                        }
+                        MouseArea {
+                            id: clearSearchMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.searchText = ""
+                        }
+                    }
                 }
 
                 Item { Layout.fillWidth: true }
@@ -194,17 +249,17 @@ Window {
                 Layout.topMargin: 2
                 Layout.bottomMargin: 2
                 clip: true
-                model: root.connModel
-                onCountChanged: emptyHint.visible = root.connModel.length === 0
+                model: root.filteredModel
+                onCountChanged: emptyHint.visible = root.filteredModel.length === 0
 
-                // 空状态提示（当 connModel 为空时显示）
+                // 空状态提示（当筛选结果为空时显示）
                 Item {
                     id: emptyHint
                     anchors.fill: parent
-                    visible: root.connModel.length === 0
+                    visible: root.filteredModel.length === 0
                     Text {
                         anchors.centerIn: parent
-                        text: qsTr("No active TCP connections")
+                        text: root.searchText.length > 0 ? qsTr("No matching connections") : qsTr("No active TCP connections")
                         font.pixelSize: 13
                         color: theme.textTertiary
                     }
@@ -283,7 +338,7 @@ Window {
 
                 Text {
                     Layout.fillWidth: true
-                    text: qsTr("Total: ") + root.connCount + qsTr(" connections")
+                    text: qsTr("Total: ") + root.filteredModel.length + "/" + root.connCount + qsTr(" connections")
                     font.pixelSize: 12
                     font.weight: Font.Bold
                     color: theme.textPrimary
