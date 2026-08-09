@@ -17,6 +17,8 @@
 #include <QColor>
 #include <QSettings>
 #include <QJsonObject>
+#include <QMetaType>
+#include <QVariantMap>
 
 DS_BEGIN_NAMESPACE
 
@@ -39,6 +41,19 @@ struct SpeedSample {
     qint64 timestamp;
     double downloadSpeed;
     double uploadSpeed;
+};
+
+// 单个 TCP 连接信息，供 QML 展示连接清单
+// localAddress/remoteAddress 为可读的 IP 地址字符串（已从十六进制转换）
+// localPort/remotePort 为十进制端口号
+// processName 为占用该连接的进程名（解析失败时为空串）
+struct TcpConnectionInfo {
+    QString localAddress;
+    int localPort;
+    QString remoteAddress;
+    int remotePort;
+    QString state;        // 状态文本，如 "ESTABLISHED"
+    QString processName;  // 进程名，解析失败为空串
 };
 
 class NetworkMonitorApplet : public DApplet
@@ -92,6 +107,11 @@ class NetworkMonitorApplet : public DApplet
     // 保存频率：累加每秒执行（内存操作），写盘与通知 QML 降频（每 30 秒一次），
     // 避免每秒磁盘 IO 与 QML 重绘
     Q_PROPERTY(QJsonObject trafficLog READ trafficLog NOTIFY trafficLogChanged)
+    // TCP 连接详情列表，供 QML 连接清单窗口展示
+    // 每项为 TcpConnectionInfo（通过 QVariantList of QVariantMap 暴露给 QML）
+    // 仅包含 ESTABLISHED 状态连接，含进程名反查
+    // 设计原因：进程名反查需遍历 /proc 开销较大，故降频至每 5 秒更新一次
+    Q_PROPERTY(QVariantList tcpConnectionList READ tcpConnectionList NOTIFY tcpConnectionListChanged)
 
 public:
     explicit NetworkMonitorApplet(QObject *parent = nullptr);
@@ -138,6 +158,8 @@ public:
     void setTextColor(const QString &color);
     // 返回流量统计日志（JSON 对象），结构见 trafficLog 属性注释，供 QML 流量统计窗口读取
     QJsonObject trafficLog() const;
+    // 返回 TCP 连接详情列表（QVariantList of QVariantMap），供 QML 连接清单窗口展示
+    QVariantList tcpConnectionList() const;
 
     // 定时器回调，由 m_refreshTimer 每秒调用。非 Q_INVOKABLE（QML 不应直接调用，
     // 否则会打破 1 秒定时间隔导致速度计算失真）
@@ -167,6 +189,8 @@ signals:
     void textColorChanged();
     // 流量统计日志变化时通知 QML 更新（降频，每 30 秒发射一次）
     void trafficLogChanged();
+    // TCP 连接详情列表变化时通知 QML 更新（降频，每 5 秒发射一次）
+    void tcpConnectionListChanged();
 
 private:
     void readNetworkStats();
@@ -182,6 +206,17 @@ private:
     int parseIwBitrate(const QString &output) const;
     // 统计 /proc/net/tcp 与 tcp6 中 ESTABLISHED（状态 01）的连接数
     int countTcpConnections() const;
+    // 构建 TCP 连接详情列表（解析 /proc/net/tcp 与 tcp6，含进程名反查）
+    // 结果存入 m_tcpConnectionList 并发射 tcpConnectionListChanged；仅 ESTABLISHED
+    void buildTcpConnectionList();
+    // 解析单个 /proc/net/tcp 或 tcp6 行的连接信息，格式异常时返回无效标志
+    bool parseTcpLine(const QString &line, bool isV6, TcpConnectionInfo &conn) const;
+    // 将十六进制地址（IPv4 或 IPv6）转换为可读 IP 字符串
+    QString hexToIp(const QString &hex, bool isV6) const;
+    // 遍历 /proc/<pid>/fd 构建 socket inode -> pid 映射（一次性遍历，供进程名反查）
+    QHash<qint64, qint64> buildInodePidMap() const;
+    // 根据 socket inode 反查进程名，未找到或读取失败时返回空串
+    QString processNameForInode(qint64 inode) const;
     // 读取指定接口的 WiFi 信号强度（dBm），非无线接口或不可用时返回 0
     int detectWifiSignal(const QString &iface);
     // 判断是否为物理网卡（无线 wlp/wlan，有线 enp/eth），
@@ -291,6 +326,17 @@ private:
     // 按日记录最多保留 90 天、按月最多保留 24 个月，超出自动裁剪最旧记录
     static constexpr int MAX_DAY_ENTRIES = 90;
     static constexpr int MAX_MONTH_ENTRIES = 24;
+
+    // ---- TCP 连接清单成员 ----
+    // TCP 连接详情列表（QVariantList of QVariantMap），供 QML 连接清单窗口读取
+    // 设计原因：QVariantMap 便于 QML 以 JS 对象直接访问各字段，
+    // 不直接暴露 TcpConnectionInfo 结构体（需注册元类型，QML 访问繁琐）
+    QVariantList m_tcpConnectionList;
+    // TCP 连接清单降频计数器：进程名反查需遍历 /proc 开销大，每 5 次 refresh 更新一次
+    // 初始化 4 使首次 refresh 立即更新
+    int m_tcpListCounter = 4;
 };
 
 DS_END_NAMESPACE
+
+Q_DECLARE_METATYPE(ds::TcpConnectionInfo)

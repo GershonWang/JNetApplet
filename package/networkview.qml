@@ -384,6 +384,16 @@ AppletItem {
             }
         }
 
+        // TCP 连接清单：屏幕居中独立窗口，展示当前所有 ESTABLISHED 状态的 TCP 连接
+        Platform.MenuItem {
+            text: qsTr("TCP Connections")
+            onTriggered: {
+                tcpConnectionsWindow.show()
+                tcpConnectionsWindow.raise()
+                tcpConnectionsWindow.requestActivate()
+            }
+        }
+
         Platform.MenuSeparator {}
 
         Platform.MenuItem {
@@ -421,6 +431,16 @@ AppletItem {
     // isDarkMode 取自上方 DockPalette 检测结果
     TrafficStatsWindow {
         id: trafficStatsWindow
+        accentColor: root.accentRed
+        applet: root.applet
+        isDarkMode: root.isDarkMode
+    }
+
+    // TCP 连接清单窗口：屏幕居中独立窗口，展示当前所有 ESTABLISHED 状态的 TCP 连接
+    // 依赖通过属性传入：accentColor = root.accentRed，applet = root.applet，
+    // isDarkMode 取自上方 DockPalette 检测结果
+    TcpConnectionsWindow {
+        id: tcpConnectionsWindow
         accentColor: root.accentRed
         applet: root.applet
         isDarkMode: root.isDarkMode
