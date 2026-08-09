@@ -1027,7 +1027,7 @@ void NetworkMonitorApplet::appendToTrafficLog(qint64 rxDelta, qint64 txDelta)
     m_trafficLog[QStringLiteral("byMonth")] = byMonth;
 }
 
-// 裁剪超期记录：按日最多 90 天、按月最多 24 个月，超出删除最旧记录
+// 裁剪超期记录：按日最多 30 天、按月最多 12 个月，超出删除最旧记录
 // 日期/月份均为 ISO 格式（"yyyy-MM-dd"/"yyyy-MM"），字典序即时间序，
 // 排序后取最小的超量个删除，保证始终保留最近的记录
 void NetworkMonitorApplet::pruneTrafficLog()

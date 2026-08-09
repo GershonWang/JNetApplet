@@ -212,7 +212,7 @@ private:
     void saveTrafficLog();
     // 将本次流量增量累加到当日/当月/当前活动接口的日志记录中（每秒调用，内存操作）
     void appendToTrafficLog(qint64 rxDelta, qint64 txDelta);
-    // 裁剪超期记录：按日最多 90 天、按月最多 24 个月，超出删除最旧记录
+    // 裁剪超期记录：按日最多 30 天、按月最多 12 个月，超出删除最旧记录
     void pruneTrafficLog();
 
     QTimer *m_refreshTimer;
@@ -303,9 +303,9 @@ private:
     // 降频保存计数器：每 30 秒（按刷新间隔折算）写盘一次并通知 QML，
     // 避免每秒磁盘 IO 与 QML 重绘；析构函数再兜底保存一次
     int m_trafficSaveCounter;
-    // 按日记录最多保留 90 天、按月最多保留 24 个月，超出自动裁剪最旧记录
-    static constexpr int MAX_DAY_ENTRIES = 90;
-    static constexpr int MAX_MONTH_ENTRIES = 24;
+    // 按日记录最多保留 30 天、按月最多保留 12 个月，超出自动裁剪最旧记录
+    static constexpr int MAX_DAY_ENTRIES = 30;
+    static constexpr int MAX_MONTH_ENTRIES = 12;
 
     // ---- TCP 连接清单成员 ----
     // TCP 连接详情列表（QVariantList of QVariantMap），供 QML 连接清单窗口读取
