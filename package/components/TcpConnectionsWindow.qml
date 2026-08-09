@@ -161,25 +161,26 @@ Window {
                     selectByMouse: true
                     text: root.searchText
                     onTextChanged: root.searchText = text
-                    // 清除按钮：有输入时显示 ×，点击清空搜索
-                    rightItem: Rectangle {
-                        visible: root.searchText.length > 0
-                        width: 20; height: 20
-                        radius: 10
-                        color: clearSearchMouse.containsMouse ? theme.hoverBg : "transparent"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "×"
-                            font.pixelSize: 14
-                            color: clearSearchMouse.containsMouse ? root.accentColor : theme.textTertiary
-                        }
-                        MouseArea {
-                            id: clearSearchMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.searchText = ""
-                        }
+                }
+
+                // 清除按钮：有输入时显示 ×，点击清空搜索
+                Rectangle {
+                    visible: root.searchText.length > 0
+                    width: 20; height: 20
+                    radius: 10
+                    color: clearSearchMouse.containsMouse ? theme.hoverBg : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "×"
+                        font.pixelSize: 14
+                        color: clearSearchMouse.containsMouse ? root.accentColor : theme.textTertiary
+                    }
+                    MouseArea {
+                        id: clearSearchMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.searchText = ""
                     }
                 }
 
