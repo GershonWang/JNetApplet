@@ -821,189 +821,79 @@ int NetworkMonitorApplet::countTcpConnections() const
     return count;
 }
 
-// 构建 TCP 连接详情列表（解析 /proc/net/tcp 与 tcp6，含进程名反查）
+// 构建 TCP 连接详情列表（调用 ss 命令获取 ESTABLISHED 连接，含进程名反查）
 // 结果存入 m_tcpConnectionList（QVariantList of QVariantMap）并发射 tcpConnectionListChanged；
-// 仅保留 ESTABLISHED（状态 01）连接。优雅降级：文件缺失/行格式异常时跳过该文件/行，不崩溃
-// 设计原因：进程名反查需遍历 /proc/<pid>/fd 开销较大，故本方法由 readNetworkStats 降频
-// 至每 5 秒调用一次；先一次性构建 inode -> pid 映射，再为每个连接查映射，避免每连接重复遍历
+// 仅保留 ESTABLISHED 状态连接。优雅降级：ss 命令不存在/执行失败时返回空列表，不崩溃
+// 设计原因：原先通过遍历 /proc/<pid>/fd 反查进程名，但 dde-shell 以普通用户运行，
+// 无权 readlink 其他进程的 fd（lr-x------ 权限），导致进程名全空；改用 ss 命令一次
+// 获取全部 ESTABLISHED 连接的地址/端口/进程名，ss 通过 netlink 获取信息不受 /proc 权限限制，
+// 且仍由 readNetworkStats 降频至每 5 秒调用一次（ss 启动子进程仍有开销）
 void NetworkMonitorApplet::buildTcpConnectionList()
 {
     QVariantList list;
-    const QStringList paths = {QStringLiteral("/proc/net/tcp"), QStringLiteral("/proc/net/tcp6")};
 
-    // 一次性遍历 /proc 构建 socket inode -> pid 映射，供所有连接复用
-    // 设计原因：连接多时遍历 /proc 是主要开销，先建映射再查询可将 O(连接数×进程数)
-    // 降为 O(进程数 + 连接数)，且映射缓存至下次刷新
-    const QHash<qint64, qint64> inodePidMap = buildInodePidMap();
+    // 用 ss 命令获取 ESTABLISHED 连接（含进程名），通过 netlink 不受 /proc 权限限制
+    // -t TCP, -n 不解析服务名（显示端口）, -p 显示进程信息, state established 仅已建立连接
+    QProcess process;
+    process.start(QStringLiteral("ss"), {QStringLiteral("-tnp"), QStringLiteral("state"), QStringLiteral("established")});
+    // ss 命令不存在或启动失败（如精简系统未安装 iproute2）时优雅降级：返回空列表，不崩溃
+    if (!process.waitForStarted(1000)) {
+        m_tcpConnectionList = list;
+        emit tcpConnectionListChanged();
+        return;
+    }
+    process.waitForFinished(3000); // 3 秒超时，ss 卡住时不阻塞主线程过久
+    const QString output = QString::fromUtf8(process.readAllStandardOutput());
 
-    for (const QString &path : paths) {
-        const bool isV6 = path.endsWith(QStringLiteral("tcp6"));
-        QFile f(path);
-        if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            continue;
+    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (int i = 0; i < lines.size(); ++i) {
+        if (i == 0) continue; // 跳过表头（Recv-Q Send-Q ...）
+
+        const QString line = lines[i].trimmed();
+        if (line.isEmpty()) continue;
+
+        // ss 输出按多空格分割：Recv-Q Send-Q Local:Port Peer:Port [Process]
+        // 注意 Process 列可能为空，且 IPv6 地址形如 [::1]:port（方括号内无空格），
+        // 用正则提取更可靠，可容忍列之间任意空白
+        QRegularExpression re(QStringLiteral("(\\S+)\\s+(\\S+)\\s+(\\S+):(\\d+)\\s+(\\S+):(\\d+)\\s*(.*)"));
+        QRegularExpressionMatch match = re.match(line);
+        if (!match.hasMatch()) continue;
+
+        QString localAddress = match.captured(3);
+        const QString localPort = match.captured(4);
+        QString remoteAddress = match.captured(5);
+        const QString remotePort = match.captured(6);
+        const QString processField = match.captured(7).trimmed();
+
+        // 去掉地址中的接口后缀（如 192.168.3.83%wlp3s0 -> 192.168.3.83）
+        localAddress = localAddress.split(QLatin1Char('%')).first();
+        remoteAddress = remoteAddress.split(QLatin1Char('%')).first();
+        // 去掉 IPv6 地址的方括号（[::1] -> ::1）
+        if (localAddress.startsWith(QLatin1Char('['))) localAddress = localAddress.mid(1, localAddress.size() - 2);
+        if (remoteAddress.startsWith(QLatin1Char('['))) remoteAddress = remoteAddress.mid(1, remoteAddress.size() - 2);
+
+        // 提取进程名：users:(("进程名",pid=xxx,fd=xxx))，取第一个双引号内的内容
+        QString processName;
+        if (processField.startsWith(QStringLiteral("users:"))) {
+            QRegularExpression nameRe(QStringLiteral("\\(\"([^\"]+)\""));
+            QRegularExpressionMatch nameMatch = nameRe.match(processField);
+            if (nameMatch.hasMatch()) {
+                processName = nameMatch.captured(1);
+            }
         }
-        QTextStream stream(&f);
-        stream.readLine(); // 跳过标题行
-        while (!stream.atEnd()) {
-            const QString line = stream.readLine().trimmed();
-            if (line.isEmpty()) {
-                continue;
-            }
-            TcpConnectionInfo conn;
-            if (!parseTcpLine(line, isV6, conn)) {
-                continue; // 行格式异常，跳过
-            }
-            // 进程名反查：parseTcpLine 已将 socket inode 暂存于 conn.state，取出后覆盖为状态文本
-            const qint64 inode = conn.state.toLongLong();
-            const auto it = inodePidMap.constFind(inode);
-            if (it != inodePidMap.constEnd()) {
-                conn.processName = processNameForInode(*it);
-            }
-            conn.state = QStringLiteral("ESTABLISHED");
 
-            QVariantMap item;
-            item[QStringLiteral("localAddress")] = conn.localAddress;
-            item[QStringLiteral("localPort")] = conn.localPort;
-            item[QStringLiteral("remoteAddress")] = conn.remoteAddress;
-            item[QStringLiteral("remotePort")] = conn.remotePort;
-            item[QStringLiteral("state")] = conn.state;
-            item[QStringLiteral("processName")] = conn.processName;
-            list.append(item);
-        }
-        f.close();
+        QVariantMap item;
+        item[QStringLiteral("localAddress")] = localAddress;
+        item[QStringLiteral("localPort")] = localPort.toInt();
+        item[QStringLiteral("remoteAddress")] = remoteAddress;
+        item[QStringLiteral("remotePort")] = remotePort.toInt();
+        item[QStringLiteral("state")] = QStringLiteral("ESTABLISHED");
+        item[QStringLiteral("processName")] = processName;
+        list.append(item);
     }
 
     m_tcpConnectionList = list;
     emit tcpConnectionListChanged();
-}
-
-// 解析单个 /proc/net/tcp 或 tcp6 行，成功返回 true 并填充 conn
-// 列格式：sl local_address:local_port rem_address:rem_port st tx_queue:rx_queue ...
-// local_address/rem_address 为十六进制 IP，端口为十六进制；st=01 为 ESTABLISHED
-// 设计原因：仅保留 ESTABLISHED 状态（与 countTcpConnections 口径一致）；
-// conn.state 字段在建立映射时暂存 socket inode（第 10 列），随后由 buildTcpConnectionList
-// 覆盖为状态文本，避免再增一个中间字段
-bool NetworkMonitorApplet::parseTcpLine(const QString &line, bool isV6, TcpConnectionInfo &conn) const
-{
-    const QStringList parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-    // 至少需要 10 列（含 inode），不足视为格式异常
-    if (parts.size() < 10) {
-        return false;
-    }
-    // 状态码：第 4 列（索引 3），仅保留 ESTABLISHED（01）
-    if (parts[3] != QLatin1String("01")) {
-        return false;
-    }
-
-    // 本地地址:端口（索引 1）
-    const QStringList local = parts[1].split(QLatin1Char(':'));
-    if (local.size() != 2) {
-        return false;
-    }
-    // 远程地址:端口（索引 2）
-    const QStringList remote = parts[2].split(QLatin1Char(':'));
-    if (remote.size() != 2) {
-        return false;
-    }
-
-    conn.localAddress = hexToIp(local[0], isV6);
-    conn.localPort = local[1].toInt(nullptr, 16);       // 端口为十六进制
-    conn.remoteAddress = hexToIp(remote[0], isV6);
-    conn.remotePort = remote[1].toInt(nullptr, 16);
-
-    // 暂存 socket inode（第 10 列，索引 9）供进程名反查；随后会被覆盖为状态文本
-    conn.state = parts[9];
-    conn.processName.clear();
-    return true;
-}
-
-// 将十六进制地址转换为可读 IP 字符串
-// IPv4（tcp）：8 位十六进制，小端序按字节倒序 -> "A.B.C.D"
-// IPv6（tcp6）：32 位十六进制，大端序按 8 个 16 位组 -> "xxxx:xxxx:...:xxxx"
-// 设计原因：/proc/net/tcp 的 IPv4 地址为小端字节序存储，需倒序；
-// IPv6 则按大端序存储，直接分组即可。解析失败返回空串
-QString NetworkMonitorApplet::hexToIp(const QString &hex, bool isV6) const
-{
-    if (isV6) {
-        if (hex.size() != 32) {
-            return QString();
-        }
-        QStringList groups;
-        for (int i = 0; i < 32; i += 4) {
-            groups << hex.mid(i, 4);
-        }
-        return groups.join(QLatin1Char(':'));
-    }
-    if (hex.size() != 8) {
-        return QString();
-    }
-    // IPv4 小端序：每 2 位十六进制为一个字节，倒序拼接
-    QStringList octets;
-    for (int i = 6; i >= 0; i -= 2) {
-        bool ok = false;
-        const int oct = hex.mid(i, 2).toInt(&ok, 16);
-        octets << (ok ? QString::number(oct) : QStringLiteral("0"));
-    }
-    return octets.join(QLatin1Char('.'));
-}
-
-// 遍历 /proc/<pid>/fd 构建 socket inode -> pid 映射
-// 设计原因：进程名反查需匹配连接的 socket inode 与进程的 fd 链接（socket:[inode]）；
-// 一次性遍历所有进程建立映射，供多个连接复用，避免对每个连接重复扫描 /proc
-QHash<qint64, qint64> NetworkMonitorApplet::buildInodePidMap() const
-{
-    QHash<qint64, qint64> map;
-    QDir procDir(QStringLiteral("/proc"));
-    if (!procDir.exists()) {
-        return map;
-    }
-    const QStringList entries = procDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-    for (const QString &pidStr : entries) {
-        // 仅处理纯数字目录（进程 PID）
-        bool ok = false;
-        const qint64 pid = pidStr.toLongLong(&ok);
-        if (!ok || pid <= 0) {
-            continue;
-        }
-        QDir fdDir(QStringLiteral("/proc/%1/fd").arg(pidStr));
-        if (!fdDir.exists()) {
-            continue; // 进程可能已退出或无权限
-        }
-        const QStringList fds = fdDir.entryList(QDir::NoDotAndDotDot);
-        for (const QString &fd : fds) {
-            // fd 为符号链接，symLinkTarget 返回其目标（如 "socket:[12345]"）
-            const QString link = fdDir.absoluteFilePath(fd);
-            const QString resolved = QFile::symLinkTarget(link);
-            if (resolved.isEmpty() || !resolved.startsWith(QStringLiteral("socket:["))) {
-                continue;
-            }
-            // 提取 inode 数字
-            const int start = resolved.indexOf(QLatin1Char('['));
-            const int end = resolved.indexOf(QLatin1Char(']'));
-            if (start < 0 || end <= start) {
-                continue;
-            }
-            const qint64 inode = resolved.mid(start + 1, end - start - 1).toLongLong();
-            if (inode > 0) {
-                map.insert(inode, pid);
-            }
-        }
-    }
-    return map;
-}
-
-// 根据 socket inode 的 pid 反查进程名（读 /proc/<pid>/comm），失败返回空串
-// 设计原因：comm 为进程可执行文件名（不含路径与参数），适合清单展示；
-// 进程可能已退出导致读取失败，此时返回空串不影响其他列显示
-QString NetworkMonitorApplet::processNameForInode(qint64 pid) const
-{
-    QFile comm(QStringLiteral("/proc/%1/comm").arg(pid));
-    if (!comm.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return QString();
-    }
-    const QString name = QString::fromUtf8(comm.readAll()).trimmed();
-    comm.close();
-    return name;
 }
 
 // 读取指定接口的 WiFi 信号强度（dBm）

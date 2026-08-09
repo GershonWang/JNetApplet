@@ -43,19 +43,6 @@ struct SpeedSample {
     double uploadSpeed;
 };
 
-// 单个 TCP 连接信息，供 QML 展示连接清单
-// localAddress/remoteAddress 为可读的 IP 地址字符串（已从十六进制转换）
-// localPort/remotePort 为十进制端口号
-// processName 为占用该连接的进程名（解析失败时为空串）
-struct TcpConnectionInfo {
-    QString localAddress;
-    int localPort;
-    QString remoteAddress;
-    int remotePort;
-    QString state;        // 状态文本，如 "ESTABLISHED"
-    QString processName;  // 进程名，解析失败为空串
-};
-
 class NetworkMonitorApplet : public DApplet
 {
     Q_OBJECT
@@ -108,9 +95,10 @@ class NetworkMonitorApplet : public DApplet
     // 避免每秒磁盘 IO 与 QML 重绘
     Q_PROPERTY(QJsonObject trafficLog READ trafficLog NOTIFY trafficLogChanged)
     // TCP 连接详情列表，供 QML 连接清单窗口展示
-    // 每项为 TcpConnectionInfo（通过 QVariantList of QVariantMap 暴露给 QML）
+    // 每项为 QVariantMap（键：localAddress/localPort/remoteAddress/remotePort/state/processName）
     // 仅包含 ESTABLISHED 状态连接，含进程名反查
-    // 设计原因：进程名反查需遍历 /proc 开销较大，故降频至每 5 秒更新一次
+    // 设计原因：用 ss 命令反查进程名，通过 netlink 获取不受 /proc 权限限制，
+    // 但仍需启动子进程开销较大，故降频至每 5 秒更新一次
     Q_PROPERTY(QVariantList tcpConnectionList READ tcpConnectionList NOTIFY tcpConnectionListChanged)
 
 public:
@@ -206,17 +194,9 @@ private:
     int parseIwBitrate(const QString &output) const;
     // 统计 /proc/net/tcp 与 tcp6 中 ESTABLISHED（状态 01）的连接数
     int countTcpConnections() const;
-    // 构建 TCP 连接详情列表（解析 /proc/net/tcp 与 tcp6，含进程名反查）
+    // 构建 TCP 连接详情列表（调用 ss 命令获取 ESTABLISHED 连接，含进程名反查）
     // 结果存入 m_tcpConnectionList 并发射 tcpConnectionListChanged；仅 ESTABLISHED
     void buildTcpConnectionList();
-    // 解析单个 /proc/net/tcp 或 tcp6 行的连接信息，格式异常时返回无效标志
-    bool parseTcpLine(const QString &line, bool isV6, TcpConnectionInfo &conn) const;
-    // 将十六进制地址（IPv4 或 IPv6）转换为可读 IP 字符串
-    QString hexToIp(const QString &hex, bool isV6) const;
-    // 遍历 /proc/<pid>/fd 构建 socket inode -> pid 映射（一次性遍历，供进程名反查）
-    QHash<qint64, qint64> buildInodePidMap() const;
-    // 根据 socket inode 反查进程名，未找到或读取失败时返回空串
-    QString processNameForInode(qint64 inode) const;
     // 读取指定接口的 WiFi 信号强度（dBm），非无线接口或不可用时返回 0
     int detectWifiSignal(const QString &iface);
     // 判断是否为物理网卡（无线 wlp/wlan，有线 enp/eth），
@@ -330,13 +310,11 @@ private:
     // ---- TCP 连接清单成员 ----
     // TCP 连接详情列表（QVariantList of QVariantMap），供 QML 连接清单窗口读取
     // 设计原因：QVariantMap 便于 QML 以 JS 对象直接访问各字段，
-    // 不直接暴露 TcpConnectionInfo 结构体（需注册元类型，QML 访问繁琐）
+    // 不暴露中间结构体（需注册元类型，QML 访问繁琐）
     QVariantList m_tcpConnectionList;
-    // TCP 连接清单降频计数器：进程名反查需遍历 /proc 开销大，每 5 次 refresh 更新一次
+    // TCP 连接清单降频计数器：ss 命令需启动子进程开销大，每 5 次 refresh 更新一次
     // 初始化 4 使首次 refresh 立即更新
     int m_tcpListCounter = 4;
 };
 
 DS_END_NAMESPACE
-
-Q_DECLARE_METATYPE(ds::TcpConnectionInfo)
