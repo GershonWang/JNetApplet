@@ -114,7 +114,7 @@ Priority: optional
 Description: 网络速度监控 dde-shell 任务栏插件
  实时监控网络下载/上传速度，支持多网卡切换、IP 地址显示、
  总流量统计。适用于 deepin 桌面环境的 dde-shell 任务栏。
-Homepage: https://git.jokul.space/Jokul/JNetApplet
+Homepage: https://github.com/GershonWang/JNetApplet
 EOF
 
 # 生成 postinst 脚本：安装后重启桌面用户的 dde-shell

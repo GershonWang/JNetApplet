@@ -210,7 +210,7 @@ Window {
                     }
 
                     Text {
-                        text: "git.jokul.space/Jokul/JNetApplet"
+                        text: "github.com/GershonWang/JNetApplet"
                         font.pixelSize: 11
                         color: theme.textTertiary
                         Layout.fillWidth: true
@@ -252,7 +252,9 @@ Window {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                clipboardHelper.text = "git.jokul.space/Jokul/JNetApplet"
+                                // 界面展示省略协议前缀以节省横向空间；复制时补全 https://，
+                                // 使粘贴出去的内容可直接被浏览器/终端识别为可访问链接
+                                clipboardHelper.text = "https://github.com/GershonWang/JNetApplet"
                                 clipboardHelper.selectAll()
                                 clipboardHelper.copy()
                                 copied = true
