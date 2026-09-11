@@ -2,7 +2,8 @@
 
 Guidance for AI agents working in this repo. Verified against `CMakeLists.txt`,
 `package/metadata.json.in`, and the installed macro file at
-`/usr/lib/x86_64-linux-gnu/cmake/DDEShell/DDEShellPackageMacros.cmake`.
+`/usr/lib/<triplet>/cmake/DDEShell/DDEShellPackageMacros.cmake`
+(`x86_64-linux-gnu` on amd64; see "Build & install").
 
 ## What this is
 
@@ -47,6 +48,13 @@ bash install.sh
 
 `cmake --install` needs `sudo` because the default `DDE_SHELL_PACKAGE_INSTALL_DIR`
 is `/usr/share/dde-shell` (a CMake CACHE variable on this system).
+
+The plugin shared library installs to `/usr/lib/${_GNU_TRIPLET}/dde-shell/`, where
+the GNU triplet is derived at configure time from `dpkg --print-architecture`
+(amd64 -> `x86_64-linux-gnu`, arm64 -> `aarch64-linux-gnu`,
+loong64 -> `loongarch64-linux-gnu`), falling back to `CMAKE_LIBRARY_ARCHITECTURE`
+and then `x86_64-linux-gnu`. `install.sh` mirrors the same detection for its
+post-install verification output.
 
 ### Deb packaging
 

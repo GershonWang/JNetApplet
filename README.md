@@ -61,6 +61,13 @@ bash install.sh
 `cmake --install` 需要 `sudo`，因为默认 `DDE_SHELL_PACKAGE_INSTALL_DIR`
 为 `/usr/share/dde-shell`（本机 CMake CACHE 变量）。
 
+插件动态库的安装目录按系统 GNU 三元组自动适配，无需手工改路径：
+amd64 装到 `/usr/lib/x86_64-linux-gnu/dde-shell`，arm64 装到
+`/usr/lib/aarch64-linux-gnu/dde-shell`，loong64 装到
+`/usr/lib/loongarch64-linux-gnu/dde-shell`。三元组由 CMake 在配置阶段通过
+`dpkg --print-architecture` 推导，非 Debian 系回退 `CMAKE_LIBRARY_ARCHITECTURE`；
+`install.sh` 的安装后校验沿用同一套规则。
+
 安装后重启 dde-shell 使插件生效：
 
 ```sh
