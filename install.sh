@@ -5,7 +5,25 @@
 set -e
 
 INSTALL_DIR="/usr/share/dde-shell/space.jokul.JNetApplet"
-SO_DIR="/usr/lib/x86_64-linux-gnu/dde-shell"
+
+# 自动检测系统多架构 GNU 三元组（triplet），支持 amd64/arm64/loong64
+# 设计原因：原硬编码 x86_64-linux-gnu 在 arm64/loong64 上会定位不到 .so。
+# 该路径仅用于安装后的校验输出（真正安装位置由 CMake 决定），
+# 因此探测必须逐级兜底，不能在 set -e 下因缺少 dpkg 而中断整个安装流程
+DEB_ARCH=""
+if command -v dpkg >/dev/null 2>&1; then
+    DEB_ARCH=$(dpkg --print-architecture 2>/dev/null || true)
+fi
+case "$DEB_ARCH" in
+    amd64)   TRIPLET="x86_64-linux-gnu" ;;
+    arm64)   TRIPLET="aarch64-linux-gnu" ;;
+    loong64) TRIPLET="loongarch64-linux-gnu" ;;
+    *)
+        # 非 Debian 系或未知架构：取编译器自带三元组，等价 CMake 侧的 CMAKE_LIBRARY_ARCHITECTURE 兜底
+        TRIPLET=$(gcc -dumpmachine 2>/dev/null || echo "x86_64-linux-gnu")
+        ;;
+esac
+SO_DIR="/usr/lib/${TRIPLET}/dde-shell"
 
 echo "=== JNetApplet 安装脚本 ==="
 

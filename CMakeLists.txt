@@ -52,8 +52,33 @@ target_link_libraries(space.jokul.JNetApplet PRIVATE
     Dde::Shell
 )
 
+# 自动检测系统多架构三元组（triplet），支持 amd64/arm64/loong64
+# 设计原因：原硬编码 x86_64-linux-gnu 不兼容 arm64/loong64 架构
+set(_DEB_ARCH "")
+if(EXISTS "/etc/debian_version")
+    execute_process(
+        COMMAND dpkg --print-architecture
+        OUTPUT_VARIABLE _DEB_ARCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+endif()
+if(_DEB_ARCH STREQUAL "amd64")
+    set(_GNU_TRIPLET "x86_64-linux-gnu")
+elseif(_DEB_ARCH STREQUAL "arm64")
+    set(_GNU_TRIPLET "aarch64-linux-gnu")
+elseif(_DEB_ARCH STREQUAL "loong64")
+    set(_GNU_TRIPLET "loongarch64-linux-gnu")
+else()
+    # 兜底：用 CMAKE_LIBRARY_ARCHITECTURE（Debian 系派生变量）或回退 x86_64
+    if(CMAKE_LIBRARY_ARCHITECTURE)
+        set(_GNU_TRIPLET "${CMAKE_LIBRARY_ARCHITECTURE}")
+    else()
+        set(_GNU_TRIPLET "x86_64-linux-gnu")
+    endif()
+endif()
+
 # 安装到dde-shell插件目录
-install(TARGETS space.jokul.JNetApplet DESTINATION /usr/lib/x86_64-linux-gnu/dde-shell)
+install(TARGETS space.jokul.JNetApplet DESTINATION /usr/lib/${_GNU_TRIPLET}/dde-shell)
 
 # 由模板生成 metadata.json，版本号从 project() 取，避免多处手动维护
 # 设计原因：版本号唯一源为 CMakeLists.txt 顶部的 project(... VERSION)，
