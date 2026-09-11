@@ -96,6 +96,8 @@ echo "[3/6] 安装到 staging 目录..."
 run_step "安装到 staging" env DESTDIR="$STAGE_DIR" cmake --install build || exit 1
 
 # 生成 DEBIAN/control
+# 注意：Maintainer 字段只保留姓名。原邮箱绑定的是已停用的 git.jokul.space 域名，
+# 在提供新邮箱之前不写入邮箱地址（Debian 规范建议该字段含邮箱，规范检查工具可能提示缺失）
 echo "[4/6] 生成 control 文件..."
 mkdir -p "$STAGE_DIR/DEBIAN"
 
@@ -106,7 +108,7 @@ cat > "$STAGE_DIR/DEBIAN/control" << EOF
 Package: ${PKG_NAME}
 Version: ${VERSION}
 Architecture: ${ARCH}
-Maintainer: Jokul <jokul@git.jokul.space>
+Maintainer: Jokul
 Installed-Size: ${INSTALLED_SIZE}
 Depends: dde-shell, libc6, libqt6core6, libqt6gui6, libqt6quick6, libqt6network6, libdtk6core
 Section: utils
