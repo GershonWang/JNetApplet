@@ -52,7 +52,7 @@ echo "  产物: $DEB_FILE"
 echo "=========================================="
 
 # 检查依赖工具
-# dpkg 用于读取系统架构（见下方"架构判断"），必须与 cmake/dpkg-deb 一并预检，
+# dpkg 用于读取系统架构（见上方"架构判断"），必须与 cmake/dpkg-deb 一并预检，
 # 否则在 set -e 下会以 "dpkg: command not found" 直接中断，用户看不到友好提示
 for cmd in cmake dpkg dpkg-deb; do
     if ! command -v "$cmd" &> /dev/null; then

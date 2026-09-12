@@ -25,5 +25,8 @@ cmake-build-*/
 .DS_Store
 Thumbs.db
 
-# AI 工作流内部文档（不纳入版本控制）
+# AI 工作流内部文档（默认不纳入版本控制）
+# 注意：.gitignore 对已跟踪文件无效——docs/superpowers/ 下的 plans/ 与 specs/
+# 各有一个文件在该规则加入之前就已提交，因此它们仍留在版本库中；
+# 若要把它们真正移出版本库，需要单独执行 git rm --cached（会从远程仓库删除）
 docs/superpowers/
