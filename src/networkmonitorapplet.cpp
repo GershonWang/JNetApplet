@@ -6,6 +6,7 @@
 #include <pluginfactory.h>
 
 #include <QFile>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QDebug>
 #include <QDir>
@@ -954,7 +955,9 @@ void NetworkMonitorApplet::loadTrafficLog()
         if (err.error == QJsonParseError::NoError && doc.isObject()) {
             m_trafficLog = doc.object();
         } else {
-            // 解析失败（如文件被外部写坏）：降级为空结构，避免后续累加异常
+            // 解析失败（如文件被外部写坏）：降级为空结构，避免后续累加异常。
+            // 记录告警而非静默降级——历史统计会整体清零，用户需要知道原因
+            qWarning() << "traffic_log.json 解析失败，历史统计已重置:" << err.errorString();
             m_trafficLog = QJsonObject();
             m_trafficLog[QStringLiteral("byDay")] = QJsonObject();
             m_trafficLog[QStringLiteral("byMonth")] = QJsonObject();
@@ -974,12 +977,19 @@ void NetworkMonitorApplet::saveTrafficLog()
     pruneTrafficLog();
     QDir dir;
     dir.mkpath(QFileInfo(m_trafficLogPath).absolutePath());
-    QFile file(m_trafficLogPath);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        // 用 Indented 缩进格式便于用户手动查看/调试日志文件
-        file.write(QJsonDocument(m_trafficLog).toJson(QJsonDocument::Indented));
-        file.close();
+
+    // 用 QSaveFile 先写临时文件、commit() 时原子替换目标文件
+    // 设计原因：原实现以 Truncate 直接覆盖，写入中途崩溃/断电会留下半截 JSON，
+    // 而 loadTrafficLog() 对损坏文件降级为空结构，会导致 30 天历史一次性丢失；
+    // 原子替换保证失败时旧文件内容仍然完整可用
+    QSaveFile file(m_trafficLogPath);
+    if (!file.open(QIODevice::WriteOnly)) {
+        return;
     }
+    // 用 Indented 缩进格式便于用户手动查看/调试日志文件
+    file.write(QJsonDocument(m_trafficLog).toJson(QJsonDocument::Indented));
+    // commit() 失败时不会覆盖原文件，此处无需额外处理
+    file.commit();
 }
 
 // 将本次流量增量累加到当日/当月/当前活动接口的日志记录中（每秒调用，纯内存操作）
