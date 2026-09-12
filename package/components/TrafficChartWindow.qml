@@ -392,17 +392,34 @@ Window {
                     var ul = root.applet ? root.applet.speedHistoryUpload : []
                     var n = dl.length
 
+                    // X 轴窗口 [tMax - timeWindowSec, tMax]，右缘对齐最新采样点。
+                    // 提前于此计算（而非绘制折线前）的原因：Y 轴上限需要按可见窗口取极值
+                    var tMax = n > 0 ? dl[n - 1].x : 0
+                    var tRange = root.timeWindowSec
+                    var tMin = tMax - tRange
+
+                    // 可见窗口起点索引：早于 tMin 的采样点仍在缓冲中（30 分钟窗口下最长 1800 点），
+                    // 绘制时必须跳过，否则会映射到负坐标而画到绘图区之外
+                    var visibleStart = 0
+                    while (visibleStart < n - 1 && dl[visibleStart].x < tMin) {
+                        visibleStart++
+                    }
+
                     // ---- Y 轴上限计算（动态适应最近活动）----
-                    // 使用最近 60 秒的数据计算 Y 轴上限，而非全量历史缓冲。
+                    // 取"可见窗口内最近 60 秒"的数据计算 Y 轴上限，而非全量历史缓冲。
                     // 设计原因：若使用全量缓冲，当历史中存在大流量峰值（如 12MB/s 下载）时，
                     // 即使当前网速已降至 KB/s 级别，Y 轴仍保持高位，导致当前曲线被压到底部
                     // 无法观察波动。改用 60 秒窗口后，峰值滑出窗口时 Y 轴自动缩小，
                     // 始终为当前活动提供合适的显示比例。30 分钟视图下 60 秒窗口仍合理
                     //（关注近期活动），故不随 timeWindowSec 变化。
+                    // 注意按时间戳筛选而非按下标：原实现用 n - 60 取 60 个采样点，
+                    // 刷新间隔设为 5 秒时实际覆盖 300 秒，与"最近 1 分钟"的意图不符
+                    var recentStart = visibleStart
+                    while (recentStart < n - 1 && dl[recentStart].x < tMax - 60) {
+                        recentStart++
+                    }
                     var vMax = 0
                     var i
-                    var recentWindow = 60  // 秒，Y 轴基于最近 1 分钟的活动计算
-                    var recentStart = Math.max(0, n - recentWindow)
                     for (i = recentStart; i < n; i++) {
                         if (dl[i].y > vMax) vMax = dl[i].y
                         if (i < ul.length && ul[i].y > vMax) vMax = ul[i].y
@@ -464,9 +481,7 @@ Window {
                     // 用户看到的是"几秒趋势图"而非"时间窗口趋势图"。
                     // tRange 取 timeWindowSec（60/300/1800），对应 1/5/30 分钟窗口，
                     // 与 C++ MAX_HISTORY_SAMPLES（1800）保证 30 分钟窗口下数据充足
-                    var tMax = dl[n - 1].x
-                    var tRange = root.timeWindowSec
-                    var tMin = tMax - tRange
+                    // tMax/tRange/tMin 已在上方（Y 轴计算之前）求得，此处不再重复声明
 
                     // 单点边界：只有 1 个采样点时无法连线，画一个圆点。
                     // 固定窗口下单点对齐 now（右缘），而非居中
@@ -483,39 +498,45 @@ Window {
                     // 绘制一条序列折线：先填充线下淡色区域增强可读性，再描边 2px 主线
                     // lineCap/lineJoin 用 round 使折线端点与转角圆润
                     // 注意每次 stroke/fill 前必须 beginPath()，避免与上一段路径串连
-                    // 5 点滑动平均（±2 样本）：抑制 1 秒采样的亚秒混叠尖峰，
-                    // 使曲线反映趋势而非瞬时脉冲；hover 提示仍显示原始值供诊断
-                    function smoothY(data, idx) {
-                        var sum = 0, cnt = 0
-                        for (var k = Math.max(0, idx - 2); k <= Math.min(data.length - 1, idx + 2); k++) {
-                            sum += data[k].y
-                            cnt++
-                        }
-                        return cnt > 0 ? sum / cnt : data[idx].y
-                    }
-                    function drawSeries(data, colorCss, fillCss) {
+                    // from 为可见窗口起点索引：早于 tMin 的点映射为负坐标，必须跳过，
+                    // 否则曲线与填充会越出绘图区、压住 Y 轴刻度与顶部信息条
+                    function drawSeries(data, from, colorCss, fillCss) {
                         var m = data.length
-                        if (m === 0) return
-                        var j, px, py
+                        if (from >= m) return
+                        // 5 点滑动平均（±2 样本）：抑制 1 秒采样的亚秒混叠尖峰，
+                        // 使曲线反映趋势而非瞬时脉冲；hover 提示仍显示原始值供诊断。
+                        // 先算一遍供填充与描边共用——原实现两条路径各算一次，同一点被算两遍
+                        var sm = []
+                        var j, sum, cnt, k
+                        for (j = from; j < m; j++) {
+                            sum = 0
+                            cnt = 0
+                            for (k = Math.max(0, j - 2); k <= Math.min(m - 1, j + 2); k++) {
+                                sum += data[k].y
+                                cnt++
+                            }
+                            sm.push(cnt > 0 ? sum / cnt : data[j].y)
+                        }
+                        var px, py
                         // 线下淡色填充（alpha 0.08）：贴到基线形成闭合区域
                         ctx.beginPath()
-                        for (j = 0; j < m; j++) {
+                        for (j = from; j < m; j++) {
                             px = pl + ((data[j].x - tMin) / tRange) * pw
-                            py = pt + ph - (smoothY(data, j) / yMax) * ph
-                            if (j === 0) ctx.moveTo(px, py)
+                            py = pt + ph - (sm[j - from] / yMax) * ph
+                            if (j === from) ctx.moveTo(px, py)
                             else ctx.lineTo(px, py)
                         }
                         ctx.lineTo(pl + ((data[m - 1].x - tMin) / tRange) * pw, pt + ph)
-                        ctx.lineTo(pl + ((data[0].x - tMin) / tRange) * pw, pt + ph)
+                        ctx.lineTo(pl + ((data[from].x - tMin) / tRange) * pw, pt + ph)
                         ctx.closePath()
                         ctx.fillStyle = fillCss
                         ctx.fill()
                         // 主线：2px 描边
                         ctx.beginPath()
-                        for (j = 0; j < m; j++) {
+                        for (j = from; j < m; j++) {
                             px = pl + ((data[j].x - tMin) / tRange) * pw
-                            py = pt + ph - (smoothY(data, j) / yMax) * ph
-                            if (j === 0) ctx.moveTo(px, py)
+                            py = pt + ph - (sm[j - from] / yMax) * ph
+                            if (j === from) ctx.moveTo(px, py)
                             else ctx.lineTo(px, py)
                         }
                         ctx.strokeStyle = colorCss
@@ -525,14 +546,22 @@ Window {
                         ctx.stroke()
                     }
 
+                    // 裁剪到绘图区：折线在极值处可能超出 yMax 或负向越界，
+                    // clip 作为兜底保证不会画到网格、Y 轴刻度与顶部信息条上
+                    ctx.save()
+                    ctx.beginPath()
+                    ctx.rect(pl, pt, pw, ph)
+                    ctx.clip()
                     // 先画上传（橙）再画下载（绿）：下载通常是主视线，后画置于上层
-                    drawSeries(ul, "#FF9500", "rgba(255, 149, 0, 0.08)")
-                    drawSeries(dl, "#34C759", "rgba(52, 199, 89, 0.08)")
+                    drawSeries(ul, visibleStart, "#FF9500", "rgba(255, 149, 0, 0.08)")
+                    drawSeries(dl, visibleStart, "#34C759", "rgba(52, 199, 89, 0.08)")
+                    ctx.restore()
 
                     // ---- Hover：竖直辅助线 + 两条折线上的圆点标记 ----
                     // hoverIndex 由 chartHover 根据 mouseX 反查更新；此处按索引换算坐标
                     var hi = root.hoverIndex
-                    if (hi >= 0 && hi < n) {
+                    // 仅在可见窗口内绘制 hover 标记：hi < visibleStart 的点位于绘图区左侧之外
+                    if (hi >= visibleStart && hi < n) {
                         var hx = pl + ((dl[hi].x - tMin) / tRange) * pw
                         // 竖直辅助线：虚线，避免与实线折线混淆
                         ctx.strokeStyle = root.hoverLineColor
@@ -634,6 +663,8 @@ Window {
     Connections {
         target: root.applet
         function onSpeedHistoryChanged() {
+            // 窗口不可见时不重绘：后端仍每秒追加采样点，但无需为隐藏的 Canvas 做无效绘制
+            if (!root.visible) return
             canvas.requestPaint()
         }
         // 接口切换时历史整体更换，原 Hover 索引失去意义，需清除避免残留标记
