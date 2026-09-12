@@ -310,9 +310,6 @@ private:
     QJsonObject m_trafficLog;
     // 日志文件路径（~/.config/jnetapplet/traffic_log.json）
     QString m_trafficLogPath;
-    // 当前日期 "yyyy-MM-dd" 与月份 "yyyy-MM"，用于跨日/跨月检测
-    QString m_currentDate;
-    QString m_currentMonth;
     // 降频保存计数器：每 30 秒（按刷新间隔折算）写盘一次并通知 QML，
     // 避免每秒磁盘 IO 与 QML 重绘；析构函数再兜底保存一次
     int m_trafficSaveCounter;

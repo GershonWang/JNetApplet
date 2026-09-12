@@ -113,11 +113,9 @@ bool NetworkMonitorApplet::init()
     
     // 初始化流量日志持久化
     // 设计原因：日志与设置共用 ~/.config/jnetapplet 目录；
-    // 启动时记录当前日期/月份用于跨日跨月检测，并从 JSON 文件加载历史累计数据
+    // 启动时从 JSON 文件加载历史累计数据，当日/当月键由 appendToTrafficLog 按需取用
     m_trafficLogPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
                        + QStringLiteral("/jnetapplet/traffic_log.json");
-    m_currentDate = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
-    m_currentMonth = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
     loadTrafficLog();
     
     // 启动定时刷新
@@ -1087,11 +1085,10 @@ void NetworkMonitorApplet::appendToTrafficLog(qint64 rxDelta, qint64 txDelta)
         return;
     }
 
-    // 跨日/跨月检测：更新当前日期/月份，切换记录（旧记录保留不再累加）
+    // 直接取当前日期/月份作为键：跨日/跨月时键自然变化，新键从零累加，旧键保留不再增长
+    // 设计原因：无需维护额外的"上次日期"状态，每次按当天/当月取键即可保证语义正确
     const QString date = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
     const QString month = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
-    m_currentDate = date;
-    m_currentMonth = month;
 
     // 累加到按日记录：byDay[date][iface] = {rx, tx}
     // 用 toVariant().toLongLong() 读取并写回 qint64，保留整数精度
