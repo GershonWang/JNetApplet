@@ -62,6 +62,16 @@ Window {
     // 卸载按钮文字：复制命令后临时显示提示，定时器到期后还原
     property string uninstallButtonText: qsTr("Uninstall Plugin")
 
+    // 卸载命令单一来源：界面展示文本与剪贴板内容共用同一条字符串
+    // 设计原因：原实现把同一串命令硬编码在展示 Text 与隐藏 TextEdit 两处，
+    // 插件 ID / 安装路径一旦调整，就可能出现"显示的命令"与"复制的命令"不一致
+    readonly property string uninstallCommand: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
+
+    // 卸载按钮是否处于"命令已复制"的提示态
+    // 设计原因：原实现用 uninstallButtonText !== qsTr("Uninstall Plugin") 反推状态，
+    // 即状态由界面文案推导，文案或翻译一变即失效；改用独立布尔量表达
+    property bool uninstallCopied: false
+
     width: 350
     height: 450
     minimumWidth: 350
@@ -362,8 +372,8 @@ Window {
                         id: uninstallButton
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
-                        // 提示状态时背景和边框变绿
-                        readonly property bool isStatus: uninstallButtonText !== qsTr("Uninstall Plugin")
+                        // 提示状态时背景和边框变绿；状态由独立布尔量决定，不依赖界面文案
+                        readonly property bool isStatus: root.uninstallCopied
                         color: isStatus
                                ? Qt.rgba(22/255, 163/255, 74/255, 0.08)
                                : (uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08))
@@ -453,7 +463,7 @@ Window {
                 Text {
                     anchors.fill: parent
                     anchors.margins: 10
-                    text: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
+                    text: root.uninstallCommand
                     font.pixelSize: 10
                     font.family: "monospace"
                     color: theme.textSecondary
@@ -520,6 +530,7 @@ Window {
                             uninstallConfirmDialog.close()
                             // 卸载按钮文字临时替换为复制成功提示，5 秒后还原
                             uninstallButtonText = qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
+                            root.uninstallCopied = true
                             statusHideTimer.start()
                         }
                     }
@@ -533,13 +544,16 @@ Window {
     TextEdit {
         id: clipboardHelper
         visible: false
-        text: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
+        text: root.uninstallCommand
     }
 
     // 卸载按钮文字还原定时器：复制命令后 5 秒将按钮文字从提示还原为"卸载插件"
     Timer {
         id: statusHideTimer
         interval: 5000
-        onTriggered: uninstallButtonText = qsTr("Uninstall Plugin")
+        onTriggered: {
+            uninstallButtonText = qsTr("Uninstall Plugin")
+            root.uninstallCopied = false
+        }
     }
 }
