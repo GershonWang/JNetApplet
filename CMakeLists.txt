@@ -43,10 +43,12 @@ target_include_directories(space.jokul.JNetApplet PRIVATE
     /usr/include/dde-shell
 )
 
+# 链接依赖：src/ 未使用任何 QtDBus 符号，故不链接 Qt6::DBus。
+# 注意：find_package 中的 DBus 组件暂时保留——DDEShell / Dtk6 的 CMake 配置
+# 是否依赖该组件已存在无法在本仓库内确认，贸然移除可能导致 configure 失败
 target_link_libraries(space.jokul.JNetApplet PRIVATE
     Qt6::Core
     Qt6::Quick
-    Qt6::DBus
     Qt6::Network
     Dtk6::Core
     Dde::Shell
@@ -106,11 +108,11 @@ if(TARGET Qt6::Test)
         src/networkmonitorapplet.cpp
         src/networkmonitorapplet.h
     )
+    # 与主插件保持一致：未使用 QtDBus 符号，不链接 Qt6::DBus
     target_link_libraries(tst_networkmonitorapplet PRIVATE
         Qt6::Test
         Qt6::Core
         Qt6::Quick
-        Qt6::DBus
         Qt6::Network
         Dtk6::Core
         Dde::Shell
