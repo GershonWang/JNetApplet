@@ -72,12 +72,17 @@ Window {
     // 即状态由界面文案推导，文案或翻译一变即失效；改用独立布尔量表达
     property bool uninstallCopied: false
 
+    // 宽度固定 350；高度改为"默认更高 + 允许随屏幕收缩"，不再把 min/max 锁成同一个值
+    // 设计原因：原实现 minimumHeight == maximumHeight == 450，而内容区（标题 44 + 分割线 1
+    // + 上下文边距 32 + 各分区合计约 448）在多网卡机器上会超出窗口高度，
+    // 底部"卸载插件"区域可能被压缩到难以点击；放开上限后内容优先按 preferred 高度展示
+    // 注意：像素是否够用需在多网卡环境实测，必要时可改为整块内容放入滚动容器
     width: 350
-    height: 450
+    height: 520
     minimumWidth: 350
     maximumWidth: 350
-    minimumHeight: 450
-    maximumHeight: 450
+    minimumHeight: 360
+    maximumHeight: Screen.height * 0.8
     visible: false
     flags: Qt.FramelessWindowHint | Qt.Window
     // NonModal：不阻塞桌面其他区域，用户可同时操作任务栏
