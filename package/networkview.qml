@@ -397,7 +397,7 @@ AppletItem {
     AboutWindow {
         id: aboutWindow
         accentColor: root.accentRed
-        version: root.applet ? root.applet.version : "1.0"
+        version: root.applet ? root.applet.version : ""
         isDarkMode: root.isDarkMode
     }
 

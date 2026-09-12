@@ -28,8 +28,9 @@ Window {
     property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
 
     // 插件版本号，由父组件从 C++ 后端 applet.version 传入
-    // 默认值保证组件独立可用（如 qmlscene 预览时未传入）
-    property string version: "1.0"
+    // 版本唯一源是 CMakeLists.txt 的 project(VERSION)（经 metadata.json → 后端兜底），
+    // 故此处默认空串、由界面显示占位符，不硬编码字面量版本号以免与真实版本不符
+    property string version: ""
 
     // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
@@ -146,7 +147,7 @@ Window {
                     }
 
                     Text {
-                        text: version
+                        text: version.length > 0 ? version : "—"
                         font.pixelSize: 12
                         color: theme.textPrimary
                         Layout.fillWidth: true
