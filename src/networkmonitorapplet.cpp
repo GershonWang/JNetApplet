@@ -855,7 +855,9 @@ int NetworkMonitorApplet::countTcpConnections() const
             if (line.isEmpty()) {
                 continue;
             }
-            const QStringList parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+            // static const：正则仅首次编译，避免每条连接重复构造（连接数可能上千）
+            static const QRegularExpression wsRe(QStringLiteral("\\s+"));
+            const QStringList parts = line.split(wsRe, Qt::SkipEmptyParts);
             if (parts.size() > 3 && parts[3] == QLatin1String("01")) {
                 ++count;
             }
@@ -910,6 +912,10 @@ QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output)
 {
     QVariantList list;
 
+    // static const：正则仅首次编译一次，避免每条连接重复编译
+    static const QRegularExpression lineRe(QStringLiteral("(\\S+)\\s+(\\S+)\\s+(\\S+):(\\d+)\\s+(\\S+):(\\d+)\\s*(.*)"));
+    static const QRegularExpression nameRe(QStringLiteral("\\(\"([^\"]+)\""));
+
     const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     for (int i = 0; i < lines.size(); ++i) {
         if (i == 0) continue; // 跳过表头（Recv-Q Send-Q ...）
@@ -920,8 +926,7 @@ QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output)
         // ss 输出按多空格分割：Recv-Q Send-Q Local:Port Peer:Port [Process]
         // 注意 Process 列可能为空，且 IPv6 地址形如 [::1]:port（方括号内无空格），
         // 用正则提取更可靠，可容忍列之间任意空白
-        QRegularExpression re(QStringLiteral("(\\S+)\\s+(\\S+)\\s+(\\S+):(\\d+)\\s+(\\S+):(\\d+)\\s*(.*)"));
-        QRegularExpressionMatch match = re.match(line);
+        QRegularExpressionMatch match = lineRe.match(line);
         if (!match.hasMatch()) continue;
 
         QString localAddress = match.captured(3);
@@ -940,7 +945,6 @@ QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output)
         // 提取进程名：users:(("进程名",pid=xxx,fd=xxx))，取第一个双引号内的内容
         QString processName;
         if (processField.startsWith(QStringLiteral("users:"))) {
-            QRegularExpression nameRe(QStringLiteral("\\(\"([^\"]+)\""));
             QRegularExpressionMatch nameMatch = nameRe.match(processField);
             if (nameMatch.hasMatch()) {
                 processName = nameMatch.captured(1);
@@ -982,7 +986,9 @@ int NetworkMonitorApplet::detectWifiSignal(const QString &iface)
         if (line.isEmpty()) {
             continue;
         }
-        const QStringList parts = line.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+        // static const：正则仅首次编译，避免每行重复构造
+        static const QRegularExpression wsRe(QStringLiteral("\\s+"));
+        const QStringList parts = line.split(wsRe, Qt::SkipEmptyParts);
         if (parts.size() > 3 && parts[0].startsWith(iface)) {
             bool ok = false;
             const double level = parts[3].toDouble(&ok);
