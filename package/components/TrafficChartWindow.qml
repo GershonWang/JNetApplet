@@ -7,7 +7,7 @@
 // 设计要点：
 // - 视觉风格复用 AboutWindow.qml（圆角卡片 12px、1px 边框、44px 标题栏、
 //   28x28 圆形关闭按钮 hover 淡红底）；深/浅主题由 isDarkMode 切换
-//   （networkview.qml 依据 DockPalette 检测任务栏深浅后传入），默认浅色保证独立预览可用
+//   （networkview.qml 依据 DTK.palette 检测任务栏深浅后传入），默认浅色保证独立预览可用
 // - 图表使用纯 QML Canvas 绘制，无 QtCharts 等外部依赖（与项目零依赖风格一致）；
 //   Canvas 不随属性绑定自动重绘，isDarkMode 变化时主动 requestPaint()
 // - 数据通过属性注入：applet 即 networkview.qml 的 root.applet（C++ 后端对象），
@@ -43,7 +43,7 @@ Window {
     // 为 null 时组件可独立预览（显示空状态），所有数据访问处均需做空值兜底
     property var applet: null
 
-    // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
+    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
 

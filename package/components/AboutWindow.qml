@@ -5,7 +5,7 @@
 // 关于窗口：DTK 原生风格的独立顶层窗口，桌面居中弹出，展示插件信息
 // 设计要点：圆角卡片 + 键值对信息布局，信息标签使用 deepin 蓝（#0081FF），
 // 关闭按钮 hover 高亮色由父组件通过 accentColor 传入（红色）；
-// 深/浅主题由 isDarkMode 切换（networkview.qml 依据 DockPalette 检测任务栏深浅后传入），
+// 深/浅主题由 isDarkMode 切换（networkview.qml 依据 DTK.palette 检测任务栏深浅后传入），
 // 默认浅色，保证组件独立预览时与原版视觉一致
 // 对外依赖：accentColor、isDarkMode，由 networkview.qml 实例化时传入，触发方式为 show()/raise()/requestActivate()
 // 公共能力复用：主题色取自 WindowTheme，标题栏/圆角卡片取自 TitleBar，消除三窗口样板重复
@@ -31,7 +31,7 @@ Window {
     // 默认值保证组件独立可用（如 qmlscene 预览时未传入）
     property string version: "1.0"
 
-    // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
+    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
 

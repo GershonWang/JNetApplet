@@ -301,7 +301,7 @@ QVariantList NetworkMonitorApplet::tcpConnectionList() const
 
 // 返回当前活动接口的下行速度历史，转换为 QVariantList of QPointF 供 QML 使用
 // 设计原因：QPointF 仅携带 x/y 两个值，上传与下载分别对应两个列表；
-// 结果缓存于成员变量，仅当 m_historyDirty 时重建，避免 QML 每次读取都重新构造 300 个点
+// 结果缓存于成员变量，仅当 m_historyDirty 时重建，避免 QML 每次读取都重新构造上千个点
 QVariantList NetworkMonitorApplet::speedHistoryDownload() const
 {
     if (m_historyDirty) {
@@ -612,7 +612,7 @@ void NetworkMonitorApplet::calculateSpeed()
             sample.uploadSpeed = (iTxDelta > 0 ? iTxDelta : 0) / elapsedSec;
             m_speedHistory[name].append(sample);
 
-            // 滑动窗口裁剪：超过 300 点时丢弃最旧的
+            // 滑动窗口裁剪：超过 MAX_HISTORY_SAMPLES（1800）点时丢弃最旧的
             QVector<SpeedSample> &samples = m_speedHistory[name];
             while (samples.size() > MAX_HISTORY_SAMPLES) {
                 samples.removeFirst();

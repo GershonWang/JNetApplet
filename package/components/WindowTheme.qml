@@ -8,7 +8,7 @@
 // 改一处需同步多处）。现集中到本文件，各窗口实例化 WindowTheme { id: theme } 后
 // 统一经 theme.xxx 访问，仅需向 theme.isDarkMode 传入深色模式标记。
 // 设计原因：
-// - 深/浅主题由 networkview.qml 依据 DockPalette 检测任务栏深浅后通过 isDarkMode 传入，
+// - 深/浅主题由 networkview.qml 依据 DTK.palette 检测任务栏深浅后通过 isDarkMode 传入，
 //   浅色取值与原各窗口硬编码完全一致，保证独立预览时视觉不变。
 // - 个别窗口存在差异值（如 SettingsWindow 的 winBg 浅色为 #F5F5F5、lineColor 为
 //   #E0E0E0），因此每个颜色拆成 light/dark 一对可覆盖属性，派生色由它们计算，

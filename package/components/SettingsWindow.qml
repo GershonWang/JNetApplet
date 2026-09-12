@@ -4,7 +4,7 @@
 
 // 设置窗口：独立顶层窗口，桌面居中弹出，提供网络接口选择、字体颜色选择、插件卸载功能
 // 设计要点：圆角卡片 + 自定义标题栏可拖动，接口单选切换，卸载按钮带复制命令功能；
-// 深/浅主题由 isDarkMode 切换（networkview.qml 依据 DockPalette 检测任务栏深浅后传入），
+// 深/浅主题由 isDarkMode 切换（networkview.qml 依据 DTK.palette 检测任务栏深浅后传入），
 // 默认浅色，保证组件独立预览时与原版视觉一致
 // 对外依赖：applet（C++ 后端对象）、networkInterfaces（接口列表）、activeInterface（当前接口）、
 // accentColor（强调色）、isDarkMode（深色模式标记），由 networkview.qml 实例化时传入，
@@ -46,7 +46,7 @@ Window {
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
     property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
 
-    // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
+    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
 

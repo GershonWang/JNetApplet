@@ -291,9 +291,11 @@ private:
     // 设计原因：流量波动图支持 1/5/30 分钟时间窗口切换，需在展示层选择显示范围，
     // 故后端需存够 30 分钟的历史数据；时间窗口选择是纯 QML 展示层行为，后端只需
     // 提供足够长的历史缓冲，无需新增 Q_PROPERTY
+    // 注意：缓冲"时长"与刷新间隔耦合——1/2/5 秒间隔分别对应约 30/60/150 分钟覆盖，
+    // 30 分钟窗口在 1 秒间隔下刚好满足；QML 侧按时间戳裁剪可视范围，不依赖点位数
     static constexpr int MAX_HISTORY_SAMPLES = 1800;
 
-    // 历史 QVariantList 缓存：避免 QML 每次读取都重新构造 300 个 QPointF
+    // 历史 QVariantList 缓存：避免 QML 每次读取都重新构造上千个 QPointF
     // 设计原因：Canvas 每秒读取一次 + hover 时也读取，逐个 append 开销可观；
     // 用 dirty 标记懒重建，仅当追加采样点或切换接口后重建一次
     // 注意：getter 为 const，故缓存与 dirty 标记声明为 mutable

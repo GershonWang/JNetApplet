@@ -8,7 +8,7 @@
 // 设计要点：
 // - 视觉风格复用 TrafficChartWindow.qml（圆角卡片 12px、1px 边框、44px 标题栏、
 //   28x28 圆形关闭按钮 hover 淡红底）；深/浅主题由 isDarkMode 切换
-//   （networkview.qml 依据 DockPalette 检测任务栏深浅后传入），默认浅色保证独立预览可用
+//   （networkview.qml 依据 DTK.palette 检测任务栏深浅后传入），默认浅色保证独立预览可用
 // - 数据通过属性注入：applet 即 networkview.qml 的 root.applet（C++ 后端对象），
 //   applet.trafficLog 为 JSON 对象 {"byDay": {日期: {接口: {rx, tx}}},
 //   "byMonth": {月份: {接口: {rx, tx}}}}，为 null 时组件可独立预览（显示空状态）
@@ -44,7 +44,7 @@ Window {
     // 提供 trafficLog（JSON 对象，见文件头注释）；为 null 时组件可独立预览（显示空状态）
     property var applet: null
 
-    // 深色模式标记：由 networkview.qml 根据 DockPalette 检测后传入；
+    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
     property bool isDarkMode: false
 
