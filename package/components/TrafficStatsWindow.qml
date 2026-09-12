@@ -310,8 +310,10 @@ Window {
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
+                        // 不再额外缩进：ListView 自身已有 16 左右边距，
+                        // 此处再各加 8 会使数据列比表头右移 8px（原实现即为此错位）
+                        anchors.leftMargin: 0
+                        anchors.rightMargin: 0
                         spacing: root.colSpacing
 
                         Text {
@@ -374,12 +376,15 @@ Window {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 34
-                Layout.leftMargin: 24
+                // 与表头/数据行保持同一左边界（原为 24，比表头多 8px）
+                Layout.leftMargin: 16
                 Layout.rightMargin: 16
                 spacing: root.colSpacing
 
                 Text {
-                    Layout.preferredWidth: root.colDate + root.colIface
+                    // 跨"日期 + 接口"两列的宽度需含两列之间的间距，
+                    // 否则后续数值列会比表头对应列左移一个 colSpacing
+                    Layout.preferredWidth: root.colDate + root.colSpacing + root.colIface
                     text: qsTr("Total")
                     font.pixelSize: 12
                     font.weight: Font.Bold

@@ -156,13 +156,23 @@ Window {
 
                 // 搜索框：输入关键字筛选匹配地址/端口/进程名的连接
                 TextField {
+                    id: searchField
                     Layout.preferredWidth: 200
                     placeholderText: qsTr("Search address, port, process...")
                     font.pixelSize: 12
                     color: theme.textPrimary
                     selectByMouse: true
-                    text: root.searchText
                     onTextChanged: root.searchText = text
+                }
+
+                // 用 Binding 而不是直接写 text: root.searchText：
+                // 直接绑定会在用户首次输入时被 TextField 的内部赋值销毁，
+                // 导致点击"×"把 root.searchText 置空后，输入框仍显示旧关键字（UI 与实际筛选不一致）
+                Binding {
+                    target: searchField
+                    property: "text"
+                    value: root.searchText
+                    restoreMode: Binding.RestoreNone
                 }
 
                 // 清除按钮：有输入时显示 ×，点击清空搜索
@@ -279,8 +289,10 @@ Window {
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
+                        // 不再额外缩进：ListView 自身已有 16 左右边距，
+                        // 此处再各加 8 会使数据列比表头右移 8px（原实现即为此错位）
+                        anchors.leftMargin: 0
+                        anchors.rightMargin: 0
                         spacing: root.colSpacing
 
                         Text {
@@ -335,7 +347,8 @@ Window {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 34
-                Layout.leftMargin: 24
+                // 与表头/数据行保持同一左边界（原为 24，比表头多 8px）
+                Layout.leftMargin: 16
                 Layout.rightMargin: 16
                 spacing: root.colSpacing
 
