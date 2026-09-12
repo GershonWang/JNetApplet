@@ -188,15 +188,22 @@ private:
     void detectIpAddress();
     // 低频统计检测：链路速率与 WiFi 信号（每 5 秒），变化时发射对应信号
     void detectLowFreqStats();
-    // 读取指定接口的链路协商速率（Mbps），无线读 speed 失败时降级解析 iw bitrate
-    int detectLinkSpeed(const QString &iface);
+    // 链路协商速率检测入口：有线同步读 sysfs（一次微小文件读取），
+    // 无线降级执行 iw 时改为异步，由回调在值变化时发射 linkSpeedChanged
+    void updateLinkSpeed();
+    // 同步读取 /sys/class/net/<iface>/speed（Mbps）；不可用时返回 -1，表示需走 iw 降级路径
+    int readSysfsLinkSpeed(const QString &iface) const;
+    // 更新链路速率缓存，仅在值变化时发射 linkSpeedChanged
+    void setLinkSpeed(int mbps);
     // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
     int parseIwBitrate(const QString &output) const;
     // 统计 /proc/net/tcp 与 tcp6 中 ESTABLISHED（状态 01）的连接数
     int countTcpConnections() const;
-    // 构建 TCP 连接详情列表（调用 ss 命令获取 ESTABLISHED 连接，含进程名反查）
-    // 结果存入 m_tcpConnectionList 并发射 tcpConnectionListChanged；仅 ESTABLISHED
-    void buildTcpConnectionList();
+    // 异步请求 TCP 连接详情列表（ss 子进程，含进程名反查），仅 ESTABLISHED
+    // 子进程不再阻塞主线程，解析完成后更新 m_tcpConnectionList 并发射 tcpConnectionListChanged
+    void requestTcpConnectionList();
+    // 解析 ss -tnp 输出为连接列表（纯函数，便于单元测试）
+    QVariantList parseTcpConnectionList(const QString &output) const;
     // 读取指定接口的 WiFi 信号强度（dBm），非无线接口或不可用时返回 0
     int detectWifiSignal(const QString &iface);
     // 判断是否为物理网卡（无线 wlp/wlan，有线 enp/eth），
@@ -315,6 +322,11 @@ private:
     // TCP 连接清单降频计数器：ss 命令需启动子进程开销大，每 5 次 refresh 更新一次
     // 初始化 4 使首次 refresh 立即更新
     int m_tcpListCounter = 4;
+
+    // 子进程运行标记：异步化后用于避免上一次任务未返回时重复启动子进程
+    // （iw 为无线链路速率降级路径，ss 为 TCP 连接清单采集路径）
+    bool m_iwPending = false;
+    bool m_ssPending = false;
 };
 
 DS_END_NAMESPACE

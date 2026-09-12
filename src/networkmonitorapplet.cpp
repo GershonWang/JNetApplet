@@ -510,7 +510,7 @@ void NetworkMonitorApplet::readNetworkStats()
     // TCP 连接清单同样每 5 秒更新一次（进程名反查需遍历 /proc 开销大，不能每秒执行）
     if (++m_tcpListCounter >= 5) {
         m_tcpListCounter = 0;
-        buildTcpConnectionList();
+        requestTcpConnectionList();
     }
 }
 
@@ -714,11 +714,8 @@ void NetworkMonitorApplet::detectIpAddress()
 void NetworkMonitorApplet::detectLowFreqStats()
 {
     if (!m_activeInterface.isEmpty()) {
-        const int speed = detectLinkSpeed(m_activeInterface);
-        if (m_linkSpeed != speed) {
-            m_linkSpeed = speed;
-            emit linkSpeedChanged();
-        }
+        // 链路速率：有线走同步 sysfs，无线走异步 iw；两者内部负责在变化时发射信号
+        updateLinkSpeed();
         const int sig = detectWifiSignal(m_activeInterface);
         if (m_wifiSignal != sig) {
             m_wifiSignal = sig;
@@ -726,10 +723,7 @@ void NetworkMonitorApplet::detectLowFreqStats()
         }
     } else {
         // 无活动接口时归零，避免显示上一接口的残留数据
-        if (m_linkSpeed != 0) {
-            m_linkSpeed = 0;
-            emit linkSpeedChanged();
-        }
+        setLinkSpeed(0);
         if (m_wifiSignal != 0) {
             m_wifiSignal = 0;
             emit wifiSignalChanged();
@@ -737,36 +731,94 @@ void NetworkMonitorApplet::detectLowFreqStats()
     }
 }
 
-// 读取指定接口的链路协商速率（Mbps）
-// 有线：直接读 /sys/class/net/<iface>/speed（Mbps）
-// 无线：speed 文件常返回错误（EINVAL），降级执行 `iw dev <iface> link` 解析 bitrate
-// 任何一步失败都返回 0（表示不可用），不抛出不记录
-int NetworkMonitorApplet::detectLinkSpeed(const QString &iface)
+// 链路协商速率检测入口（Mbps）
+// 有线：直接读 /sys/class/net/<iface>/speed（同步，一次微小文件读取，开销可忽略）
+// 无线：speed 文件常返回 EINVAL，降级执行 `iw dev <iface> link` 解析 bitrate。
+//       子进程改为异步执行——dde-shell 的 applet 与面板同进程，原同步
+//       waitForFinished(1000) 在 iw 卡住时会冻结整个任务栏
+// 不可用时置 0（表示不可用）
+void NetworkMonitorApplet::updateLinkSpeed()
 {
-    // 尝试 /sys/class/net/<iface>/speed
-    QFile f(QStringLiteral("/sys/class/net/%1/speed").arg(iface));
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        const QString val = QString::fromLatin1(f.readAll()).trimmed();
-        f.close();
-        bool ok = false;
-        const int speed = val.toInt(&ok);
-        if (ok && speed >= 0) {
-            return speed;
-        }
+    if (m_activeInterface.isEmpty()) {
+        setLinkSpeed(0);
+        return;
     }
 
-    // 无线网卡降级：解析 iw dev link 的 bitrate
-    if (iface.startsWith("wlp") || iface.startsWith("wlan")) {
-        QProcess proc;
-        proc.start(QStringLiteral("iw"), {QStringLiteral("dev"), iface, QStringLiteral("link")});
-        if (proc.waitForFinished(1000)) {
-            const int br = parseIwBitrate(QString::fromUtf8(proc.readAllStandardOutput()));
-            if (br > 0) {
-                return br;
-            }
-        }
+    const int sysSpeed = readSysfsLinkSpeed(m_activeInterface);
+    if (sysSpeed >= 0) {
+        setLinkSpeed(sysSpeed);
+        return;
     }
-    return 0;
+
+    if (!m_activeInterface.startsWith("wlp") && !m_activeInterface.startsWith("wlan")) {
+        setLinkSpeed(0);
+        return;
+    }
+
+    // 上一次 iw 尚未返回时跳过本轮，避免子进程堆积
+    if (m_iwPending) {
+        return;
+    }
+
+    const QString iface = m_activeInterface;
+    m_iwPending = true;
+    QProcess *proc = new QProcess(this);
+    // 超时兜底：保留原同步实现的 1 秒上限，kill 后仍按已读取的输出解析
+    QTimer::singleShot(1000, proc, [proc]() {
+        if (proc->state() != QProcess::NotRunning) {
+            proc->kill();
+        }
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc, iface](QProcess::ProcessError error) {
+        // FailedToStart 不会触发 finished（如系统未安装 iw），需在此清理；
+        // kill 导致的异常退出仍会走 finished，故只处理 FailedToStart 避免重复处理
+        if (error != QProcess::FailedToStart) {
+            return;
+        }
+        m_iwPending = false;
+        // 与同步实现保持一致：iw 不可用时速率视为不可用（0）
+        if (m_activeInterface == iface) {
+            setLinkSpeed(0);
+        }
+        proc->deleteLater();
+    });
+    connect(proc, &QProcess::finished, this, [this, proc, iface](int, QProcess::ExitStatus) {
+        m_iwPending = false;
+        // 期间用户可能已切换接口，此时结果对当前接口已无意义，直接丢弃
+        if (m_activeInterface == iface) {
+            const int br = parseIwBitrate(QString::fromUtf8(proc->readAllStandardOutput()));
+            setLinkSpeed(br > 0 ? br : 0);
+        }
+        proc->deleteLater();
+    });
+    proc->start(QStringLiteral("iw"), {QStringLiteral("dev"), iface, QStringLiteral("link")});
+}
+
+// 同步读取 /sys/class/net/<iface>/speed（Mbps）
+// 返回 -1 表示不可用（文件不存在、驱动返回负数或 "unknown"），调用方据此决定是否走 iw 降级；
+// 返回 0 是合法值（部分驱动在链路断开时报 0），故不能用 0 表示失败
+int NetworkMonitorApplet::readSysfsLinkSpeed(const QString &iface) const
+{
+    QFile f(QStringLiteral("/sys/class/net/%1/speed").arg(iface));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return -1;
+    }
+    const QString val = QString::fromLatin1(f.readAll()).trimmed();
+    f.close();
+    bool ok = false;
+    const int speed = val.toInt(&ok);
+    // 超大值（部分驱动返回 4294967295）会导致 toInt 失败，与负数一起视为不可用
+    return (ok && speed >= 0) ? speed : -1;
+}
+
+// 更新链路速率缓存，仅在值变化时发射 linkSpeedChanged，避免 QML 无效重绘
+void NetworkMonitorApplet::setLinkSpeed(int mbps)
+{
+    if (m_linkSpeed == mbps) {
+        return;
+    }
+    m_linkSpeed = mbps;
+    emit linkSpeedChanged();
 }
 
 // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
@@ -813,29 +865,50 @@ int NetworkMonitorApplet::countTcpConnections() const
     return count;
 }
 
-// 构建 TCP 连接详情列表（调用 ss 命令获取 ESTABLISHED 连接，含进程名反查）
-// 结果存入 m_tcpConnectionList（QVariantList of QVariantMap）并发射 tcpConnectionListChanged；
-// 仅保留 ESTABLISHED 状态连接。优雅降级：ss 命令不存在/执行失败时返回空列表，不崩溃
-// 设计原因：原先通过遍历 /proc/<pid>/fd 反查进程名，但 dde-shell 以普通用户运行，
-// 无权 readlink 其他进程的 fd（lr-x------ 权限），导致进程名全空；改用 ss 命令一次
-// 获取全部 ESTABLISHED 连接的地址/端口/进程名，ss 通过 netlink 获取信息不受 /proc 权限限制，
-// 且仍由 readNetworkStats 降频至每 5 秒调用一次（ss 启动子进程仍有开销）
-void NetworkMonitorApplet::buildTcpConnectionList()
+// 异步请求 TCP 连接详情列表（QVariantList of QVariantMap），仅保留 ESTABLISHED 连接
+// 设计原因：ss 需启动子进程通过 netlink 取信息（原先遍历 /proc/<pid>/fd 因权限拿不到进程名），
+// 原同步 waitForFinished(3000) 在 ss 卡住时会冻结同进程的 dde-shell 面板；
+// 改为异步 + 定时器兜底后，主线程不再等待子进程
+void NetworkMonitorApplet::requestTcpConnectionList()
+{
+    if (m_ssPending) {
+        return; // 上一次 ss 尚未返回，跳过本轮，避免子进程堆积
+    }
+    m_ssPending = true;
+
+    QProcess *proc = new QProcess(this);
+    // 超时兜底：保留原同步实现的 3 秒上限；kill 后仍按已读取到的输出解析
+    QTimer::singleShot(3000, proc, [proc]() {
+        if (proc->state() != QProcess::NotRunning) {
+            proc->kill();
+        }
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc](QProcess::ProcessError error) {
+        // FailedToStart 不会触发 finished（如精简系统未安装 iproute2），需在此降级为空清单；
+        // kill 导致的异常退出仍会走 finished，故只处理 FailedToStart 以避免重复处理
+        if (error != QProcess::FailedToStart) {
+            return;
+        }
+        m_ssPending = false;
+        m_tcpConnectionList.clear();
+        proc->deleteLater();
+        emit tcpConnectionListChanged();
+    });
+    connect(proc, &QProcess::finished, this, [this, proc](int, QProcess::ExitStatus) {
+        m_ssPending = false;
+        m_tcpConnectionList = parseTcpConnectionList(QString::fromUtf8(proc->readAllStandardOutput()));
+        proc->deleteLater();
+        emit tcpConnectionListChanged();
+    });
+    // -t TCP, -n 不解析服务名（显示端口）, -p 显示进程信息, state established 仅已建立连接
+    proc->start(QStringLiteral("ss"), {QStringLiteral("-tnp"), QStringLiteral("state"), QStringLiteral("established")});
+}
+
+// 解析 ss -tnp 输出为连接列表（QVariantList of QVariantMap）
+// 拆为纯函数的原因：解析逻辑与子进程调度解耦后可直接单元测试，无需启动真实 ss
+QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output) const
 {
     QVariantList list;
-
-    // 用 ss 命令获取 ESTABLISHED 连接（含进程名），通过 netlink 不受 /proc 权限限制
-    // -t TCP, -n 不解析服务名（显示端口）, -p 显示进程信息, state established 仅已建立连接
-    QProcess process;
-    process.start(QStringLiteral("ss"), {QStringLiteral("-tnp"), QStringLiteral("state"), QStringLiteral("established")});
-    // ss 命令不存在或启动失败（如精简系统未安装 iproute2）时优雅降级：返回空列表，不崩溃
-    if (!process.waitForStarted(1000)) {
-        m_tcpConnectionList = list;
-        emit tcpConnectionListChanged();
-        return;
-    }
-    process.waitForFinished(3000); // 3 秒超时，ss 卡住时不阻塞主线程过久
-    const QString output = QString::fromUtf8(process.readAllStandardOutput());
 
     const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     for (int i = 0; i < lines.size(); ++i) {
@@ -884,8 +957,7 @@ void NetworkMonitorApplet::buildTcpConnectionList()
         list.append(item);
     }
 
-    m_tcpConnectionList = list;
-    emit tcpConnectionListChanged();
+    return list;
 }
 
 // 读取指定接口的 WiFi 信号强度（dBm）
