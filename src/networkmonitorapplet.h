@@ -181,6 +181,12 @@ signals:
     void tcpConnectionListChanged();
 
 private:
+    // ---- 设置持久化（~/.config/jnetapplet/settings.ini）----
+    // 配置文件完整路径：字体颜色、活动接口、刷新间隔三处读写共用，避免重复拼接
+    static QString configFilePath();
+    // 写入单个配置项并立即落盘
+    void persistSetting(const QString &key, const QVariant &value);
+
     void readNetworkStats();
     void calculateSpeed();
     void detectInterfaces();

@@ -57,9 +57,7 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     // 从独立配置文件读取持久化的字体颜色
     // 设计原因：使用独立配置文件避免污染 dde-shell 的共享配置，
     // 空串表示"跟随系统"，由 QML 层回退到 primaryText 实现
-    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-                               + QStringLiteral("/jnetapplet/settings.ini");
-    QSettings settings(configPath, QSettings::IniFormat);
+    QSettings settings(configFilePath(), QSettings::IniFormat);
     if (settings.contains(QStringLiteral("textColor"))) {
         const QString saved = settings.value(QStringLiteral("textColor")).toString();
         // 空串合法（跟随系统），非空则校验是否为合法颜色值
@@ -196,6 +194,25 @@ int NetworkMonitorApplet::linkSpeed() const { return m_linkSpeed; }
 // 返回刷新间隔（毫秒）
 int NetworkMonitorApplet::refreshInterval() const { return m_refreshInterval; }
 
+// 独立配置文件的完整路径（~/.config/jnetapplet/settings.ini）
+// 设计原因：字体颜色、活动接口、刷新间隔的读写都落在这个文件，
+// 路径拼接与 QSettings 构造集中一处，避免多处重复导致不一致
+QString NetworkMonitorApplet::configFilePath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+           + QStringLiteral("/jnetapplet/settings.ini");
+}
+
+// 写入单个配置项并立即落盘
+// 设计原因：三个 setter 都需要"构造 QSettings + setValue + sync"这组动作，统一收敛到一处；
+// 写盘失败时不抛异常也不回滚内存值——设置在本次会话已生效，仅下次启动会丢失，属可接受降级
+void NetworkMonitorApplet::persistSetting(const QString &key, const QVariant &value)
+{
+    QSettings settings(configFilePath(), QSettings::IniFormat);
+    settings.setValue(key, value);
+    settings.sync();
+}
+
 // 设置刷新间隔（毫秒），校验后持久化并即时生效
 // 设计原因：仅接受 1/2/5 秒，避免非法值破坏刷新频率；
 // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
@@ -213,11 +230,7 @@ void NetworkMonitorApplet::setRefreshInterval(int ms)
     }
 
     // 持久化到独立配置文件，重启后仍生效
-    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-                               + QStringLiteral("/jnetapplet/settings.ini");
-    QSettings settings(configPath, QSettings::IniFormat);
-    settings.setValue(QStringLiteral("refreshInterval"), m_refreshInterval);
-    settings.sync();
+    persistSetting(QStringLiteral("refreshInterval"), m_refreshInterval);
 
     emit refreshIntervalChanged();
 }
@@ -270,11 +283,7 @@ void NetworkMonitorApplet::setTextColor(const QString &color)
     m_textColor = color;
 
     // 持久化到独立配置文件
-    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-                               + QStringLiteral("/jnetapplet/settings.ini");
-    QSettings settings(configPath, QSettings::IniFormat);
-    settings.setValue(QStringLiteral("textColor"), m_textColor);
-    settings.sync();
+    persistSetting(QStringLiteral("textColor"), m_textColor);
 
     emit textColorChanged();
 }
@@ -377,11 +386,7 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
 
         // 持久化到配置文件，下次启动自动加载用户选择的网卡
         // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
-        const QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
-                                   + QStringLiteral("/jnetapplet/settings.ini");
-        QSettings settings(configPath, QSettings::IniFormat);
-        settings.setValue(QStringLiteral("activeInterface"), m_activeInterface);
-        settings.sync();
+        persistSetting(QStringLiteral("activeInterface"), m_activeInterface);
 
         emit activeInterfaceChanged();
         // 接口切换后通知 QML 趋势图切换显示新接口的历史数据
