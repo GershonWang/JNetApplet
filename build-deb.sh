@@ -37,10 +37,9 @@ if [ -z "$VERSION" ]; then
 fi
 
 # 架构判断
+# dpkg 已由下方依赖工具预检保证存在，故不再需要空值兜底
+# （原 if [ -z "$ARCH" ] 兜底在 set -e 下不可达，属死代码）
 ARCH=$(dpkg --print-architecture)
-if [ -z "$ARCH" ]; then
-    ARCH="amd64"
-fi
 
 PKG_NAME="jnetapplet"
 DEB_FILE="${PKG_NAME}_${VERSION}_${ARCH}.deb"
@@ -53,7 +52,9 @@ echo "  产物: $DEB_FILE"
 echo "=========================================="
 
 # 检查依赖工具
-for cmd in cmake dpkg-deb; do
+# dpkg 用于读取系统架构（见下方"架构判断"），必须与 cmake/dpkg-deb 一并预检，
+# 否则在 set -e 下会以 "dpkg: command not found" 直接中断，用户看不到友好提示
+for cmd in cmake dpkg dpkg-deb; do
     if ! command -v "$cmd" &> /dev/null; then
         echo "错误：缺少 $cmd，请先安装"
         exit 1

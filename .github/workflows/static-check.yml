@@ -1,0 +1,23 @@
+# 静态检查工作流
+# 适用场景：push / PR 时对仓库内的 shell 脚本做静态检查
+# 设计原因：本项目的构建依赖 DDEShell / DTK6（deepin 仓库提供），
+# GitHub 托管 runner 上无法安装，因此无法在此做完整构建或单元测试；
+# 能自动化且不依赖 deepin 生态的只有 shell 脚本检查，故只做这一层。
+# QML 侧需要 dde-shell/DTK 的导入才能被 qmllint 正确解析，一并留给人工验证。
+name: static-check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # -S error：只让 error 级别失败，warning/info 仍会打印但不阻断
+      # 设计原因：既有脚本未做过 shellcheck 清理，若一次性拉满阈值会让 CI 长期为红，
+      # 反而失去信号意义；先卡错误，警告随改动逐步收敛
+      - name: shellcheck（error 级别）
+        run: shellcheck -S error install.sh build-deb.sh
