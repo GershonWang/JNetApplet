@@ -106,10 +106,12 @@ Window {
         }
     }
 
-    // 定时刷新：窗口可见时按刷新间隔的 5 倍重建清单（与 C++ 后端降频周期一致），
-    // 不依赖 C++ 信号；关闭时停止，兼顾实时性与性能
+    // 兜底刷新：窗口可见时按刷新间隔的 5 倍重建清单（与 C++ 后端 5 秒降频周期一致），
+    // 主要更新通道是下方 tcpConnectionListChanged 信号，此处仅作兜底；关闭时停止
+    // 设计原因：原实现直接用 refreshInterval（1 倍），与注释所述 5 倍降频不符，
+    // 导致窗口打开期间每秒整体重建一次模型
     Timer {
-        interval: root.applet ? root.applet.refreshInterval : 1000
+        interval: (root.applet ? root.applet.refreshInterval : 1000) * 5
         repeat: true
         running: root.visible
         onTriggered: refreshModel()
@@ -349,10 +351,11 @@ Window {
     }
 
     // 数据刷新：C++ 每 5 秒更新并发射 tcpConnectionListChanged，据此重建清单；
-    // 本窗口自身的 Timer 兜底，避免依赖信号时序
+    // 窗口不可见时跳过（显示时 onVisibleChanged 会补一次刷新），避免隐藏状态下白重建模型
     Connections {
         target: root.applet
         function onTcpConnectionListChanged() {
+            if (!root.visible) return
             refreshModel()
         }
     }

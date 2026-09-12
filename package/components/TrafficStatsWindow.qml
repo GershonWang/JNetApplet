@@ -116,11 +116,12 @@ Window {
     onCurrentTabChanged: buildStatsModel()
     Component.onCompleted: buildStatsModel()
 
-    // 定时刷新：窗口可见时按刷新间隔的 5 倍重建表格，不依赖 C++ 30 秒信号
-    // 设计原因：C++ 降频 30 秒通知，用户打开窗口期间看不到实时更新；
-    // 窗口可见时主动刷新，间隔跟随设置中的刷新间隔（5 倍降频），关闭时停止
+    // 兜底刷新：窗口可见时按刷新间隔的 5 倍重建表格
+    // 设计原因：C++ 每 30 秒才发 trafficLogChanged，用户打开窗口期间需要更快看到增量，
+    // 故保留窗口内主动刷新；原实现直接用 refreshInterval（1 倍），与注释所述 5 倍降频不符，
+    // 导致窗口打开期间每秒整体重建一次模型
     Timer {
-        interval: root.applet ? root.applet.refreshInterval : 1000
+        interval: (root.applet ? root.applet.refreshInterval : 1000) * 5
         repeat: true
         running: root.visible
         onTriggered: buildStatsModel()
@@ -415,9 +416,12 @@ Window {
 
     // 数据刷新：C++ 每 30 秒保存并发射 trafficLogChanged，据此重建表格；
     // 接口切换不影响日志（日志按活动接口累计，切接口后数据仍完整）
+    // 数据刷新：C++ 每 30 秒更新并发射 trafficLogChanged，据此重建表格；
+    // 窗口不可见时跳过（显示时 onVisibleChanged 会补一次刷新），避免隐藏状态下白重建模型
     Connections {
         target: root.applet
         function onTrafficLogChanged() {
+            if (!root.visible) return
             buildStatsModel()
         }
     }
