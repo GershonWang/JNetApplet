@@ -16,7 +16,8 @@ for the UI. The C++ backend reads `/proc/net/dev` to monitor network traffic.
 
 ## Features
 
-- Real-time download/upload speed monitoring (1-second refresh, real elapsed time)
+- Real-time download/upload speed monitoring (refresh interval configurable: 1/2/5 s;
+  speed is computed from real elapsed time, not the nominal timer interval)
 - Session cumulative download/upload traffic statistics
 - Multiple network interface support with interface switching (popup + settings)
 - Taskbar icon displays live speed (changes color at high speeds)
@@ -24,7 +25,8 @@ for the UI. The C++ backend reads `/proc/net/dev` to monitor network traffic.
 - Hover tooltip shows interface name + IP address
 - Click to open detailed popup (speed, totals, interface chips)
 - Popup shows active interface IPv4/IPv6 address
-- Traffic chart window: 5-minute speed trend (download/upload dual line chart)
+- Traffic chart window: speed trend with selectable 1/5/30-minute windows
+  (download/upload dual line chart)
 - Settings window: interface selection, font color picker, one-click uninstall
 - Full dark mode support (taskbar icon, popup, all independent windows)
 - All interfaces sampled in background; switching interfaces shows history immediately
@@ -70,9 +72,21 @@ After installation, restart dde-shell:
 systemctl --user restart dde-shell@DDE
 ```
 
-There is no test, lint, typecheck, or CI target. Verification is manual: install,
-then restart `dde-shell` (it discovers applets by scanning the install dir for
-`metadata.json`).
+There is no lint, typecheck, or CI target. Verification:
+
+- **Unit tests** (`tests/tst_networkmonitorapplet.cpp`, Qt Test) cover speed
+  calculation, negative-delta clamping, totals accumulation, interface validation,
+  traffic-log append/prune/corrupt-file degradation, and `iw`/`ss` output parsing:
+
+  ```sh
+  cmake -B build && cmake --build build && ctest --output-on-failure
+  ```
+
+  `Qt6::Test` is an **optional** component: when it is missing the test target is
+  not generated and `ctest` reports 0 tests — that means "not built", not "passed".
+
+- **Manual**: install, then restart `dde-shell` (it discovers applets by scanning
+  the install dir for `metadata.json`). QML has no automated check in this repo.
 
 ## Project structure
 
@@ -87,12 +101,18 @@ then restart `dde-shell` (it discovers applets by scanning the install dir for
 │   ├── metadata.json.in           # Plugin metadata 模板（由 CMake 生成 metadata.json）
 │   ├── networkview.qml            # QML UI 主入口
 │   └── components/                # 拆分出的子组件
-│       ├── NetCommon.qml          # 公共颜色与格式化函数
+│       ├── NetCommon.qml          # 公共颜色、格式化与接口排序函数
+│       ├── WindowTheme.qml        # 独立窗口公共主题色
+│       ├── TitleBar.qml           # 独立窗口公共标题栏
 │       ├── NetworkPopup.qml       # 左键弹窗内容
 │       ├── SettingsWindow.qml     # 设置窗口（接口/颜色/卸载）
-│       ├── TrafficChartWindow.qml # 流量波动图窗口
+│       ├── TrafficChartWindow.qml # 流量波动图窗口（1/5/30 分钟）
+│       ├── TrafficStatsWindow.qml # 流量统计窗口（按日/按月）
+│       ├── TcpConnectionsWindow.qml # TCP 连接清单窗口
 │       ├── TextColorPicker.qml    # 字体颜色选择器
 │       └── AboutWindow.qml        # 关于窗口
+├── translations/                  # 中文翻译（.ts -> .qm）
+├── tests/                         # Qt Test 单元测试
 ├── docs/                          # Design docs and review checklist
 └── AGENTS.md                      # This file
 ```
@@ -124,9 +144,15 @@ Inherits from `DApplet`, provides:
 - `ipAddress` / `ipv6Address`: IP address of the active interface
 - `version`: Plugin version (from metadata, fallback to `PROJECT_VERSION` macro)
 - `textColor`: Taskbar font color (empty = follow system theme, persisted)
-- `speedHistoryDownload` / `speedHistoryUpload`: Per-interface speed history (QPointF list, 5-min window)
+- `speedHistoryDownload` / `speedHistoryUpload`: Per-interface speed history
+  (QPointF list; `MAX_HISTORY_SAMPLES` = 1800 points, i.e. a 30-minute buffer when the
+  refresh interval is 1 s — longer intervals cover proportionally more time)
 - `setActiveInterface(name)`: Switch active interface (validates against interface list)
-- `refresh()`: Internal timer callback (not Q_INVOKABLE, called by m_refreshTimer every second)
+- `refresh()`: Internal timer callback (not Q_INVOKABLE, called by `m_refreshTimer` at
+  the configured `refreshInterval`; also drives IP/link-speed/TCP-list low-frequency probes)
+- `trafficLog` / `tcpConnectionList`: Day/month traffic log and ESTABLISHED TCP list;
+  both are persisted/collected at reduced frequency (30 s / 5 s) and the TCP list is
+  built asynchronously (no blocking `waitForFinished` on the main thread)
 
 ## Identifier correspondence (keep in sync when renaming)
 
