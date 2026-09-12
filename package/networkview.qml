@@ -45,23 +45,8 @@ AppletItem {
     // 与 NetworkPopup、TrafficChartWindow 共享同一份实现，消除跨组件重复定义
     NetCommon { id: common }
 
-    // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
-    // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
-    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
-    // 物理网卡判断逻辑共用 common.isPhysicalIf（与 C++ isPhysicalInterface 一致）
-    readonly property var sortedInterfaces: {
-        if (!root.ready || root.networkInterfaces.length === 0) return []
-        var physical = []
-        var virtual = []
-        for (var i = 0; i < root.networkInterfaces.length; i++) {
-            var name = root.networkInterfaces[i]
-            if (common.isPhysicalIf(name)) physical.push(name)
-            else virtual.push(name)
-        }
-        physical.sort()
-        virtual.sort()
-        return physical.concat(virtual)
-    }
+    // 排序后的接口列表已不再需要：排序规则统一由 NetCommon.sortInterfaces 提供
+    // （本文件此前维护的 sortedInterfaces 全工程无人引用，故删除）
 
     // 紧凑格式化速度（用于任务栏图标和 tooltip，不带单位后缀，节省空间）
     // 设计原因：任务栏 ~48px 空间有限，"1.2M" 比 "1.2 MB/s" 节省约一半宽度

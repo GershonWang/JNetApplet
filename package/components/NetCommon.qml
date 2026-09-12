@@ -13,7 +13,8 @@
 //   DTK.palette.windowText 则与面板/弹窗背景同步。主题切换时 DTK.paletteChanged
 //   自动触发属性绑定重新求值（QtObject 内绑定 DTK.palette 与 Item 内行为一致，已实测验证）
 // - 函数与颜色分离：downloadValueColor 依赖调用方的速度值，提取为函数由调用方传入，
-//   消除对组件上下文的依赖；sortedInterfaces 依赖各组件自身的接口列表，仍留在各组件内
+//   消除对组件上下文的依赖；接口列表由调用方传入，排序规则（sortInterfaces）
+//   与物理网卡判定（isPhysicalIf）集中在此，各组件不再各自实现
 import QtQuick 2.15
 import org.deepin.dtk 1.0
 
@@ -53,6 +54,23 @@ QtObject {
     function isPhysicalIf(name) {
         return name.startsWith("wlp") || name.startsWith("wlan")
             || name.startsWith("enp") || name.startsWith("eth")
+    }
+
+    // 接口列表排序：物理网卡在前、虚拟接口在后，各自按名称升序
+    // 设计原因：弹窗接口 chip 与设置窗口列表必须顺序一致（否则同一台机器出现两套排序）。
+    // 原实现由 NetworkPopup 与 networkview 各持一份，networkview 那份还无人引用，
+    // 设置窗口则直接用未排序列表；统一收敛到此处后三处共用同一规则
+    function sortInterfaces(list) {
+        if (!list || list.length === 0) return []
+        var physical = []
+        var virtual = []
+        for (var i = 0; i < list.length; i++) {
+            if (isPhysicalIf(list[i])) physical.push(list[i])
+            else virtual.push(list[i])
+        }
+        physical.sort()
+        virtual.sort()
+        return physical.concat(virtual)
     }
 
     // 格式化速度显示（带单位，用于弹出面板，信息更完整）

@@ -84,20 +84,8 @@ Control {
     // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
     // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
     // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
-    // 物理网卡判断逻辑共用 common.isPhysicalIf（与 C++ isPhysicalInterface 一致）
-    readonly property var sortedInterfaces: {
-        if (!popup.ready || popup.networkInterfaces.length === 0) return []
-        var physical = []
-        var virtual = []
-        for (var i = 0; i < popup.networkInterfaces.length; i++) {
-            var name = popup.networkInterfaces[i]
-            if (common.isPhysicalIf(name)) physical.push(name)
-            else virtual.push(name)
-        }
-        physical.sort()
-        virtual.sort()
-        return physical.concat(virtual)
-    }
+    // 排序规则统一由 common.sortInterfaces 提供（与设置窗口共用，确保两处顺序一致）
+    readonly property var sortedInterfaces: popup.ready ? common.sortInterfaces(popup.networkInterfaces) : []
 
     // 供外部调用：popup 打开时滚动到活动 chip
     function scrollToActiveChip(animated) {

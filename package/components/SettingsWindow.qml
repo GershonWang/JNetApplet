@@ -182,7 +182,8 @@ Window {
                                 // 行样式：类型图标 + 单选圆点 + 名称 + 右侧类型描述；
                                 // hover 底、选中底与边框颜色均随 isDarkMode 切换深浅
                                 Repeater {
-                                    model: networkInterfaces
+                                    // 与弹窗接口 chip 共用同一排序规则，避免两处顺序不一致
+                                    model: common.sortInterfaces(networkInterfaces)
                                     delegate: Rectangle {
                                         id: ifaceRow
                                         width: ifaceColumn.width
