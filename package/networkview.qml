@@ -96,6 +96,15 @@ AppletItem {
         target.requestActivate()
     }
 
+    // 显示悬停提示：以图标中心为锚点定位后打开
+    // 设计原因：图标 hover 与"弹窗关闭后恢复提示"两条路径共用同一份定位逻辑，
+    // 避免两处各写一遍 rect 计算
+    function showToolTip() {
+        const point = root.mapToItem(null, root.width / 2, root.height / 2)
+        toolTip.DockPanelPositioner.bounding = Qt.rect(point.x, point.y, toolTip.width, toolTip.height)
+        toolTip.open()
+    }
+
     // 带单位的速度/总量格式化函数（formatSpeed / formatTotal）已移至 NetCommon，
     // 本文件未直接使用；弹窗与图表窗口经 common.formatSpeed / common.formatTotal 调用
 
@@ -295,14 +304,12 @@ AppletItem {
     Timer {
         id: toolTipShowTimer
         interval: 50
-        onTriggered: {
-            const point = root.mapToItem(null, root.width / 2, root.height / 2)
-            toolTip.DockPanelPositioner.bounding = Qt.rect(point.x, point.y, toolTip.width, toolTip.height)
-            toolTip.open()
-        }
+        onTriggered: root.showToolTip()
     }
 
     HoverHandler {
+        id: hoverHandler
+
         onHoveredChanged: {
             // 仅控制 tooltip 显示，不触发 refresh。
             // C++ 后端 m_refreshTimer 持续每秒更新速度属性，QML 属性绑定自动反映。
@@ -334,6 +341,10 @@ AppletItem {
                 toolTip.close()
                 // popup 打开时确保活动 chip 完整可见
                 Qt.callLater(function() { popupContent.scrollToActiveChip(false) })
+            } else if (hoverHandler.hovered) {
+                // 关闭弹窗时鼠标仍停在图标上（hovered 未变化，不会触发 onHoveredChanged），
+                // 若不在此恢复，提示气泡要等到鼠标移出再移入才会回来
+                toolTipShowTimer.start()
             }
         }
 
