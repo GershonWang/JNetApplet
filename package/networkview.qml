@@ -79,6 +79,23 @@ AppletItem {
         return idx < 0 ? "" : str.substring(idx)
     }
 
+    // 统一打开独立窗口：右键菜单与弹窗内的详情入口共用这一个入口
+    // 设计原因：各窗口的打开方式都是同样的 show/raise/requestActivate 三步，
+    // 原先在右键菜单里重复了 5 份；新增弹窗入口后若继续各写一遍，
+    // 后续调整（如加入位置记忆）就会出现多处逻辑漂移
+    function openWindow(key) {
+        var target = null
+        if (key === "chart")         target = trafficChartWindow
+        else if (key === "stats")    target = trafficStatsWindow
+        else if (key === "tcp")      target = tcpConnectionsWindow
+        else if (key === "settings") target = settingsWindow
+        else if (key === "about")    target = aboutWindow
+        if (!target) return
+        target.show()
+        target.raise()
+        target.requestActivate()
+    }
+
     // 带单位的速度/总量格式化函数（formatSpeed / formatTotal）已移至 NetCommon，
     // 本文件未直接使用；弹窗与图表窗口经 common.formatSpeed / common.formatTotal 调用
 
@@ -305,7 +322,10 @@ AppletItem {
     PanelPopup {
         id: networkPopup
         width: 330
-        height: 320
+        // 高度需容纳弹窗内容：接口信息(76) + 实时速度(60) + 累计/包统计/TCP 三行 +
+        // 接口 chip 区(40) + 详情入口行(18) + 分隔线与间距；原 320 已接近内容总高，
+        // 新增详情入口后上调，避免 ColumnLayout 压缩固定高度分区
+        height: 348
         popupX: DockPanelPositioner.x
         popupY: DockPanelPositioner.y
 
@@ -322,6 +342,12 @@ AppletItem {
             applet: root.applet
             common: common
             anchors.fill: parent
+
+            // 弹窗内的详情入口：先关闭弹窗再打开目标窗口，避免弹窗与独立窗口并存遮挡
+            onDetailsRequested: function (key) {
+                networkPopup.close()
+                root.openWindow(key)
+            }
         }
 
         Component.onCompleted: {
@@ -343,51 +369,31 @@ AppletItem {
         // 流量波动图：屏幕居中独立窗口，展示活动接口最近 30 分钟网速趋势
         Platform.MenuItem {
             text: qsTr("Traffic Chart")
-            onTriggered: {
-                trafficChartWindow.show()
-                trafficChartWindow.raise()
-                trafficChartWindow.requestActivate()
-            }
+            onTriggered: root.openWindow("chart")
         }
 
         // 流量统计：屏幕居中独立窗口，展示按日/按月持久化的累计流量
         Platform.MenuItem {
             text: qsTr("Traffic Statistics")
-            onTriggered: {
-                trafficStatsWindow.show()
-                trafficStatsWindow.raise()
-                trafficStatsWindow.requestActivate()
-            }
+            onTriggered: root.openWindow("stats")
         }
 
         // TCP 连接清单：屏幕居中独立窗口，展示当前所有 ESTABLISHED 状态的 TCP 连接
         Platform.MenuItem {
             text: qsTr("TCP Connections")
-            onTriggered: {
-                tcpConnectionsWindow.show()
-                tcpConnectionsWindow.raise()
-                tcpConnectionsWindow.requestActivate()
-            }
+            onTriggered: root.openWindow("tcp")
         }
 
         Platform.MenuItem {
             text: qsTr("Settings")
-            onTriggered: {
-                settingsWindow.show()
-                settingsWindow.raise()
-                settingsWindow.requestActivate()
-            }
+            onTriggered: root.openWindow("settings")
         }
 
         Platform.MenuSeparator {}
 
         Platform.MenuItem {
             text: qsTr("About")
-            onTriggered: {
-                aboutWindow.show()
-                aboutWindow.raise()
-                aboutWindow.requestActivate()
-            }
+            onTriggered: root.openWindow("about")
         }
     }
 

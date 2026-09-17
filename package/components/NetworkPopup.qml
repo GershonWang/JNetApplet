@@ -81,6 +81,11 @@ Control {
     // 复制反馈状态：记录刚复制的字段（"ipv4"/"ipv6"/""），用于图标切换为 ✓
     property string copiedField: ""
 
+    // 详情入口被点击时发射，参数为窗口标识："chart"/"stats"/"tcp"
+    // 设计原因：本组件是弹窗内容，不应直接持有各独立窗口对象（跨层耦合）；
+    // 由 networkview.qml 统一接信号后关闭弹窗并打开目标窗口
+    signal detailsRequested(string key)
+
     // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
     // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
     // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
@@ -705,6 +710,68 @@ Control {
                           : (chipScrollBar.hovered ? popup.secondaryText : popup.tertiaryText)
                 }
             }
+        }
+
+        // ==================== 详情入口 ====================
+        // 设计原因：趋势图/流量统计/TCP 连接三个独立窗口此前只有右键菜单一个入口，
+        // 左键弹窗内没有任何提示，新用户几乎不可能发现它们；
+        // 这里加一行与右键菜单同名的轻量文字入口（文案复用同一批字符串，避免两套叫法），
+        // 点击只发信号，打开动作由 networkview.qml 统一完成
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 18
+            spacing: 14
+            visible: popup.ready
+
+            Item { Layout.fillWidth: true }
+
+            Text {
+                text: qsTr("Traffic Chart")
+                font.pixelSize: 11
+                color: chartEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText
+
+                MouseArea {
+                    id: chartEntryMouse
+                    // 向外扩 4px：文字本身较窄，扩大点击热区便于点中
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: popup.detailsRequested("chart")
+                }
+            }
+
+            Text {
+                text: qsTr("Traffic Statistics")
+                font.pixelSize: 11
+                color: statsEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText
+
+                MouseArea {
+                    id: statsEntryMouse
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: popup.detailsRequested("stats")
+                }
+            }
+
+            Text {
+                text: qsTr("TCP Connections")
+                font.pixelSize: 11
+                color: tcpEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText
+
+                MouseArea {
+                    id: tcpEntryMouse
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: popup.detailsRequested("tcp")
+                }
+            }
+
+            Item { Layout.fillWidth: true }
         }
 
         // 填充剩余空间，将内容推至顶部

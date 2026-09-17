@@ -106,6 +106,16 @@
         <source>TCP Connections</source>
         <translation>TCP 连接</translation>
     </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="712"/>
+        <source>Traffic Chart</source>
+        <translation>流量波动图</translation>
+    </message>
+    <message>
+        <location filename="../package/components/NetworkPopup.qml" line="726"/>
+        <source>Traffic Statistics</source>
+        <translation>流量统计</translation>
+    </message>
 </context>
 <context>
     <name>NetCommon</name>
