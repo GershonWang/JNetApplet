@@ -380,7 +380,9 @@ Window {
                         border.color: accentColor
 
                         Text {
-                            anchors.centerIn: parent
+                            // 只声明垂直居中：水平方向由 left/right + margins 决定宽度，
+                            // 与 centerIn 同时声明属于冲突锚点（运行时会告警且以最后赋值者为准）
+                            anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.margins: 8
