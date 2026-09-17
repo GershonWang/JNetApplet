@@ -335,6 +335,11 @@
     </message>
     <message>
         <location filename="../package/components/TrafficStatsWindow.qml" line="246"/>
+        <source>All records</source>
+        <translation>全部记录合计</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="294"/>
         <source>Total</source>
         <translation>总计</translation>
     </message>

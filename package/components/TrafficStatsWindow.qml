@@ -55,8 +55,17 @@ Window {
     // {date, iface, rx, tx, total}，按日期/月份降序（最新在上）排列
     property var statsModel: []
 
-    // 底部汇总：所有显示记录的 rx/tx/total 累加值
+    // 底部汇总：当前 tab 全部记录的 rx/tx/total 累加值（跨日期、跨接口）
     property var totals: ({ rx: 0, tx: 0, total: 0 })
+
+    // 当前周期合计：按日 tab 为"今日"、按月 tab 为"本月"的 rx/tx 累加值（跨接口）
+    // 设计原因：顶部说明必须与数据口径一致——原实现文案写"今日/本月累计"，
+    // 但界面上唯一存在的数字是"全部记录合计"，两者口径不同属误导；
+    // 此处单独算出周期值，让顶部说明有真实数据支撑
+    property var periodTotals: ({ rx: 0, tx: 0, total: 0 })
+
+    // 当前周期是否有记录：无记录时顶部说明显示 "—"，不用 0 冒充真实数据
+    property bool periodHasData: false
 
     // 表格列宽：与表头/行/底部汇总共用同一组固定宽度，保证各列垂直对齐
     readonly property int colDate: 118
@@ -92,6 +101,24 @@ Window {
         })
         root.statsModel = rows
         root.totals = { rx: tRx, tx: tTx, total: tRx + tTx }
+
+        // 当前周期合计：日期在此现算而不缓存，窗口开着跨天/跨月后
+        // 下一次定时刷新（可见时每 5×刷新间隔重建一次）即自动切到新周期
+        var now = new Date()
+        var periodKey = root.currentTab === 0
+                ? Qt.formatDate(now, "yyyy-MM-dd")
+                : Qt.formatDate(now, "yyyy-MM")
+        var period = entries[periodKey] || {}
+        var pRx = 0, pTx = 0
+        var periodCount = 0
+        for (var p in period) {
+            var prec = period[p]
+            pRx += prec ? (prec.rx || 0) : 0
+            pTx += prec ? (prec.tx || 0) : 0
+            periodCount++
+        }
+        root.periodHasData = periodCount > 0
+        root.periodTotals = { rx: pRx, tx: pTx, total: pRx + pTx }
     }
 
     width: 620
@@ -210,9 +237,17 @@ Window {
 
                 Item { Layout.fillWidth: true }
 
-                // 右侧数据说明：按接口累计
+                // 右侧周期说明：只报当前周期（今日/本月）合计，与表格的"全部记录"口径区分
+                // 无记录时显示 "—"；文案与数值同源，不再出现"文案说今日、数字是全部"的误导
                 Text {
-                    text: root.currentTab === 0 ? qsTr("Today accumulated") : qsTr("This month accumulated")
+                    text: {
+                        var label = root.currentTab === 0
+                                ? qsTr("Today accumulated")
+                                : qsTr("This month accumulated")
+                        if (!root.periodHasData) return label + " —"
+                        return label + " ↓" + common.formatTotal(root.periodTotals.rx)
+                                + " ↑" + common.formatTotal(root.periodTotals.tx)
+                    }
                     font.pixelSize: 11
                     color: theme.textTertiary
                 }
@@ -372,7 +407,8 @@ Window {
                 color: theme.lineColor
             }
 
-            // 底部汇总行：所有显示记录的总下载/总上传/总流量
+            // 底部汇总行：当前 tab 全部记录的总下载/总上传/总流量
+            // 文案明确写"全部记录"，与顶部"今日/本月累计"区分两个口径
             RowLayout {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 34
@@ -385,7 +421,7 @@ Window {
                     // 跨"日期 + 接口"两列的宽度需含两列之间的间距，
                     // 否则后续数值列会比表头对应列左移一个 colSpacing
                     Layout.preferredWidth: root.colDate + root.colSpacing + root.colIface
-                    text: qsTr("Total")
+                    text: qsTr("All records")
                     font.pixelSize: 12
                     font.weight: Font.Bold
                     color: theme.textPrimary
