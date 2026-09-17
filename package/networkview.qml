@@ -148,9 +148,20 @@ AppletItem {
             root.formatSpeedIntPart(root.downloadSpeed).length,
             root.formatSpeedIntPart(root.uploadSpeed).length
         )
-        // 整数部分固定宽度：按最大字符数 × 单字符宽度估算
-        // 单字符宽度约为 dockSize * 0.14（数值字号的 ~55%）
-        property real intPartWidth: maxIntDigits * root.dockSize * 0.14
+        // 整数部分固定宽度：用 TextMetrics 按实际字号实测，取代 dockSize * 0.14 的经验估算。
+        // 设计原因：0.14 是按默认字号反推的固定比例（号称字号的 ~55%），
+        // 但字符宽度随字体族、字号、字形变化——估算偏小会把速度值裁掉，
+        // 偏大则整数区留白、小数点右移，两条速度行的小数点对不齐。
+        // 这里用与数值 Text 完全相同的字号/字重实测：取两行中位数最多者，
+        // 用等宽数字字形 "0" 拼出该位数（主流字体数字等宽，"0" 即可代表最大宽度）
+        TextMetrics {
+            id: intPartMetrics
+            font.pixelSize: root.dockSize * 0.25
+            font.weight: Font.Medium
+            // new Array(n + 1).join("0") 生成 n 个 "0"（ES3 写法，避免依赖 String.repeat）
+            text: new Array(horizontalSpeed.maxIntDigits + 1).join("0")
+        }
+        property real intPartWidth: intPartMetrics.advanceWidth
 
         // 下载速度行
         RowLayout {
