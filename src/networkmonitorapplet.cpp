@@ -274,8 +274,28 @@ void NetworkMonitorApplet::saveWindowGeometry(const QString &key, int x, int y)
                    QStringLiteral("%1,%2").arg(x).arg(y));
 }
 
-// 设置刷新间隔（毫秒），校验后持久化并即时生效
-// 设计原因：仅接受 1/2/5 秒，避免非法值破坏刷新频率；
+// 读取窗口置顶状态：无记录（或键名非法）时返回 false，即默认不置顶
+// 单独存 pinned/<key> 而不与几何记录混写：二者变更时机不同（移动 vs 点击置顶），
+// 合并成一条记录会让任一方变更都要读改写整条，徒增出错面
+bool NetworkMonitorApplet::windowPinned(const QString &key) const
+{
+    if (!isKnownWindowKey(key)) {
+        return false;
+    }
+    QSettings settings(configFilePath(), QSettings::IniFormat);
+    return settings.value(QStringLiteral("pinned/") + key, false).toBool();
+}
+
+// 保存窗口置顶状态（QML 侧在开关置顶时调用）
+void NetworkMonitorApplet::setWindowPinned(const QString &key, bool pinned)
+{
+    if (!isKnownWindowKey(key)) {
+        return;
+    }
+    persistSetting(QStringLiteral("pinned/") + key, pinned);
+}
+
+// 设置刷新间隔（毫秒），校验后持久化并即时生效// 设计原因：仅接受 1/2/5 秒，避免非法值破坏刷新频率；
 // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
 void NetworkMonitorApplet::setRefreshInterval(int ms)
 {

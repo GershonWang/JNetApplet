@@ -15,36 +15,23 @@
 //   为 null 时组件可独立预览（显示空状态）
 // - 定时刷新：窗口可见时每 5 秒重建清单（与 C++ 后端降频周期一致），关闭时停止
 // 触发方式：右键菜单"TCP 连接清单" -> show()/raise()/requestActivate()
-// 公共能力复用：主题色取自 WindowTheme，标题栏（含关闭按钮）取自 TitleBar
+// 公共能力复用：窗口外壳（标题栏/位置持久化）取自 WindowShell，主题色经 root.theme 访问
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import "."
 
-Window {
+WindowShell {
     id: root
 
-    // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅
-    WindowTheme {
-        id: theme
-        isDarkMode: root.isDarkMode
-    }
-
-    // 公共强调色：仅用于 accentColor 的默认值，避免与其他窗口各写一份红色字面量
-    NetCommon { id: common }
-
-    // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
-    // 默认值与 networkview.qml 中 root.accentRed 一致（同源于 NetCommon），确保独立可用
-    property color accentColor: common.accentRed
+    // 外壳参数：窗口标识（位置与置顶状态持久化用）与标题栏文字
+    windowKey: "tcp"
+    title: qsTr("TCP Connections")
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 tcpConnectionList（QVariantList of QVariantMap）；为 null 时可独立预览（显示空状态）
     property var applet: null
-
-    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
-    // 默认 false（浅色）保证组件独立预览时与原版视觉一致
-    property bool isDarkMode: false
 
     // 表格模型：由 refreshModel() 生成的连接记录数组，每项
     // {localAddress, localPort, remoteAddress, remotePort, state, processName}
@@ -99,47 +86,10 @@ Window {
 
     width: 680
     height: 420
-    visible: false
-    flags: Qt.FramelessWindowHint | Qt.Window
-    modality: Qt.NonModal
-    color: "transparent"
 
-    // ---- 窗口位置持久化（由 C++ 侧写入 settings.ini 的 geometry/<key>）----
-    // 设计原因：三个独立窗口此前每次打开都居中，用户拖到顺手的位置后下次打开又回到屏幕中央。
-    // key 由 C++ 侧白名单校验（chart/stats/tcp），无记录时回退为居中显示
-    readonly property string windowGeometryKey: "tcp"
-    // 首次定位是否已完成：完成前不允许保存，避免把初始布局阶段的临时坐标写进配置
-    property bool geometryReady: false
-
-    // 显示时定位：有保存位置就用保存位置（C++ 已确认该点仍落在某个屏幕上），
-    // 否则居中到任务栏所在屏幕（加 virtualX/virtualY 偏移，避免多显示器下出现在非预期屏幕）
-    function applyInitialGeometry() {
-        var g = root.applet ? root.applet.windowGeometry(root.windowGeometryKey) : null
-        if (g && g.valid) {
-            x = g.x
-            y = g.y
-        } else {
-            x = Screen.virtualX + (Screen.width - width) / 2
-            y = Screen.virtualY + (Screen.height - height) / 2
-        }
-        root.geometryReady = true
-    }
-
-    // 拖动停止 500ms 后写一次盘：拖动过程中 x/y 高频变化，
-    // 逐次写盘既无意义（用户还在拖）又会产生大量 INI 写入
-    Timer {
-        id: geometrySaveTimer
-        interval: 500
-        onTriggered: if (root.applet && root.geometryReady) {
-            root.applet.saveWindowGeometry(root.windowGeometryKey, Math.round(root.x), Math.round(root.y))
-        }
-    }
-    onXChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
-    onYChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
 
     onVisibleChanged: {
         if (visible) {
-            applyInitialGeometry()
             // 窗口显示时立即刷新一次，确保数据最新
             refreshModel()
         }
@@ -156,26 +106,6 @@ Window {
         onTriggered: refreshModel()
     }
 
-    // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边
-    Rectangle {
-        anchors.fill: parent
-        color: theme.winBg
-        radius: 12
-        border.width: 1
-        border.color: theme.lineColor
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-
-            // 公共标题栏：标题文字 + 关闭按钮，整栏可拖动
-            TitleBar {
-                Layout.fillWidth: true
-                titleText: qsTr("TCP Connections")
-                textColor: theme.textPrimary
-                secondaryTextColor: theme.textSecondary
-                closeHoverColor: root.accentColor
-            }
 
             // 顶部状态条：当前连接数 + 搜索框 + 刷新间隔说明
             RowLayout {
@@ -190,7 +120,7 @@ Window {
                     text: qsTr("Active connections: ") + root.filteredModel.length + "/" + root.connCount
                     font.pixelSize: 12
                     font.weight: Font.Medium
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                 }
 
                 // 搜索框：输入关键字筛选匹配地址/端口/进程名的连接
@@ -199,7 +129,7 @@ Window {
                     Layout.preferredWidth: 200
                     placeholderText: qsTr("Search address, port, process...")
                     font.pixelSize: 12
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                     selectByMouse: true
                     onTextChanged: root.searchText = text
                 }
@@ -223,15 +153,15 @@ Window {
                     Accessible.role: Accessible.Button
                     Accessible.name: qsTr("Clear search")
                     color: clearSearchMouse.pressed
-                           ? Qt.darker(theme.hoverBg, 1.12)
-                           : (clearSearchMouse.containsMouse ? theme.hoverBg : "transparent")
+                           ? Qt.darker(root.theme.hoverBg, 1.12)
+                           : (clearSearchMouse.containsMouse ? root.theme.hoverBg : "transparent")
                     Text {
                         anchors.centerIn: parent
                         text: "×"
                         font.pixelSize: 14
                         color: clearSearchMouse.pressed
                                ? Qt.darker(root.accentColor, 1.15)
-                               : (clearSearchMouse.containsMouse ? root.accentColor : theme.textTertiary)
+                               : (clearSearchMouse.containsMouse ? root.accentColor : root.theme.textTertiary)
                     }
                     MouseArea {
                         id: clearSearchMouse
@@ -247,7 +177,7 @@ Window {
                 Text {
                     text: qsTr("Refreshes every ") + ((root.applet ? root.applet.refreshInterval : 1000) / 1000) + qsTr(" seconds")
                     font.pixelSize: 11
-                    color: theme.textTertiary
+                    color: root.theme.textTertiary
                 }
             }
 
@@ -264,28 +194,28 @@ Window {
                     text: qsTr("Local Address:Port")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colRemote
                     text: qsTr("Remote Address:Port")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colState
                     text: qsTr("State")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("Process")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
             }
 
@@ -296,7 +226,7 @@ Window {
                 Layout.leftMargin: 16
                 Layout.rightMargin: 16
                 Layout.topMargin: 4
-                color: theme.lineColor
+                color: root.theme.lineColor
             }
 
             // 表格区：ListView 展示每条连接记录，行 hover 高亮
@@ -320,7 +250,7 @@ Window {
                         anchors.centerIn: parent
                         text: root.searchText.length > 0 ? qsTr("No matching connections") : qsTr("No active TCP connections")
                         font.pixelSize: 13
-                        color: theme.textTertiary
+                        color: root.theme.textTertiary
                     }
                 }
 
@@ -331,7 +261,7 @@ Window {
                     height: 28
                     radius: 4
                     // 行 hover 高亮：浅色用淡黑、深色用淡白，保证两种卡片背景上均可见
-                    color: rowMouse.containsMouse ? theme.hoverBg : "transparent"
+                    color: rowMouse.containsMouse ? root.theme.hoverBg : "transparent"
 
                     RowLayout {
                         anchors.fill: parent
@@ -345,21 +275,21 @@ Window {
                             Layout.preferredWidth: root.colLocal
                             text: modelData.localAddress + ":" + modelData.localPort
                             font.pixelSize: 12
-                            color: theme.textPrimary
+                            color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colRemote
                             text: modelData.remoteAddress + ":" + modelData.remotePort
                             font.pixelSize: 12
-                            color: theme.textPrimary
+                            color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colState
                             text: modelData.state
                             font.pixelSize: 12
-                            color: theme.textSecondary
+                            color: root.theme.textSecondary
                             elide: Text.ElideRight
                         }
                         Text {
@@ -367,7 +297,7 @@ Window {
                             // 进程名可能为空（反查失败），显示占位符避免空白行
                             text: modelData.processName.length > 0 ? modelData.processName : "-"
                             font.pixelSize: 12
-                            color: modelData.processName.length > 0 ? theme.textPrimary : theme.textTertiary
+                            color: modelData.processName.length > 0 ? root.theme.textPrimary : root.theme.textTertiary
                             elide: Text.ElideRight
                         }
                     }
@@ -386,7 +316,7 @@ Window {
                 Layout.preferredHeight: 1
                 Layout.leftMargin: 16
                 Layout.rightMargin: 16
-                color: theme.lineColor
+                color: root.theme.lineColor
             }
 
             // 底部汇总行：连接总数
@@ -403,11 +333,9 @@ Window {
                     text: qsTr("Total: ") + root.filteredModel.length + "/" + root.connCount + qsTr(" connections")
                     font.pixelSize: 12
                     font.weight: Font.Bold
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                 }
             }
-        }
-    }
 
     // 数据刷新：C++ 每 5 秒更新并发射 tcpConnectionListChanged，据此重建清单；
     // 窗口不可见时跳过（显示时 onVisibleChanged 会补一次刷新），避免隐藏状态下白重建模型

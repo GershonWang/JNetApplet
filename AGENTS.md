@@ -104,6 +104,7 @@ There is no lint, typecheck, or CI target. Verification:
 │       ├── NetCommon.qml          # 公共颜色、格式化与接口排序函数
 │       ├── WindowTheme.qml        # 独立窗口公共主题色
 │       ├── TitleBar.qml           # 独立窗口公共标题栏
+│       ├── WindowShell.qml        # 独立窗口外壳（无边框/圆角卡片/标题栏/可选置顶/位置与置顶持久化）
 │       ├── NetworkPopup.qml       # 左键弹窗内容
 │       ├── SettingsWindow.qml     # 设置窗口（接口/颜色/卸载）
 │       ├── TrafficChartWindow.qml # 流量波动图窗口（1/5/30 分钟）

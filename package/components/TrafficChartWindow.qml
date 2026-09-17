@@ -13,42 +13,31 @@
 // - 数据通过属性注入：applet 即 networkview.qml 的 root.applet（C++ 后端对象），
 //   为 null 时组件可独立预览（Canvas 显示"暂无历史数据"空状态）
 // 触发方式：右键菜单"流量波动图" -> show()/raise()/requestActivate()
-// 公共能力复用：主题色取自 WindowTheme，标题栏（含置顶/关闭按钮）取自 TitleBar，
+// 公共能力复用：窗口外壳（标题栏/置顶/位置持久化）取自 WindowShell，主题色经 root.theme 访问，
 // 消除三窗口样板重复
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import "."
 
-Window {
+WindowShell {
     id: root
+
+    // 外壳参数：窗口标识（位置与置顶状态持久化用）与标题栏文字
+    windowKey: "chart"
+    title: qsTr("Traffic Chart")
+    // 本窗口需要标题栏提供置顶按钮（置顶逻辑与图标绘制均已在外壳内实现）
+    pinnable: true
 
     // 公共格式化函数：集中定义于同目录 NetCommon.qml，
     // 与 networkview.qml、NetworkPopup 共享同一份实现，消除跨组件重复定义
     NetCommon { id: common }
-
-    // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅
-    WindowTheme {
-        id: theme
-        isDarkMode: root.isDarkMode
-    }
-
-    // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
-    // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: common.accentRed
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 speedHistoryDownload / speedHistoryUpload（QVariantList of QPointF，
     // x=时间戳秒, y=速度 bytes/sec）、downloadSpeed / uploadSpeed、activeInterface
     // 为 null 时组件可独立预览（显示空状态），所有数据访问处均需做空值兜底
     property var applet: null
-
-    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
-    // 默认 false（浅色）保证组件独立预览时与原版视觉一致
-    property bool isDarkMode: false
-
-    // 置顶按钮 hover 底色（本窗口特有）：浅色用淡黑、深色用淡白，保证两种卡片背景上均可见
-    readonly property color pinHoverBg: isDarkMode ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)
 
     // 图表绘制色（本窗口特有）：声明为 string 供 Canvas 2D 上下文直接使用
     //（QML color 类型含 alpha 时序列化为 #AARRGGBB，Canvas 无法正确解析，故不用 color 类型）
@@ -105,18 +94,9 @@ Window {
     // 顶部状态条右侧的时间窗口标签文本（如 "· 5 min"），随 timeWindowSec 动态显示
     readonly property string timeWindowLabel: "· " + formatWindowLabel(timeWindowSec)
 
-    // 窗口置顶状态：true 时 flags 附加 Qt.WindowStaysOnTopHint，窗口保持在
-    // 所有非置顶窗口之上（便于边下载大文件边观察曲线）；由标题栏图钉按钮切换
-    property bool pinned: false
-
-    // 置顶状态变化时重绘图钉图标（未置顶=灰色轮廓，置顶=蓝色填充）
-    onPinnedChanged: pinIcon.requestPaint()
-
-    // 主题切换时重绘图表与图钉图标：Canvas 不随属性绑定自动重绘，需主动触发
-    onIsDarkModeChanged: {
-        pinIcon.requestPaint()
-        canvas.requestPaint()
-    }
+    // 主题切换时重绘图表：Canvas 不随属性绑定自动重绘，需主动触发
+    // （图钉图标随外壳绘制，其重绘由 WindowShell 自行处理）
+    onIsDarkModeChanged: canvas.requestPaint()
 
     // 下载折线颜色（绿）与上传折线颜色（橙），与规范 §4.4 一致
     readonly property color downloadLineColor: "#34C759"
@@ -131,49 +111,10 @@ Window {
 
     width: 680
     height: 420
-    visible: false
-    // flags 绑定 pinned：置顶时附加 WindowStaysOnTopHint；未置顶时该位为 0，
-    // 与原静态 flags 行为完全一致
-    flags: Qt.FramelessWindowHint | Qt.Window | (pinned ? Qt.WindowStaysOnTopHint : 0)
-    modality: Qt.NonModal
-    color: "transparent"
 
-    // ---- 窗口位置持久化（由 C++ 侧写入 settings.ini 的 geometry/<key>）----
-    // 设计原因：三个独立窗口此前每次打开都居中，用户拖到顺手的位置后下次打开又回到屏幕中央。
-    // key 由 C++ 侧白名单校验（chart/stats/tcp），无记录时回退为居中显示
-    readonly property string windowGeometryKey: "chart"
-    // 首次定位是否已完成：完成前不允许保存，避免把初始布局阶段的临时坐标写进配置
-    property bool geometryReady: false
-
-    // 显示时定位：有保存位置就用保存位置（C++ 已确认该点仍落在某个屏幕上），
-    // 否则居中到任务栏所在屏幕（加 virtualX/virtualY 偏移，避免多显示器下出现在非预期屏幕）
-    function applyInitialGeometry() {
-        var g = root.applet ? root.applet.windowGeometry(root.windowGeometryKey) : null
-        if (g && g.valid) {
-            x = g.x
-            y = g.y
-        } else {
-            x = Screen.virtualX + (Screen.width - width) / 2
-            y = Screen.virtualY + (Screen.height - height) / 2
-        }
-        root.geometryReady = true
-    }
-
-    // 拖动停止 500ms 后写一次盘：拖动过程中 x/y 高频变化，
-    // 逐次写盘既无意义（用户还在拖）又会产生大量 INI 写入
-    Timer {
-        id: geometrySaveTimer
-        interval: 500
-        onTriggered: if (root.applet && root.geometryReady) {
-            root.applet.saveWindowGeometry(root.windowGeometryKey, Math.round(root.x), Math.round(root.y))
-        }
-    }
-    onXChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
-    onYChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
 
     onVisibleChanged: {
         if (visible) {
-            applyInitialGeometry()
         }
     }
 
@@ -215,109 +156,6 @@ Window {
         return s + " " + unit.suffix
     }
 
-    // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边（与 AboutWindow 一致）
-    Rectangle {
-        anchors.fill: parent
-        color: theme.winBg
-        radius: 12
-        border.width: 1
-        border.color: theme.lineColor
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-
-            // 公共标题栏：标题文字 + 置顶/关闭按钮，整栏可拖动。
-            // 置顶按钮通过 TitleBar 的额外按钮槽（extraActions）注入，逻辑仍在本窗口
-            TitleBar {
-                Layout.fillWidth: true
-                titleText: qsTr("Traffic Chart")
-                textColor: theme.textPrimary
-                secondaryTextColor: theme.textSecondary
-                closeHoverColor: root.accentColor
-
-                // 置顶按钮：28x28 圆形（与关闭按钮一致），位于关闭按钮左侧
-                // 三态视觉：未置顶=灰色图钉轮廓；置顶=deepin 蓝填充 + 淡蓝底；
-                // hover=淡灰底（置顶时淡蓝底优先）
-                Rectangle {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28
-                    height: 28
-                    radius: 14
-                    // 三态：按下 > 置顶(淡蓝底) > hover(淡灰底)。
-                    // pinHoverBg 本身是半透明色，按下态用同色提高透明度，
-                    // 不用 Qt.darker（对含透明度的颜色会改变透明度语义）
-                    color: pinMouse.pressed
-                           ? Qt.rgba(root.pinHoverBg.r, root.pinHoverBg.g, root.pinHoverBg.b, root.pinHoverBg.a * 1.8)
-                           : (root.pinned ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
-                                          : (pinMouse.containsMouse ? root.pinHoverBg : "transparent"))
-
-                    // 置顶图标：Canvas 绘制"上箭头触顶"（⤒ 风格）——向上箭头指向顶部横杠，
-                    // 是"置顶/移到顶部"最通用的视觉语言，与关闭按钮"×"形态区分明显
-                    // 未置顶：灰色细线描边；置顶：蓝色加粗 + 箭头头部实心填充，激活态更醒目
-                    Canvas {
-                        id: pinIcon
-                        anchors.centerIn: parent
-                        width: 16
-                        height: 16
-
-                        onPaint: {
-                            var ctx = getContext("2d")
-                            ctx.clearRect(0, 0, width, height)
-                            var c = root.pinned ? common.accentBlueBright : root.axisTextColor
-                            ctx.strokeStyle = c
-                            ctx.fillStyle = c
-                            ctx.lineCap = "round"
-                            ctx.lineJoin = "round"
-                            ctx.lineWidth = root.pinned ? 2 : 1.5
-
-                            // 顶部横杠：y=3，x 3..13
-                            ctx.beginPath()
-                            ctx.moveTo(3, 3)
-                            ctx.lineTo(13, 3)
-                            ctx.stroke()
-
-                            // 箭头主干：自底部 (8,13) 向上至 (8,7)，
-                            // 与横杠间留 ~1.5px 间隙，保持"触顶"的意象清晰
-                            ctx.beginPath()
-                            ctx.moveTo(8, 13)
-                            ctx.lineTo(8, 7)
-                            ctx.stroke()
-
-                            if (root.pinned) {
-                                // 置顶：箭头头部实心三角填充，与描边态形成明确视觉差异
-                                ctx.beginPath()
-                                ctx.moveTo(8, 5.2)
-                                ctx.lineTo(4.6, 9)
-                                ctx.lineTo(11.4, 9)
-                                ctx.closePath()
-                                ctx.fill()
-                            } else {
-                                // 未置顶：左右两片箭头羽，自顶端 (8,5.5) 向两肩展开
-                                ctx.beginPath()
-                                ctx.moveTo(8, 5.5)
-                                ctx.lineTo(5, 8.5)
-                                ctx.moveTo(8, 5.5)
-                                ctx.lineTo(11, 8.5)
-                                ctx.stroke()
-                            }
-                        }
-                    }
-
-                    // 无障碍：置顶按钮无文字（Canvas 画的图钉），名称需说明当前动作与结果
-                    Accessible.role: Accessible.Button
-                    Accessible.name: root.pinned ? qsTr("Unpin window") : qsTr("Pin window on top")
-
-                    MouseArea {
-                        id: pinMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.pinned = !root.pinned
-                    }
-                }
-            }
 
             // 顶部状态条：实时下行/上行速度（箭头颜色与折线一致，兼作图例）
             // + 右侧活动接口名与时间窗口标签
@@ -339,7 +177,7 @@ Window {
                     // applet 为空时兜底为 0，保证独立预览不报错
                     text: common.formatSpeed(root.applet ? root.applet.downloadSpeed : 0)
                     font.pixelSize: 12
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                 }
 
                 Item { Layout.preferredWidth: 10 }
@@ -354,7 +192,7 @@ Window {
                 Text {
                     text: common.formatSpeed(root.applet ? root.applet.uploadSpeed : 0)
                     font.pixelSize: 12
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                 }
 
                 Item { Layout.fillWidth: true }
@@ -385,7 +223,7 @@ Window {
                         border.width: 1
                         border.color: isSelected
                                        ? common.accentBlue
-                                       : (mouse.containsMouse ? common.accentBlue : theme.lineColor)
+                                       : (mouse.containsMouse ? common.accentBlue : root.theme.lineColor)
 
                         Text {
                             anchors.centerIn: parent
@@ -394,7 +232,7 @@ Window {
                             font.weight: isSelected ? Font.Bold : Font.Normal
                             color: isSelected ? "white"
                                               : (mouse.pressed ? Qt.darker(common.accentBlue, 1.2)
-                                                 : (mouse.containsMouse ? common.accentBlue : theme.textSecondary))
+                                                 : (mouse.containsMouse ? common.accentBlue : root.theme.textSecondary))
                         }
 
                         MouseArea {
@@ -419,7 +257,7 @@ Window {
                     text: (root.applet && root.applet.activeInterface
                            ? root.applet.activeInterface : "—") + " " + root.timeWindowLabel
                     font.pixelSize: 12
-                    color: theme.textTertiary
+                    color: root.theme.textTertiary
                 }
             }
 
@@ -712,11 +550,9 @@ Window {
                     text: root.hoverHint.length > 0
                           ? root.hoverHint : qsTr("Hover over the curve for details")
                     font.pixelSize: 11
-                    color: root.hoverHint.length > 0 ? theme.textPrimary : theme.textTertiary
+                    color: root.hoverHint.length > 0 ? root.theme.textPrimary : root.theme.textTertiary
                 }
             }
-        }
-    }
 
     // 动态刷新：C++ 每秒追加采样点时发射 speedHistoryChanged，触发 Canvas 重绘
     // 注意：此处不重置 Hover 状态，否则用户悬停时提示会随每秒刷新闪断；

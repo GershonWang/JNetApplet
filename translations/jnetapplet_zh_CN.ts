@@ -272,16 +272,6 @@
         <source>-%1 s</source>
         <translation>-%1 秒</translation>
     </message>
-    <message>
-        <location filename="../package/components/TrafficChartWindow.qml" line="310"/>
-        <source>Pin window on top</source>
-        <translation>窗口置顶</translation>
-    </message>
-    <message>
-        <location filename="../package/components/TrafficChartWindow.qml" line="310"/>
-        <source>Unpin window</source>
-        <translation>取消置顶</translation>
-    </message>
 </context>
 <context>
     <name>networkview</name>
@@ -491,6 +481,19 @@
         <location filename="../package/components/TitleBar.qml" line="81"/>
         <source>Close</source>
         <translation>关闭</translation>
+    </message>
+</context>
+<context>
+    <name>WindowShell</name>
+    <message>
+        <location filename="../package/components/WindowShell.qml" line="217"/>
+        <source>Pin window on top</source>
+        <translation>窗口置顶</translation>
+    </message>
+    <message>
+        <location filename="../package/components/WindowShell.qml" line="217"/>
+        <source>Unpin window</source>
+        <translation>取消置顶</translation>
     </message>
 </context>
 </TS>

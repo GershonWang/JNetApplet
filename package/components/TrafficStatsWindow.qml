@@ -16,37 +16,27 @@
 //   （日期, 接口）记录；底部汇总所有显示记录的总下载/总上传/总流量
 // - 数据刷新：C++ 每 30 秒保存并发射 trafficLogChanged，本窗口据此重建表格
 // 触发方式：右键菜单"流量统计" -> show()/raise()/requestActivate()
-// 公共能力复用：主题色取自 WindowTheme，标题栏（含关闭按钮）取自 TitleBar，
+// 公共能力复用：窗口外壳（标题栏/位置持久化）取自 WindowShell，主题色经 root.theme 访问，
 // 格式化函数取自 NetCommon.formatTotal
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 import "."
 
-Window {
+WindowShell {
     id: root
+
+    // 外壳参数：窗口标识（位置与置顶状态持久化用）与标题栏文字
+    windowKey: "stats"
+    title: qsTr("Traffic Statistics")
 
     // 公共格式化函数：集中定义于同目录 NetCommon.qml，
     // 与 networkview.qml、TrafficChartWindow 共享同一份实现
     NetCommon { id: common }
 
-    // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅
-    WindowTheme {
-        id: theme
-        isDarkMode: root.isDarkMode
-    }
-
-    // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
-    // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: common.accentRed
-
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 trafficLog（JSON 对象，见文件头注释）；为 null 时组件可独立预览（显示空状态）
     property var applet: null
-
-    // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
-    // 默认 false（浅色）保证组件独立预览时与原版视觉一致
-    property bool isDarkMode: false
 
     // 当前 tab：0=按日, 1=按月，切换后重建表格模型
     property int currentTab: 0
@@ -132,47 +122,10 @@ Window {
 
     width: 620
     height: 440
-    visible: false
-    flags: Qt.FramelessWindowHint | Qt.Window
-    modality: Qt.NonModal
-    color: "transparent"
 
-    // ---- 窗口位置持久化（由 C++ 侧写入 settings.ini 的 geometry/<key>）----
-    // 设计原因：三个独立窗口此前每次打开都居中，用户拖到顺手的位置后下次打开又回到屏幕中央。
-    // key 由 C++ 侧白名单校验（chart/stats/tcp），无记录时回退为居中显示
-    readonly property string windowGeometryKey: "stats"
-    // 首次定位是否已完成：完成前不允许保存，避免把初始布局阶段的临时坐标写进配置
-    property bool geometryReady: false
-
-    // 显示时定位：有保存位置就用保存位置（C++ 已确认该点仍落在某个屏幕上），
-    // 否则居中到任务栏所在屏幕（加 virtualX/virtualY 偏移，避免多显示器下出现在非预期屏幕）
-    function applyInitialGeometry() {
-        var g = root.applet ? root.applet.windowGeometry(root.windowGeometryKey) : null
-        if (g && g.valid) {
-            x = g.x
-            y = g.y
-        } else {
-            x = Screen.virtualX + (Screen.width - width) / 2
-            y = Screen.virtualY + (Screen.height - height) / 2
-        }
-        root.geometryReady = true
-    }
-
-    // 拖动停止 500ms 后写一次盘：拖动过程中 x/y 高频变化，
-    // 逐次写盘既无意义（用户还在拖）又会产生大量 INI 写入
-    Timer {
-        id: geometrySaveTimer
-        interval: 500
-        onTriggered: if (root.applet && root.geometryReady) {
-            root.applet.saveWindowGeometry(root.windowGeometryKey, Math.round(root.x), Math.round(root.y))
-        }
-    }
-    onXChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
-    onYChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
 
     onVisibleChanged: {
         if (visible) {
-            applyInitialGeometry()
             // 窗口显示时立即刷新一次，确保数据最新
             buildStatsModel()
         }
@@ -193,26 +146,6 @@ Window {
         onTriggered: buildStatsModel()
     }
 
-    // 窗口主体：圆角卡片（背景与边框随 isDarkMode 切换深浅），1px 边框模拟 DTK 窗口描边
-    Rectangle {
-        anchors.fill: parent
-        color: theme.winBg
-        radius: 12
-        border.width: 1
-        border.color: theme.lineColor
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 0
-
-            // 公共标题栏：标题文字 + 关闭按钮，整栏可拖动
-            TitleBar {
-                Layout.fillWidth: true
-                titleText: qsTr("Traffic Statistics")
-                textColor: theme.textPrimary
-                secondaryTextColor: theme.textSecondary
-                closeHoverColor: root.accentColor
-            }
 
             // 顶部 tab 切换：按日 / 按月
             RowLayout {
@@ -240,7 +173,7 @@ Window {
                               : "transparent")
                     border.width: 1
                     border.color: sel ? common.accentBlue
-                                      : (dayMouse.containsMouse ? common.accentBlue : theme.lineColor)
+                                      : (dayMouse.containsMouse ? common.accentBlue : root.theme.lineColor)
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("By Day")
@@ -248,7 +181,7 @@ Window {
                         font.weight: sel ? Font.Bold : Font.Normal
                         color: sel ? "white"
                                    : (dayMouse.pressed ? Qt.darker(common.accentBlue, 1.2)
-                                      : (dayMouse.containsMouse ? common.accentBlue : theme.textSecondary))
+                                      : (dayMouse.containsMouse ? common.accentBlue : root.theme.textSecondary))
                     }
                     MouseArea {
                         id: dayMouse
@@ -277,7 +210,7 @@ Window {
                               : "transparent")
                     border.width: 1
                     border.color: sel ? common.accentBlue
-                                      : (monthMouse.containsMouse ? common.accentBlue : theme.lineColor)
+                                      : (monthMouse.containsMouse ? common.accentBlue : root.theme.lineColor)
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("By Month")
@@ -285,7 +218,7 @@ Window {
                         font.weight: sel ? Font.Bold : Font.Normal
                         color: sel ? "white"
                                    : (monthMouse.pressed ? Qt.darker(common.accentBlue, 1.2)
-                                      : (monthMouse.containsMouse ? common.accentBlue : theme.textSecondary))
+                                      : (monthMouse.containsMouse ? common.accentBlue : root.theme.textSecondary))
                     }
                     MouseArea {
                         id: monthMouse
@@ -310,7 +243,7 @@ Window {
                                 + " ↑" + common.formatTotal(root.periodTotals.tx)
                     }
                     font.pixelSize: 11
-                    color: theme.textTertiary
+                    color: root.theme.textTertiary
                 }
             }
 
@@ -327,35 +260,35 @@ Window {
                     text: root.currentTab === 0 ? qsTr("Date") : qsTr("Month")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colIface
                     text: qsTr("Interface")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: qsTr("Download")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: qsTr("Upload")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: qsTr("Total")
                     font.pixelSize: 11
                     font.weight: Font.Bold
-                    color: theme.textSecondary
+                    color: root.theme.textSecondary
                 }
                 Item { Layout.fillWidth: true }
             }
@@ -367,7 +300,7 @@ Window {
                 Layout.leftMargin: 16
                 Layout.rightMargin: 16
                 Layout.topMargin: 4
-                color: theme.lineColor
+                color: root.theme.lineColor
             }
 
             // 表格区：ListView 展示每条（日期, 接口）记录，行 hover 高亮
@@ -391,7 +324,7 @@ Window {
                         anchors.centerIn: parent
                         text: qsTr("No traffic records yet")
                         font.pixelSize: 13
-                        color: theme.textTertiary
+                        color: root.theme.textTertiary
                     }
                 }
 
@@ -402,7 +335,7 @@ Window {
                     height: 28
                     radius: 4
                     // 行 hover 高亮：浅色用淡黑、深色用淡白，保证两种卡片背景上均可见
-                    color: rowMouse.containsMouse ? theme.hoverBg : "transparent"
+                    color: rowMouse.containsMouse ? root.theme.hoverBg : "transparent"
 
                     RowLayout {
                         anchors.fill: parent
@@ -416,28 +349,28 @@ Window {
                             Layout.preferredWidth: root.colDate
                             text: modelData.date
                             font.pixelSize: 12
-                            color: theme.textPrimary
+                            color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colIface
                             text: modelData.iface
                             font.pixelSize: 12
-                            color: theme.textSecondary
+                            color: root.theme.textSecondary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colNum
                             text: common.formatTotal(modelData.rx)
                             font.pixelSize: 12
-                            color: theme.textPrimary
+                            color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colNum
                             text: common.formatTotal(modelData.tx)
                             font.pixelSize: 12
-                            color: theme.textPrimary
+                            color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
@@ -445,7 +378,7 @@ Window {
                             text: common.formatTotal(modelData.total)
                             font.pixelSize: 12
                             font.weight: Font.Medium
-                            color: theme.textPrimary
+                            color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Item { Layout.fillWidth: true }
@@ -465,7 +398,7 @@ Window {
                 Layout.preferredHeight: 1
                 Layout.leftMargin: 16
                 Layout.rightMargin: 16
-                color: theme.lineColor
+                color: root.theme.lineColor
             }
 
             // 底部汇总行：当前 tab 全部记录的总下载/总上传/总流量
@@ -485,7 +418,7 @@ Window {
                     text: qsTr("All records")
                     font.pixelSize: 12
                     font.weight: Font.Bold
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
@@ -508,13 +441,11 @@ Window {
                     text: common.formatTotal(root.totals.total)
                     font.pixelSize: 12
                     font.weight: Font.Bold
-                    color: theme.textPrimary
+                    color: root.theme.textPrimary
                     elide: Text.ElideRight
                 }
                 Item { Layout.fillWidth: true }
             }
-        }
-    }
 
     // 数据刷新：C++ 每 30 秒保存并发射 trafficLogChanged，据此重建表格；
     // 接口切换不影响日志（日志按活动接口累计，切接口后数据仍完整）

@@ -161,6 +161,10 @@ public:
     Q_INVOKABLE QVariantMap windowGeometry(const QString &key) const;
     // 保存指定窗口的位置（由 QML 在窗口移动停止后调用；键名不在白名单内时静默忽略）
     Q_INVOKABLE void saveWindowGeometry(const QString &key, int x, int y);
+    // 读取窗口的"置顶"状态（无记录时返回 false）
+    Q_INVOKABLE bool windowPinned(const QString &key) const;
+    // 保存窗口的"置顶"状态（键名不在白名单内时静默忽略）
+    Q_INVOKABLE void setWindowPinned(const QString &key, bool pinned);
 
 signals:
     void speedChanged();
