@@ -189,7 +189,12 @@ Window {
                     width: 80
                     height: 24
                     radius: 5
-                    color: sel ? common.accentBlue : "transparent"
+                    // 三态：按下 > 选中 > 常态；未选中按下用卡片底色给出反馈
+                    color: sel
+                           ? (dayMouse.pressed ? Qt.darker(common.accentBlue, 1.2) : common.accentBlue)
+                           : (dayMouse.pressed
+                              ? Qt.rgba(common.cardBackground.r, common.cardBackground.g, common.cardBackground.b, common.cardBackground.a * 1.8)
+                              : "transparent")
                     border.width: 1
                     border.color: sel ? common.accentBlue
                                       : (dayMouse.containsMouse ? common.accentBlue : theme.lineColor)
@@ -198,7 +203,9 @@ Window {
                         text: qsTr("By Day")
                         font.pixelSize: 12
                         font.weight: sel ? Font.Bold : Font.Normal
-                        color: sel ? "white" : (dayMouse.containsMouse ? common.accentBlue : theme.textSecondary)
+                        color: sel ? "white"
+                                   : (dayMouse.pressed ? Qt.darker(common.accentBlue, 1.2)
+                                      : (dayMouse.containsMouse ? common.accentBlue : theme.textSecondary))
                     }
                     MouseArea {
                         id: dayMouse
@@ -215,7 +222,12 @@ Window {
                     width: 90
                     height: 24
                     radius: 5
-                    color: sel ? common.accentBlue : "transparent"
+                    // 三态：按下 > 选中 > 常态；未选中按下用卡片底色给出反馈
+                    color: sel
+                           ? (monthMouse.pressed ? Qt.darker(common.accentBlue, 1.2) : common.accentBlue)
+                           : (monthMouse.pressed
+                              ? Qt.rgba(common.cardBackground.r, common.cardBackground.g, common.cardBackground.b, common.cardBackground.a * 1.8)
+                              : "transparent")
                     border.width: 1
                     border.color: sel ? common.accentBlue
                                       : (monthMouse.containsMouse ? common.accentBlue : theme.lineColor)
@@ -224,7 +236,9 @@ Window {
                         text: qsTr("By Month")
                         font.pixelSize: 12
                         font.weight: sel ? Font.Bold : Font.Normal
-                        color: sel ? "white" : (monthMouse.containsMouse ? common.accentBlue : theme.textSecondary)
+                        color: sel ? "white"
+                                   : (monthMouse.pressed ? Qt.darker(common.accentBlue, 1.2)
+                                      : (monthMouse.containsMouse ? common.accentBlue : theme.textSecondary))
                     }
                     MouseArea {
                         id: monthMouse

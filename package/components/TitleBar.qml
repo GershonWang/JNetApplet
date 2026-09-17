@@ -84,9 +84,12 @@ Item {
         radius: 14
         // hover 底色由 closeHoverColor 派生（同色 15% 透明），不再写死红色：
         // 子窗口若换用非红色高亮，底与字仍然一致
-        color: closeMouse.containsMouse
-               ? Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g, titleBar.closeHoverColor.b, 0.15)
-               : "transparent"
+        // 三态：按下 > hover > 常态，底色透明度逐级加深
+        color: closeMouse.pressed
+               ? Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g, titleBar.closeHoverColor.b, 0.25)
+               : (closeMouse.containsMouse
+                  ? Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g, titleBar.closeHoverColor.b, 0.15)
+                  : "transparent")
 
         Text {
             anchors.centerIn: parent

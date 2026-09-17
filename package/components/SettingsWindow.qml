@@ -209,9 +209,12 @@ Window {
                                         // 保证 ▢ 等空心图标在选中背景上仍有足够对比度
                                         readonly property color activeColor: root.selText
                                         // 背景优先级：选中 > hover；选中行 hover 时稍加深以保留交互反馈
+                                        // 背景优先级：按下 > 选中 > hover，按下加深一档
                                         color: isActive
-                                               ? (hovered ? root.selBgHover : root.selBg)
-                                               : (hovered ? theme.hoverBg : "transparent")
+                                               ? (rowMouse.pressed ? Qt.darker(root.selBgHover, 1.12)
+                                                                   : (hovered ? root.selBgHover : root.selBg))
+                                               : (rowMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
+                                                                   : (hovered ? theme.hoverBg : "transparent"))
                                         // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动
                                         border.width: 1
                                         border.color: isActive ? root.selBorder : "transparent"
@@ -342,8 +345,11 @@ Window {
                                 Layout.preferredHeight: 34
                                 radius: 8
                                 // 选中态蓝色填充边框，未选中态卡片背景，hover 态加深
+                                // 三态：按下 > 选中 > hover，按下加深一档
                                 color: applet && applet.refreshInterval === modelData
-                                       ? root.selBg : (intervalMouse.containsMouse ? theme.hoverBg : theme.cardBg)
+                                       ? (intervalMouse.pressed ? Qt.darker(root.selBg, 1.12) : root.selBg)
+                                       : (intervalMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
+                                                                : (intervalMouse.containsMouse ? theme.hoverBg : theme.cardBg))
                                 border.width: 1
                                 border.color: applet && applet.refreshInterval === modelData
                                               ? root.selBorder : theme.lineColor
@@ -374,7 +380,10 @@ Window {
                         id: uninstallButton
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
-                        color: uninstallMouse.containsMouse ? common.accentRedHover : common.accentRedLight
+                        // 三态：按下 > hover > 常态，底色透明度逐级加深
+                        color: uninstallMouse.pressed
+                               ? Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
+                               : (uninstallMouse.containsMouse ? common.accentRedHover : common.accentRedLight)
                         radius: 10
                         border.width: 1
                         border.color: accentColor
@@ -492,7 +501,9 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
-                    color: cancelUninstallMouse.containsMouse ? theme.hoverBg : theme.cardBg
+                    color: cancelUninstallMouse.pressed
+                           ? Qt.darker(theme.hoverBg, 1.12)
+                           : (cancelUninstallMouse.containsMouse ? theme.hoverBg : theme.cardBg)
                     radius: 8
                     border.width: 1
                     border.color: theme.lineColor
@@ -517,8 +528,10 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
-                    color: confirmUninstallMouse.containsMouse ? accentColor
-                           : Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.8)
+                    color: confirmUninstallMouse.pressed
+                           ? Qt.darker(accentColor, 1.15)
+                           : (confirmUninstallMouse.containsMouse ? accentColor
+                              : Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.8))
                     radius: 8
 
                     Text {

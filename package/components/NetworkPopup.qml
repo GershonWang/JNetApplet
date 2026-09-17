@@ -221,9 +221,11 @@ Control {
                     Text {
                         text: popup.copiedField === "ipv4" ? "✓" : "⧉"
                         font.pixelSize: 12
+                        // 四态：已复制(绿 ✓) > 按下(深蓝) > hover(蓝) > 常态(主文字色)
                         color: popup.copiedField === "ipv4"
                                ? popup.accentGreen
-                               : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText)
+                               : (ipv4CopyMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
+                                  : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText))
 
                         MouseArea {
                             id: ipv4CopyMouse
@@ -282,9 +284,11 @@ Control {
                     Text {
                         text: popup.copiedField === "ipv6" ? "✓" : "⧉"
                         font.pixelSize: 12
+                        // 四态：已复制(绿 ✓) > 按下(深蓝) > hover(蓝) > 常态(主文字色)
                         color: popup.copiedField === "ipv6"
                                ? popup.accentGreen
-                               : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText)
+                               : (ipv6CopyMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
+                                  : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText))
 
                         MouseArea {
                             id: ipv6CopyMouse
@@ -663,9 +667,13 @@ Control {
                         radius: 8
                         // 选中态：蓝色填充+蓝边框；未选中态：透明背景+cardBorder 边框
                         // hover 态：边框变蓝、文字变蓝，提供清晰交互反馈
+                        // 选中态蓝色填充；按下时加深（填充型用 Qt.darker，
+                        // 透明型用 cardBackground 提高透明度，两者都给出点击反馈）
                         color: modelData === popup.activeInterface
-                               ? popup.accentBlue
-                               : "transparent"
+                               ? (chipMouse.pressed ? Qt.darker(popup.accentBlue, 1.2) : popup.accentBlue)
+                               : (chipMouse.pressed
+                                  ? Qt.rgba(popup.cardBackground.r, popup.cardBackground.g, popup.cardBackground.b, popup.cardBackground.a * 1.8)
+                                  : "transparent")
                         border.width: 1
                         border.color: modelData === popup.activeInterface
                                        ? popup.accentBlue
@@ -728,7 +736,9 @@ Control {
             Text {
                 text: qsTr("Traffic Chart")
                 font.pixelSize: 11
-                color: chartEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText
+                // 按下加深一档，与 hover 区分
+                color: chartEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
+                       : (chartEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
 
                 MouseArea {
                     id: chartEntryMouse
@@ -744,7 +754,9 @@ Control {
             Text {
                 text: qsTr("Traffic Statistics")
                 font.pixelSize: 11
-                color: statsEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText
+                // 按下加深一档，与 hover 区分
+                color: statsEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
+                       : (statsEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
 
                 MouseArea {
                     id: statsEntryMouse
@@ -759,7 +771,9 @@ Control {
             Text {
                 text: qsTr("TCP Connections")
                 font.pixelSize: 11
-                color: tcpEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText
+                // 按下加深一档，与 hover 区分
+                color: tcpEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
+                       : (tcpEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
 
                 MouseArea {
                     id: tcpEntryMouse

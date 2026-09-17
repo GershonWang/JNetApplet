@@ -183,12 +183,16 @@ Window {
                     visible: root.searchText.length > 0
                     width: 20; height: 20
                     radius: 10
-                    color: clearSearchMouse.containsMouse ? theme.hoverBg : "transparent"
+                    color: clearSearchMouse.pressed
+                           ? Qt.darker(theme.hoverBg, 1.12)
+                           : (clearSearchMouse.containsMouse ? theme.hoverBg : "transparent")
                     Text {
                         anchors.centerIn: parent
                         text: "×"
                         font.pixelSize: 14
-                        color: clearSearchMouse.containsMouse ? root.accentColor : theme.textTertiary
+                        color: clearSearchMouse.pressed
+                               ? Qt.darker(root.accentColor, 1.15)
+                               : (clearSearchMouse.containsMouse ? root.accentColor : theme.textTertiary)
                     }
                     MouseArea {
                         id: clearSearchMouse

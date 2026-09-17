@@ -280,6 +280,8 @@ Window {
                             color: theme.cardBg
                             border.width: 1
                             border.color: copyRepoMouse.containsMouse ? theme.textPrimary : theme.textTertiary
+                            // 按下时底色变化，弥补图标按钮只有边框变化时的反馈不足
+                            opacity: copyRepoMouse.pressed ? 0.6 : 1.0
                         }
 
                         // 前层矩形（左上），复制成功时边框短暂变绿
@@ -292,6 +294,7 @@ Window {
                             color: theme.cardBg
                             border.width: 1
                             border.color: copied ? common.accentGreen : (copyRepoMouse.containsMouse ? theme.textPrimary : theme.textTertiary)
+                            opacity: copyRepoMouse.pressed ? 0.6 : 1.0
                         }
                     }
                 }

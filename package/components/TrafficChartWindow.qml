@@ -215,8 +215,13 @@ Window {
                     width: 28
                     height: 28
                     radius: 14
-                    color: root.pinned ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
-                                       : (pinMouse.containsMouse ? root.pinHoverBg : "transparent")
+                    // 三态：按下 > 置顶(淡蓝底) > hover(淡灰底)。
+                    // pinHoverBg 本身是半透明色，按下态用同色提高透明度，
+                    // 不用 Qt.darker（对含透明度的颜色会改变透明度语义）
+                    color: pinMouse.pressed
+                           ? Qt.rgba(root.pinHoverBg.r, root.pinHoverBg.g, root.pinHoverBg.b, root.pinHoverBg.a * 1.8)
+                           : (root.pinned ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
+                                          : (pinMouse.containsMouse ? root.pinHoverBg : "transparent"))
 
                     // 置顶图标：Canvas 绘制"上箭头触顶"（⤒ 风格）——向上箭头指向顶部横杠，
                     // 是"置顶/移到顶部"最通用的视觉语言，与关闭按钮"×"形态区分明显
@@ -334,7 +339,11 @@ Window {
                         height: 18
                         radius: 4
                         // 选中态：蓝色填充+白字；未选中态：透明背景+浅边框，hover 边框变蓝
-                        color: isSelected ? common.accentBlue : "transparent"
+                        color: isSelected
+                               ? (mouse.pressed ? Qt.darker(common.accentBlue, 1.2) : common.accentBlue)
+                               : (mouse.pressed
+                                  ? Qt.rgba(common.cardBackground.r, common.cardBackground.g, common.cardBackground.b, common.cardBackground.a * 1.8)
+                                  : "transparent")
                         border.width: 1
                         border.color: isSelected
                                        ? common.accentBlue
@@ -345,7 +354,9 @@ Window {
                             text: root.formatWindowLabel(modelData)
                             font.pixelSize: 10
                             font.weight: isSelected ? Font.Bold : Font.Normal
-                            color: isSelected ? "white" : (mouse.containsMouse ? common.accentBlue : theme.textSecondary)
+                            color: isSelected ? "white"
+                                              : (mouse.pressed ? Qt.darker(common.accentBlue, 1.2)
+                                                 : (mouse.containsMouse ? common.accentBlue : theme.textSecondary))
                         }
 
                         MouseArea {
