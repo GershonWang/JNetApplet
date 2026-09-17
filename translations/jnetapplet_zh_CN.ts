@@ -83,8 +83,8 @@
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="474"/>
-        <source>Packets</source>
-        <translation>包统计</translation>
+        <source>Packets (since boot)</source>
+        <translation>包统计（自开机起）</translation>
     </message>
     <message>
         <location filename="../package/components/NetworkPopup.qml" line="483"/>

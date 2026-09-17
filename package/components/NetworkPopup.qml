@@ -479,7 +479,8 @@ Control {
         // 包统计：收发包 + 错误/丢包（累计值，自开机起），紧接累计流量下方
         // 布局与流量总计行一致：标签 + ↓蓝粗 + 数值 + ↑绿粗 + 数值，拆分为独立 Text
         // 设计原因：包统计与流量统计同属"累计数据"，放一起信息归属清晰且视觉对称；
-        // 包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载
+        // 包总数始终显示；错误/丢包仅在存在时显示，避免正常网卡信息过载。
+        // 时间基准与"本次会话累计"不同，故标签显式写明"自开机起"
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
@@ -488,8 +489,10 @@ Control {
             Item { Layout.fillWidth: true }
 
             // 包统计标签（与"流量总计"标签对齐）
+            // 标注时间基准：包/错误/丢包均取自 /proc/net/dev 的累计计数（自开机起），
+            // 与上一行"本次会话累计"口径不同，不标注会让用户误读为同一基准
             Text {
-                text: qsTr("Packets")
+                text: qsTr("Packets (since boot)")
                 font.pixelSize: 12
                 color: popup.tertiaryText
             }
