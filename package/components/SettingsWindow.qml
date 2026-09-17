@@ -59,17 +59,15 @@ Window {
     readonly property color selBorder: isDarkMode ? "#2C5A8A" : "#90CAF9"
     readonly property color selText: isDarkMode ? "#64B5F6" : "#1565C0"
 
-    // 卸载按钮文字：复制命令后临时显示提示，定时器到期后还原
-    property string uninstallButtonText: qsTr("Uninstall Plugin")
-
     // 卸载命令单一来源：界面展示文本与剪贴板内容共用同一条字符串
     // 设计原因：原实现把同一串命令硬编码在展示 Text 与隐藏 TextEdit 两处，
     // 插件 ID / 安装路径一旦调整，就可能出现"显示的命令"与"复制的命令"不一致
     readonly property string uninstallCommand: "sudo rm -rf /usr/share/dde-shell/space.jokul.JNetApplet/ && systemctl --user restart dde-shell@DDE"
 
-    // 卸载按钮是否处于"命令已复制"的提示态
-    // 设计原因：原实现用 uninstallButtonText !== qsTr("Uninstall Plugin") 反推状态，
-    // 即状态由界面文案推导，文案或翻译一变即失效；改用独立布尔量表达
+    // "卸载命令已复制"提示态：控制按钮下方独立状态行的显示
+    // 设计原因：早期实现把 76 字符的提示整句赋给按钮文字，而按钮高 40px、文字区仅约 24px，
+    // 换行后的提示会被裁切；同时按钮显示的应是动作而非状态。
+    // 现在状态由本布尔量驱动一条独立提示行，按钮文字恒为"卸载插件"
     property bool uninstallCopied: false
 
     // 宽度固定 350；高度改为"默认更高 + 允许随屏幕收缩"，不再把 min/max 锁成同一个值
@@ -371,33 +369,27 @@ Window {
 
                     Item { Layout.preferredHeight: 4 }
 
-                    // 卸载插件按钮：文字可动态切换（复制命令后显示提示）
-                    // 提示状态期间按钮不可点击，文字变绿色
+                    // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担
                     Rectangle {
                         id: uninstallButton
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
-                        // 提示状态时背景和边框变绿；状态由独立布尔量决定，不依赖界面文案
-                        readonly property bool isStatus: root.uninstallCopied
-                        color: isStatus
-                               ? Qt.rgba(22/255, 163/255, 74/255, 0.08)
-                               : (uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08))
+                        color: uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08)
                         radius: 10
                         border.width: 1
-                        border.color: isStatus ? Qt.rgba(22/255, 163/255, 74/255, 1) : accentColor
+                        border.color: accentColor
 
                         Text {
                             anchors.centerIn: parent
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.margins: 8
-                            text: uninstallButtonText
-                            font.pixelSize: uninstallButton.isStatus ? 11 : 13
+                            text: qsTr("Uninstall Plugin")
+                            font.pixelSize: 13
                             font.weight: Font.Medium
-                            // 提示状态时文字绿色，否则红色
-                            color: uninstallButton.isStatus ? Qt.rgba(22/255, 163/255, 74/255, 1) : accentColor
+                            color: accentColor
                             horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.WordWrap
+                            elide: Text.ElideRight
                         }
 
                         MouseArea {
@@ -405,10 +397,21 @@ Window {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            // 提示状态期间禁用点击
-                            enabled: !uninstallButton.isStatus
                             onClicked: uninstallConfirmDialog.open()
                         }
+                    }
+
+                    // 复制成功提示行：独立于按钮，长文案可换行且不受按钮高度限制
+                    // 5 秒后由 statusHideTimer 清除（uninstallCopied 置回 false）
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.topMargin: -4
+                        visible: root.uninstallCopied
+                        text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
+                        font.pixelSize: 11
+                        color: Qt.rgba(22/255, 163/255, 74/255, 1)
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
                     }
 
 
@@ -533,8 +536,7 @@ Window {
                             clipboardHelper.selectAll()
                             clipboardHelper.copy()
                             uninstallConfirmDialog.close()
-                            // 卸载按钮文字临时替换为复制成功提示，5 秒后还原
-                            uninstallButtonText = qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
+                            // 显示按钮下方的独立提示行，5 秒后由 statusHideTimer 清除
                             root.uninstallCopied = true
                             statusHideTimer.start()
                         }
@@ -552,13 +554,10 @@ Window {
         text: root.uninstallCommand
     }
 
-    // 卸载按钮文字还原定时器：复制命令后 5 秒将按钮文字从提示还原为"卸载插件"
+    // 复制成功提示的隐藏定时器：5 秒后收起按钮下方的提示行
     Timer {
         id: statusHideTimer
         interval: 5000
-        onTriggered: {
-            uninstallButtonText = qsTr("Uninstall Plugin")
-            root.uninstallCopied = false
-        }
+        onTriggered: root.uninstallCopied = false
     }
 }
