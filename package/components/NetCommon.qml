@@ -34,9 +34,18 @@ QtObject {
     readonly property color accentGreen: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 1)
     readonly property color accentGreenLight: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 0.12)
 
+    // 高亮蓝：比 accentBlue 更亮，用于可点击链接（关于窗口的仓库地址）
+    // 与图表窗口的"置顶"激活色。设计原因：这两处此前各自写死 #0081FF，
+    // 取值恰好相同却没有共同来源，任一处调整就会产生色差，故在此收敛为唯一定义
+    readonly property color accentBlueBright: Qt.rgba(0 / 255, 129 / 255, 255 / 255, 1)
+
     // ---- 高速警示色：下载速度超过阈值时由蓝转橙再转红 ----
     readonly property color accentOrange: Qt.rgba(245 / 255, 158 / 255, 11 / 255, 1)
     readonly property color accentRed: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    // 危险操作（卸载插件）按钮的底色：常态淡红、悬停略深，与 accentRed 同源
+    // 设计原因：同一组透明度此前散落在设置窗口内以字面量书写，改主色时需逐处对齐
+    readonly property color accentRedLight: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 0.08)
+    readonly property color accentRedHover: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 0.15)
 
     // 下载值颜色：保留原有阈值逻辑（>10MB/s 红、>1MB/s 橙、否则蓝），仅作用于下载值
     // 原为各组件内的属性绑定（依赖组件自身的 downloadSpeed），提取为公共函数后

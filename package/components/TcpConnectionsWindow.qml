@@ -31,9 +31,12 @@ Window {
         isDarkMode: root.isDarkMode
     }
 
+    // 公共强调色：仅用于 accentColor 的默认值，避免与其他窗口各写一份红色字面量
+    NetCommon { id: common }
+
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
-    // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    // 默认值与 networkview.qml 中 root.accentRed 一致（同源于 NetCommon），确保独立可用
+    property color accentColor: common.accentRed
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 tcpConnectionList（QVariantList of QVariantMap）；为 null 时可独立预览（显示空状态）

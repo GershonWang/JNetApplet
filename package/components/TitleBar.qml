@@ -18,9 +18,13 @@
 //   （如 TrafficChartWindow 的"置顶"按钮），其逻辑仍保留在子窗口内
 import QtQuick 2.15
 import QtQuick.Window 2.15
+import "."
 
 Item {
     id: titleBar
+
+    // 公共强调色：仅用于关闭按钮的默认高亮色，避免与各窗口的 accentRed 各写一份
+    NetCommon { id: common }
 
     // 标题栏文字，由子窗口传入（qsTr 文案在子窗口侧）
     property string titleText: ""
@@ -31,8 +35,8 @@ Item {
     // 关闭按钮默认文字色：取主题色 textSecondary
     property color secondaryTextColor: "#666666"
 
-    // 关闭按钮 hover 态文字高亮色：取子窗口 accentColor（默认红色）
-    property color closeHoverColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    // 关闭按钮 hover 态文字高亮色：取子窗口 accentColor（默认与 NetCommon.accentRed 同源）
+    property color closeHoverColor: common.accentRed
 
     // 额外右侧按钮容器：default property 让子窗口直接把按钮写进标题栏，
     // 按钮将布局在关闭按钮左侧（用于置顶按钮等）
@@ -78,7 +82,11 @@ Item {
         width: 28
         height: 28
         radius: 14
-        color: closeMouse.containsMouse ? Qt.rgba(220 / 255, 38 / 255, 38 / 255, 0.15) : "transparent"
+        // hover 底色由 closeHoverColor 派生（同色 15% 透明），不再写死红色：
+        // 子窗口若换用非红色高亮，底与字仍然一致
+        color: closeMouse.containsMouse
+               ? Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g, titleBar.closeHoverColor.b, 0.15)
+               : "transparent"
 
         Text {
             anchors.centerIn: parent

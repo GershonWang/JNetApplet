@@ -23,9 +23,14 @@ Window {
         isDarkMode: root.isDarkMode
     }
 
+    // 公共强调色：仓库链接色与"已复制"成功色统一取自 NetCommon
+    // 设计原因：此前本文件把 #0081FF/#22A34A 直接写在样式里，
+    // 与其他窗口的 accentBlueBright/accentGreen 无共同来源，属于色值漂移
+    NetCommon { id: common }
+
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    property color accentColor: common.accentRed
 
     // 插件版本号，由父组件从 C++ 后端 applet.version 传入
     // 版本唯一源是 CMakeLists.txt 的 project(VERSION)（经 metadata.json → 后端兜底），
@@ -141,7 +146,7 @@ Window {
                     Text {
                         text: qsTr("Version")
                         font.pixelSize: 12
-                        color: "#0081FF"
+                        color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
                     }
@@ -162,7 +167,7 @@ Window {
                     Text {
                         text: qsTr("Author")
                         font.pixelSize: 12
-                        color: "#0081FF"
+                        color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
                     }
@@ -183,7 +188,7 @@ Window {
                     Text {
                         text: qsTr("Description")
                         font.pixelSize: 12
-                        color: "#0081FF"
+                        color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
                     }
@@ -205,7 +210,7 @@ Window {
                     Text {
                         text: qsTr("Repository")
                         font.pixelSize: 12
-                        color: "#0081FF"
+                        color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
                     }
@@ -236,14 +241,14 @@ Window {
                             radius: 4
                             color: theme.cardBg
                             border.width: 1
-                            border.color: "#22A34A"
+                            border.color: common.accentGreen
 
                             Text {
                                 id: copiedHintText
                                 anchors.centerIn: parent
                                 text: qsTr("Copied")
                                 font.pixelSize: 10
-                                color: "#22A34A"
+                                color: common.accentGreen
                             }
                         }
 
@@ -286,7 +291,7 @@ Window {
                             radius: 2
                             color: theme.cardBg
                             border.width: 1
-                            border.color: copied ? "#22A34A" : (copyRepoMouse.containsMouse ? theme.textPrimary : theme.textTertiary)
+                            border.color: copied ? common.accentGreen : (copyRepoMouse.containsMouse ? theme.textPrimary : theme.textTertiary)
                         }
                     }
                 }

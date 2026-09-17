@@ -35,7 +35,7 @@ Window {
 
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    property color accentColor: common.accentRed
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 speedHistoryDownload / speedHistoryUpload（QVariantList of QPointF，
@@ -215,7 +215,7 @@ Window {
                     width: 28
                     height: 28
                     radius: 14
-                    color: root.pinned ? Qt.rgba(0, 129 / 255, 1, 0.12)
+                    color: root.pinned ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
                                        : (pinMouse.containsMouse ? root.pinHoverBg : "transparent")
 
                     // 置顶图标：Canvas 绘制"上箭头触顶"（⤒ 风格）——向上箭头指向顶部横杠，
@@ -230,7 +230,7 @@ Window {
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.clearRect(0, 0, width, height)
-                            var c = root.pinned ? "#0081FF" : root.axisTextColor
+                            var c = root.pinned ? common.accentBlueBright : root.axisTextColor
                             ctx.strokeStyle = c
                             ctx.fillStyle = c
                             ctx.lineCap = "round"

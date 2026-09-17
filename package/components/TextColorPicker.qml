@@ -7,11 +7,14 @@
 // 当前选中色加 2px 边框高亮（颜色随主题切换）；点击只发射 colorSelected 信号，
 // 由父层（SettingsWindow）回写 currentColor 并同步到 C++ 后端持久化；
 // 深/浅主题由 isDarkMode 切换（SettingsWindow 传入），默认浅色保证独立预览可用
+// 公共能力复用：主题色取自 WindowTheme（本组件原自带第四套深浅色板，已收敛），
+// 仅覆盖 lightLineColor 以匹配设置窗口的线色 #E0E0E0
 // 属性语义：
 //   currentColor - 当前选中颜色字符串，空串表示"跟随系统"（默认）
 //   colorSelected(string) - 用户点击色块时发射，参数为空串或 #RRGGBB
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Rectangle {
     id: root
@@ -31,19 +34,25 @@ Rectangle {
     // 深色模式标记：由 SettingsWindow 传入；默认 false（浅色）保证独立预览可用
     property bool isDarkMode: false
 
-    // ---- 主题感知颜色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
-    readonly property color cardBg: isDarkMode ? "#2A2A2A" : "#FFFFFF"
-    readonly property color lineColor: isDarkMode ? "#383838" : "#E0E0E0"
-    readonly property color ringColor: isDarkMode ? "#E0E0E0" : "#333333"
-    // "跟随系统"色块底色：深色模式下用比卡片更深的灰保持可辨识
-    readonly property color systemSwatchBg: isDarkMode ? "#202020" : "#F5F5F5"
+    // 公共主题色：改用 WindowTheme 提供深浅取值，不再在本文件维护第四套色板
+    // 设计原因：此处原有 cardBg/lineColor/ringColor/systemSwatchBg 四组 isDarkMode
+    // 三元表达式，与 WindowTheme 的对应项重复；取值等价关系为
+    //   cardBg   -> theme.cardBg   （浅 #FFFFFF / 深 #2A2A2A）
+    //   lineColor-> theme.lineColor（深色 #383838 相同，浅色本处为 #E0E0E0 故覆盖）
+    //   ringColor-> theme.textPrimary（浅 #333333 / 深 #E0E0E0）
+    //   systemSwatchBg -> theme.sunkenBg（浅 #F5F5F5 / 深 #202020）
+    WindowTheme {
+        id: theme
+        isDarkMode: root.isDarkMode
+        lightLineColor: "#E0E0E0"
+    }
 
     Layout.fillWidth: true
     Layout.preferredHeight: 52
-    color: root.cardBg
+    color: theme.cardBg
     radius: 10
     border.width: 1
-    border.color: root.lineColor
+    border.color: theme.lineColor
 
     // Canvas 不随属性绑定自动重绘，主题切换时主动触发"跟随系统"斜线重绘
     onIsDarkModeChanged: slashCanvas.requestPaint()
@@ -63,7 +72,7 @@ Rectangle {
                 color: "transparent"
                 // 当前选中态：2px 边框高亮（颜色随主题切换）
                 border.width: root.currentColor === modelData ? 2 : 0
-                border.color: root.ringColor
+                border.color: theme.textPrimary
 
                 Rectangle {
                     anchors.centerIn: parent
@@ -74,7 +83,7 @@ Rectangle {
                     color: modelData
                     border.width: (modelData === "#FFFFFF"
                                    || (root.isDarkMode && modelData === "#000000")) ? 1 : 0
-                    border.color: root.lineColor
+                    border.color: theme.lineColor
                 }
 
                 MouseArea {
@@ -93,16 +102,16 @@ Rectangle {
             color: "transparent"
             // currentColor 为空串时高亮（跟随系统选中态）
             border.width: root.currentColor === "" ? 2 : 0
-            border.color: root.ringColor
+            border.color: theme.textPrimary
 
             Rectangle {
                 anchors.centerIn: parent
                 width: 22
                 height: 22
                 radius: 11
-                color: root.systemSwatchBg
+                color: theme.sunkenBg
                 border.width: 1
-                border.color: root.lineColor
+                border.color: theme.lineColor
 
                 // 斜线：表示"无自定义色/跟随系统"
                 Canvas {
@@ -111,7 +120,7 @@ Rectangle {
                     onPaint: {
                         var ctx = getContext("2d")
                         ctx.reset()
-                        ctx.strokeStyle = root.isDarkMode ? "#888888" : "#999999"
+                        ctx.strokeStyle = theme.textTertiary
                         ctx.lineWidth = 2
                         ctx.beginPath()
                         ctx.moveTo(2, height - 2)

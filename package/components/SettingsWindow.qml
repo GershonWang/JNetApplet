@@ -44,7 +44,7 @@ Window {
 
     // 强调色（红色），关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    property color accentColor: common.accentRed
 
     // 深色模式标记：由 networkview.qml 根据 DTK.palette 检测后传入；
     // 默认 false（浅色）保证组件独立预览时与原版视觉一致
@@ -374,7 +374,7 @@ Window {
                         id: uninstallButton
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
-                        color: uninstallMouse.containsMouse ? Qt.rgba(220/255, 38/255, 38/255, 0.15) : Qt.rgba(220/255, 38/255, 38/255, 0.08)
+                        color: uninstallMouse.containsMouse ? common.accentRedHover : common.accentRedLight
                         radius: 10
                         border.width: 1
                         border.color: accentColor
@@ -411,7 +411,7 @@ Window {
                         visible: root.uninstallCopied
                         text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
                         font.pixelSize: 11
-                        color: Qt.rgba(22/255, 163/255, 74/255, 1)
+                        color: common.accentGreen
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                     }
@@ -517,7 +517,8 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 36
-                    color: confirmUninstallMouse.containsMouse ? accentColor : Qt.rgba(220/255, 38/255, 38/255, 0.8)
+                    color: confirmUninstallMouse.containsMouse ? accentColor
+                           : Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.8)
                     radius: 8
 
                     Text {

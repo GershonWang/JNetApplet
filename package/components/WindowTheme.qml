@@ -38,6 +38,10 @@ QtObject {
     property color darkIconGray: "#AAAAAA"
     property color lightHoverBg: "#F0F0F0"
     property color darkHoverBg: "#353535"
+    // 凹陷底色：比卡片再深/再浅一层的区块（如取色器的"跟随系统"色块底）
+    // 设计原因：该值此前由取色器自行硬编码，属第四套色板，改主题需多处同步
+    property color lightSunkenBg: "#F5F5F5"
+    property color darkSunkenBg: "#202020"
 
     // ---- 派生主题色：isDarkMode 为 false 时取值与原浅色硬编码完全一致 ----
     readonly property color winBg: isDarkMode ? darkWinBg : lightWinBg
@@ -48,4 +52,5 @@ QtObject {
     readonly property color textTertiary: isDarkMode ? darkTextTertiary : lightTextTertiary
     readonly property color iconGray: isDarkMode ? darkIconGray : lightIconGray
     readonly property color hoverBg: isDarkMode ? darkHoverBg : lightHoverBg
+    readonly property color sunkenBg: isDarkMode ? darkSunkenBg : lightSunkenBg
 }

@@ -38,7 +38,7 @@ Window {
 
     // 对外依赖：关闭按钮 hover 态文字高亮色，由父组件传入
     // 默认值与 networkview.qml 中 root.accentRed 一致，确保独立可用
-    property color accentColor: Qt.rgba(220 / 255, 38 / 255, 38 / 255, 1)
+    property color accentColor: common.accentRed
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 trafficLog（JSON 对象，见文件头注释）；为 null 时组件可独立预览（显示空状态）
