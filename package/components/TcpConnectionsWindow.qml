@@ -76,11 +76,17 @@ Window {
     // 当前连接总数，底部汇总与顶部状态条共用
     property int connCount: 0
 
-    // 表格列宽：与表头/行/底部汇总共用同一组固定宽度，保证各列垂直对齐
-    readonly property int colLocal: 180
-    readonly property int colRemote: 180
-    readonly property int colState: 90
+    // 表格列宽：与表头/数据行共用同一组值，保证各列垂直对齐
+    // 设计原因：原实现写死 180/180/90，列宽与窗口宽度、字体大小脱钩。
+    // 现按可用宽度取比例：本地地址 27%、远程地址 27%、状态 14%，
+    // 剩余宽度留给进程名列（该列以 Layout.fillWidth 吸收剩余空间）。
+    // 比例按原视觉反推，680px 窗口下的结果与原值接近（175/175/91 对 180/180/90）
     readonly property int colSpacing: 6
+    // 表格可用宽度 = 窗口宽 - 左右各 16 的内边距（表头与 ListView 使用的是同一组边距）
+    readonly property real tableWidth: Math.max(0, width - 32)
+    readonly property int colLocal: Math.max(120, Math.round(tableWidth * 0.27))
+    readonly property int colRemote: Math.max(120, Math.round(tableWidth * 0.27))
+    readonly property int colState: Math.max(76, Math.round(tableWidth * 0.14))
 
     // 从 applet.tcpConnectionList 重建表格模型
     // 设计原因：连接清单数量随时变化，每次读取重建数组供 ListView 展示；

@@ -67,11 +67,20 @@ Window {
     // 当前周期是否有记录：无记录时顶部说明显示 "—"，不用 0 冒充真实数据
     property bool periodHasData: false
 
-    // 表格列宽：与表头/行/底部汇总共用同一组固定宽度，保证各列垂直对齐
-    readonly property int colDate: 118
-    readonly property int colIface: 108
-    readonly property int colNum: 102
+    // 表格列宽：表头/数据行/底部汇总三处共用同一组值，保证各列垂直对齐
+    // 设计原因：原实现写死 118/108/102，列宽与窗口宽度、字体大小脱钩——
+    // 窗口变宽时右侧留一道空白；字号放大或译文变长时又会裁字。
+    // 现改为按可用宽度取比例：日期列 20%、接口列 18%，其余宽度由三个数值列等分。
+    // 比例按原视觉反推，620px 窗口下的结果与原值接近（118/106/113 对 118/108/102）。
+    // 各列另设最小宽度，避免窗口被压窄时列宽趋近于 0 而完全不可读
     readonly property int colSpacing: 6
+    // 表格可用宽度 = 窗口宽 - 左右各 16 的内边距（表头与 ListView 使用的是同一组边距）
+    readonly property real tableWidth: Math.max(0, width - 32)
+    readonly property int colDate: Math.max(96, Math.round(tableWidth * 0.20))
+    readonly property int colIface: Math.max(88, Math.round(tableWidth * 0.18))
+    // 数值列取剩余宽度三等分后向下取整：向下取整保证"三列 + 间距"不超过可用宽度，
+    // 不会因 1px 溢出出现横向滚动或末列被截
+    readonly property int colNum: Math.max(72, Math.floor((tableWidth - colDate - colIface - 4 * colSpacing) / 3))
 
     // 依据 currentTab 与 applet.trafficLog 重建表格模型
     // 设计原因：trafficLog 为 {日期/月份: {接口: {rx, tx}}} 的嵌套对象，
