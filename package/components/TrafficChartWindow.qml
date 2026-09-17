@@ -138,12 +138,42 @@ Window {
     modality: Qt.NonModal
     color: "transparent"
 
-    onVisibleChanged: {
-        if (visible) {
-            // 居中到当前屏幕（任务栏所在屏幕），加 virtualX/virtualY 偏移
-            // 避免多显示器下窗口出现在非预期屏幕
+    // ---- 窗口位置持久化（由 C++ 侧写入 settings.ini 的 geometry/<key>）----
+    // 设计原因：三个独立窗口此前每次打开都居中，用户拖到顺手的位置后下次打开又回到屏幕中央。
+    // key 由 C++ 侧白名单校验（chart/stats/tcp），无记录时回退为居中显示
+    readonly property string windowGeometryKey: "chart"
+    // 首次定位是否已完成：完成前不允许保存，避免把初始布局阶段的临时坐标写进配置
+    property bool geometryReady: false
+
+    // 显示时定位：有保存位置就用保存位置（C++ 已确认该点仍落在某个屏幕上），
+    // 否则居中到任务栏所在屏幕（加 virtualX/virtualY 偏移，避免多显示器下出现在非预期屏幕）
+    function applyInitialGeometry() {
+        var g = root.applet ? root.applet.windowGeometry(root.windowGeometryKey) : null
+        if (g && g.valid) {
+            x = g.x
+            y = g.y
+        } else {
             x = Screen.virtualX + (Screen.width - width) / 2
             y = Screen.virtualY + (Screen.height - height) / 2
+        }
+        root.geometryReady = true
+    }
+
+    // 拖动停止 500ms 后写一次盘：拖动过程中 x/y 高频变化，
+    // 逐次写盘既无意义（用户还在拖）又会产生大量 INI 写入
+    Timer {
+        id: geometrySaveTimer
+        interval: 500
+        onTriggered: if (root.applet && root.geometryReady) {
+            root.applet.saveWindowGeometry(root.windowGeometryKey, Math.round(root.x), Math.round(root.y))
+        }
+    }
+    onXChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
+    onYChanged: if (root.visible && root.geometryReady) geometrySaveTimer.restart()
+
+    onVisibleChanged: {
+        if (visible) {
+            applyInitialGeometry()
         }
     }
 

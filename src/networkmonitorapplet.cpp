@@ -23,6 +23,8 @@
 #include <QJsonObject>
 #include <QFileInfo>
 #include <QDate>
+#include <QGuiApplication>
+#include <QScreen>
 
 DS_BEGIN_NAMESPACE
 
@@ -209,6 +211,67 @@ void NetworkMonitorApplet::persistSetting(const QString &key, const QVariant &va
     QSettings settings(configFilePath(), QSettings::IniFormat);
     settings.setValue(key, value);
     settings.sync();
+}
+
+// 判断窗口键是否属于允许持久化位置的窗口集合（白名单）
+// 设计原因：键名由 QML 传入，若不限制则任意字符串都会在 settings.ini 里留下一条记录，
+// 配置项会随版本迭代无限增长；独立窗口集合本身是固定的，用白名单把可写范围收敛到已知窗口。
+// 三个键分别对应 TrafficChartWindow / TrafficStatsWindow / TcpConnectionsWindow
+bool NetworkMonitorApplet::isKnownWindowKey(const QString &key)
+{
+    static const QStringList known{QStringLiteral("chart"),
+                                   QStringLiteral("stats"),
+                                   QStringLiteral("tcp")};
+    return known.contains(key);
+}
+
+// 读取窗口上次保存的位置，返回 {valid, x, y}
+// 设计原因：调用方（QML 窗口）需要在"有记录"与"无记录"之间区分对待——
+// 无记录时回退为居中显示，因此用 valid 标记而不是返回无效坐标（-1,-1 在多屏下是合法坐标）。
+// 记录不可用（未保存过、被手工改坏、或落在当前已不存在的屏幕上）一律按无记录处理，
+// 交由 QML 居中：显示器被拔掉后若仍按旧坐标恢复，窗口会落在屏幕外，用户表现为"窗口打不开"
+QVariantMap NetworkMonitorApplet::windowGeometry(const QString &key) const
+{
+    QVariantMap result;
+    result.insert(QStringLiteral("valid"), false);
+    if (!isKnownWindowKey(key)) {
+        return result;
+    }
+
+    QSettings settings(configFilePath(), QSettings::IniFormat);
+    const QString saved = settings.value(QStringLiteral("geometry/") + key).toString();
+    const QStringList parts = saved.split(QLatin1Char(','));
+    if (parts.size() != 2) {
+        return result;
+    }
+
+    bool okX = false;
+    bool okY = false;
+    const int x = parts.at(0).trimmed().toInt(&okX);
+    const int y = parts.at(1).trimmed().toInt(&okY);
+    if (!okX || !okY) {
+        return result;
+    }
+    // 多显示器下旧位置可能已不存在：screenAt 返回空表示该点不在任何屏幕上
+    if (!QGuiApplication::screenAt(QPoint(x, y))) {
+        return result;
+    }
+
+    result.insert(QStringLiteral("valid"), true);
+    result.insert(QStringLiteral("x"), x);
+    result.insert(QStringLiteral("y"), y);
+    return result;
+}
+
+// 保存窗口位置：以 "x,y" 形式写入 geometry/<key>，与其它设置同一份 settings.ini
+// 写盘频率由 QML 侧防抖控制（拖动停止后写一次），此处不再做节流
+void NetworkMonitorApplet::saveWindowGeometry(const QString &key, int x, int y)
+{
+    if (!isKnownWindowKey(key)) {
+        return;
+    }
+    persistSetting(QStringLiteral("geometry/") + key,
+                   QStringLiteral("%1,%2").arg(x).arg(y));
 }
 
 // 设置刷新间隔（毫秒），校验后持久化并即时生效

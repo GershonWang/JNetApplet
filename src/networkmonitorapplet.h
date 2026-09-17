@@ -154,6 +154,14 @@ public:
     void refresh();
     Q_INVOKABLE void setActiveInterface(const QString &interface);
 
+    // ---- 独立窗口位置持久化（图表/流量统计/TCP 连接清单三个窗口共用）----
+    // 设计原因：三个窗口此前每次打开都居中，用户拖到顺手的位置后下次打开又回到屏幕中央；
+    // 位置与其它设置共用 settings.ini，不再引入新的配置文件。
+    // 返回 {valid, x, y}：valid 为 false 表示"无记录/记录不可用"，QML 侧据此回退为居中显示
+    Q_INVOKABLE QVariantMap windowGeometry(const QString &key) const;
+    // 保存指定窗口的位置（由 QML 在窗口移动停止后调用；键名不在白名单内时静默忽略）
+    Q_INVOKABLE void saveWindowGeometry(const QString &key, int x, int y);
+
 signals:
     void speedChanged();
     void totalChanged();
@@ -186,6 +194,8 @@ private:
     static QString configFilePath();
     // 写入单个配置项并立即落盘
     void persistSetting(const QString &key, const QVariant &value);
+    // 判断窗口键是否属于允许持久化位置的窗口集合（见 .cpp 中的白名单说明）
+    static bool isKnownWindowKey(const QString &key);
 
     void readNetworkStats();
     void calculateSpeed();
