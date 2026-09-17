@@ -34,10 +34,18 @@ QtObject {
     readonly property color accentGreen: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 1)
     readonly property color accentGreenLight: Qt.rgba(22 / 255, 163 / 255, 74 / 255, 0.12)
 
-    // 高亮蓝：比 accentBlue 更亮，用于可点击链接（关于窗口的仓库地址）
-    // 与图表窗口的"置顶"激活色。设计原因：这两处此前各自写死 #0081FF，
-    // 取值恰好相同却没有共同来源，任一处调整就会产生色差，故在此收敛为唯一定义
+    // 高亮蓝：比 accentBlue 更亮，用于可点击链接（关于窗口的仓库地址）、
+    // 图表窗口的"置顶"激活色，以及趋势图折线的下载色。
+    // 设计原因：这几处此前各自写死 #0081FF，取值恰好相同却没有共同来源，
+    // 任一处调整就会产生色差，故在此收敛为唯一定义
     readonly property color accentBlueBright: Qt.rgba(0 / 255, 129 / 255, 255 / 255, 1)
+
+    // 上面两个强调色的字符串形式，供 Canvas 2D 使用（趋势图折线/圆点）
+    // 设计原因：Canvas 2D 上下文只接受 CSS 颜色字符串，QML 的 color 类型序列化结果
+    // （尤其含 alpha 时的 #AARRGGBB）它无法解析，故在颜色定义处同时给出字符串形式，
+    // 保证"下载=蓝、上传=绿"的语义仍只在本文件维护。改动上面的 color 时须同步此处
+    readonly property string accentBlueBrightHex: "#0081FF"
+    readonly property string accentGreenHex: "#16A34A"
 
     // ---- 高速警示色：下载速度超过阈值时由蓝转橙再转红 ----
     readonly property color accentOrange: Qt.rgba(245 / 255, 158 / 255, 11 / 255, 1)

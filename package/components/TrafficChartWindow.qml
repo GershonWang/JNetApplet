@@ -98,9 +98,17 @@ WindowShell {
     // （图钉图标随外壳绘制，其重绘由 WindowShell 自行处理）
     onIsDarkModeChanged: canvas.requestPaint()
 
-    // 下载折线颜色（绿）与上传折线颜色（橙），与规范 §4.4 一致
-    readonly property color downloadLineColor: "#34C759"
-    readonly property color uploadLineColor: "#FF9500"
+    // 折线颜色：下载=蓝、上传=绿，与弹窗/任务栏的全项目语义统一。
+    // 取值直接取自 NetCommon，不在本文件另写字面量。
+    // 设计原因：本窗口原用绿色画下载、橙色画上传，与弹窗（下载蓝、上传绿）恰好相反，
+    // 同一个"绿"在两处含义不同，用户需在两个窗口之间切换理解
+    readonly property color downloadLineColor: common.accentBlueBright
+    readonly property color uploadLineColor: common.accentGreen
+
+    // 折线填充色（8% 透明）：Canvas 需要 rgba 字符串形式，故以字面量给出；
+    // 其 RGB 必须与折线色来源（NetCommon 的 accentBlueBrightHex / accentGreenHex）一致
+    readonly property string downloadFillColor: "rgba(0, 129, 255, 0.08)"
+    readonly property string uploadFillColor: "rgba(22, 163, 74, 0.08)"
 
     // 图表区内边距：左侧容纳 Y 轴刻度标签（如 "10 MB"），底部容纳 X 轴时间标签
     // 定义为根属性，供 Canvas 绘制与 MouseArea 坐标换算共用，保证两处一致
@@ -387,7 +395,7 @@ WindowShell {
                     if (n === 1) {
                         var sx = pl + pw
                         var sy = pt + ph - (dl[0].y / yMax) * ph
-                        ctx.fillStyle = "#34C759"
+                        ctx.fillStyle = common.accentBlueBrightHex
                         ctx.beginPath()
                         ctx.arc(sx, sy, 3, 0, 2 * Math.PI)
                         ctx.fill()
@@ -452,8 +460,8 @@ WindowShell {
                     ctx.rect(pl, pt, pw, ph)
                     ctx.clip()
                     // 先画上传（橙）再画下载（绿）：下载通常是主视线，后画置于上层
-                    drawSeries(ul, visibleStart, "#FF9500", "rgba(255, 149, 0, 0.08)")
-                    drawSeries(dl, visibleStart, "#34C759", "rgba(52, 199, 89, 0.08)")
+                    drawSeries(ul, visibleStart, common.accentGreenHex, root.uploadFillColor)
+                    drawSeries(dl, visibleStart, common.accentBlueBrightHex, root.downloadFillColor)
                     ctx.restore()
 
                     // ---- Hover：竖直辅助线 + 两条折线上的圆点标记 ----
@@ -482,8 +490,8 @@ WindowShell {
                             ctx.lineWidth = 2
                             ctx.stroke()
                         }
-                        drawDot(dl[hi].y, "#34C759")
-                        if (hi < ul.length) drawDot(ul[hi].y, "#FF9500")
+                        drawDot(dl[hi].y, common.accentBlueBrightHex)
+                        if (hi < ul.length) drawDot(ul[hi].y, common.accentGreenHex)
                     }
                 }
 
