@@ -305,6 +305,10 @@ Window {
                         }
                     }
 
+                    // 无障碍：置顶按钮无文字（Canvas 画的图钉），名称需说明当前动作与结果
+                    Accessible.role: Accessible.Button
+                    Accessible.name: root.pinned ? qsTr("Unpin window") : qsTr("Pin window on top")
+
                     MouseArea {
                         id: pinMouse
                         anchors.fill: parent
@@ -364,6 +368,10 @@ Window {
                     Rectangle {
                         required property var modelData
                         property bool isSelected: root.timeWindowSec === modelData
+                        // 无障碍：时间窗口按钮是三选一，名称复用按钮上的窗口文案
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: root.formatWindowLabel(modelData)
+                        Accessible.checked: isSelected
 
                         width: 24
                         height: 18

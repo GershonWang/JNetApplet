@@ -15,6 +15,10 @@ import "components"
 AppletItem {
     id: root
     objectName: "network monitor applet"
+
+    // 无障碍：整个任务栏图标是一个"左键打开网络监控详情弹窗"的按钮
+    Accessible.role: Accessible.Button
+    Accessible.name: qsTr("Network Speed Monitor")
     property int dockOrder: 21
     property int dockSize: Panel.rootObject.dockItemMaxSize || 48
     // 任务栏方向：0=Top, 1=Right, 2=Bottom, 3=Left；% 2 为 0 表示水平，1 表示竖向
@@ -370,6 +374,9 @@ AppletItem {
                 networkPopup.close()
                 root.openWindow(key)
             }
+
+            // 弹窗内按 Esc：关闭入口仍收敛在本文件（与详情入口走同一个 close()）
+            onCloseRequested: networkPopup.close()
         }
 
         Component.onCompleted: {

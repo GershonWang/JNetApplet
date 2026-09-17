@@ -219,6 +219,9 @@ Window {
                     visible: root.searchText.length > 0
                     width: 20; height: 20
                     radius: 10
+                    // 无障碍：清空按钮无文字（"×"），显式给出名称
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Clear search")
                     color: clearSearchMouse.pressed
                            ? Qt.darker(theme.hoverBg, 1.12)
                            : (clearSearchMouse.containsMouse ? theme.hoverBg : "transparent")

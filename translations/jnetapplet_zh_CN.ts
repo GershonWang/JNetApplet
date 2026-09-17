@@ -272,6 +272,16 @@
         <source>-%1 s</source>
         <translation>-%1 秒</translation>
     </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="310"/>
+        <source>Pin window on top</source>
+        <translation>窗口置顶</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="310"/>
+        <source>Unpin window</source>
+        <translation>取消置顶</translation>
+    </message>
 </context>
 <context>
     <name>networkview</name>
@@ -319,6 +329,11 @@
         <location filename="../package/networkview.qml" line="389"/>
         <source>TCP Connections</source>
         <translation>TCP 连接</translation>
+    </message>
+    <message>
+        <location filename="../package/networkview.qml" line="21"/>
+        <source>Network Speed Monitor</source>
+        <translation>网络速度监控</translation>
     </message>
 </context>
 <context>
@@ -455,6 +470,27 @@
         <location filename="../package/components/TcpConnectionsWindow.qml" line="340"/>
         <source> connections</source>
         <translation> 个连接</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TcpConnectionsWindow.qml" line="224"/>
+        <source>Clear search</source>
+        <translation>清空搜索</translation>
+    </message>
+</context>
+<context>
+    <name>TextColorPicker</name>
+    <message>
+        <location filename="../package/components/TextColorPicker.qml" line="109"/>
+        <source>Follow System</source>
+        <translation>跟随系统</translation>
+    </message>
+</context>
+<context>
+    <name>TitleBar</name>
+    <message>
+        <location filename="../package/components/TitleBar.qml" line="81"/>
+        <source>Close</source>
+        <translation>关闭</translation>
     </message>
 </context>
 </TS>

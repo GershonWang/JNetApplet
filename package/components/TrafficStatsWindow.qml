@@ -225,6 +225,10 @@ Window {
                 // 按日 tab
                 Rectangle {
                     property bool sel: root.currentTab === 0
+                    // 无障碍：视图切换 tab 视为单选项
+                    Accessible.role: Accessible.RadioButton
+                    Accessible.name: qsTr("By Day")
+                    Accessible.checked: sel
                     width: 80
                     height: 24
                     radius: 5
@@ -258,6 +262,10 @@ Window {
                 // 按月 tab
                 Rectangle {
                     property bool sel: root.currentTab === 1
+                    // 无障碍：视图切换 tab 视为单选项
+                    Accessible.role: Accessible.RadioButton
+                    Accessible.name: qsTr("By Month")
+                    Accessible.checked: sel
                     width: 90
                     height: 24
                     radius: 5

@@ -70,6 +70,10 @@ Rectangle {
                 height: 26
                 radius: 13
                 color: "transparent"
+                // 无障碍：色块是"选择字体颜色"的单选项，名称用色值本身（无可读色名可复用）
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: modelData
+                Accessible.checked: root.currentColor === modelData
                 // 当前选中态：2px 边框高亮（颜色随主题切换）
                 border.width: root.currentColor === modelData ? 2 : 0
                 border.color: theme.textPrimary
@@ -100,6 +104,10 @@ Rectangle {
             height: 26
             radius: 13
             color: "transparent"
+            // 无障碍：恢复默认色（空串）的单选项
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: qsTr("Follow System")
+            Accessible.checked: root.currentColor === ""
             // currentColor 为空串时高亮（跟随系统选中态）
             border.width: root.currentColor === "" ? 2 : 0
             border.color: theme.textPrimary

@@ -22,6 +22,18 @@ import "."
 Control {
     id: popup
 
+    // ---- 键盘操作 ----
+    // Esc 关闭弹窗：为键盘用户提供除"点击弹窗外区域"之外的退出方式。
+    // 是否生效取决于焦点：面板弹窗是 layer-shell 窗口，键盘焦点是否交给它由 dde-shell/
+    // 合成器决定，故此处不调用 forceActiveFocus 强行抢焦点（会干扰面板自身的焦点管理），
+    // 该快捷键属"尽力而为"，不是唯一关闭路径
+    signal closeRequested()
+    focus: true
+    Keys.onEscapePressed: function (event) {
+        popup.closeRequested()
+        event.accepted = true
+    }
+
     // C++ 后端对象，提供速度/接口/IP 等所有数据
     property var applet: null
 
@@ -220,6 +232,9 @@ Control {
                     // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
                     Text {
                         text: popup.copiedField === "ipv4" ? "✓" : "⧉"
+                        // 无障碍：图标按钮自身无文字，借用相邻地址标签作为可读名称
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("IPv4")
                         font.pixelSize: 12
                         // 四态：已复制(绿 ✓) > 按下(深蓝) > hover(蓝) > 常态(主文字色)
                         color: popup.copiedField === "ipv4"
@@ -283,6 +298,9 @@ Control {
                     // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
                     Text {
                         text: popup.copiedField === "ipv6" ? "✓" : "⧉"
+                        // 无障碍：图标按钮自身无文字，借用相邻地址标签作为可读名称
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("IPv6")
                         font.pixelSize: 12
                         // 四态：已复制(绿 ✓) > 按下(深蓝) > hover(蓝) > 常态(主文字色)
                         color: popup.copiedField === "ipv6"
@@ -667,6 +685,10 @@ Control {
                         radius: 8
                         // 选中态：蓝色填充+蓝边框；未选中态：透明背景+cardBorder 边框
                         // hover 态：边框变蓝、文字变蓝，提供清晰交互反馈
+                        // 无障碍：接口 chip 是"切换活动接口"的单选项，角色与选中态供屏幕阅读器播报
+                        Accessible.role: Accessible.RadioButton
+                        Accessible.name: modelData
+                        Accessible.checked: modelData === popup.activeInterface
                         // 选中态蓝色填充；按下时加深（填充型用 Qt.darker，
                         // 透明型用 cardBackground 提高透明度，两者都给出点击反馈）
                         color: modelData === popup.activeInterface
@@ -735,6 +757,9 @@ Control {
 
             Text {
                 text: qsTr("Traffic Chart")
+                // 无障碍：弹窗内的详情入口是纯文字按钮，名称即文案
+                Accessible.role: Accessible.Button
+                Accessible.name: text
                 font.pixelSize: 11
                 // 按下加深一档，与 hover 区分
                 color: chartEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
@@ -753,6 +778,9 @@ Control {
 
             Text {
                 text: qsTr("Traffic Statistics")
+                // 无障碍：弹窗内的详情入口是纯文字按钮，名称即文案
+                Accessible.role: Accessible.Button
+                Accessible.name: text
                 font.pixelSize: 11
                 // 按下加深一档，与 hover 区分
                 color: statsEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
@@ -770,6 +798,9 @@ Control {
 
             Text {
                 text: qsTr("TCP Connections")
+                // 无障碍：弹窗内的详情入口是纯文字按钮，名称即文案
+                Accessible.role: Accessible.Button
+                Accessible.name: text
                 font.pixelSize: 11
                 // 按下加深一档，与 hover 区分
                 color: tcpEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)

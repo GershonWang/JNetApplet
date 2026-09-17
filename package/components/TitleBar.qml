@@ -76,6 +76,9 @@ Item {
     // 关闭按钮：28x28 圆形，hover 时淡红底 + 红色 ×（颜色由 closeHoverColor 决定）
     Rectangle {
         id: closeButton
+        // 无障碍：图标按钮的文字是 "×"，对屏幕阅读器无意义，显式给出名称与角色
+        Accessible.role: Accessible.Button
+        Accessible.name: qsTr("Close")
         anchors.right: parent.right
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter

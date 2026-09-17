@@ -204,6 +204,10 @@ Window {
                                         radius: 8
                                         // 当前行是否为活动接口（选中态）
                                         readonly property bool isActive: modelData === activeInterface
+                                        // 无障碍：整行是"切换活动接口"的单选项
+                                        Accessible.role: Accessible.RadioButton
+                                        Accessible.name: modelData
+                                        Accessible.checked: isActive
                                         readonly property bool hovered: rowMouse.containsMouse
                                         // 选中态强调色由 root.selText 提供（浅色 #1565c0 / 深色 #64b5f6）：
                                         // 保证 ▢ 等空心图标在选中背景上仍有足够对比度
@@ -341,6 +345,10 @@ Window {
 
                             Rectangle {
                                 id: intervalOption
+                                // 无障碍：刷新区间是单选项，名称与可见文字一致（"1s/2s/5s"）
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: (modelData / 1000) + "s"
+                                Accessible.checked: applet && applet.refreshInterval === modelData
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 34
                                 radius: 8
@@ -378,6 +386,9 @@ Window {
                     // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担
                     Rectangle {
                         id: uninstallButton
+                        // 无障碍：危险操作按钮，名称即动作
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("Uninstall Plugin")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
                         // 三态：按下 > hover > 常态，底色透明度逐级加深
