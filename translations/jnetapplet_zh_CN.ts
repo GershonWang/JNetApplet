@@ -232,6 +232,36 @@
         <source>Hover over the curve for details</source>
         <translation>鼠标移到曲线上查看详情</translation>
     </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="83"/>
+        <source>1 min</source>
+        <translation>1 分钟</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="84"/>
+        <source>5 min</source>
+        <translation>5 分钟</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="85"/>
+        <source>30 min</source>
+        <translation>30 分钟</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="100"/>
+        <source>now</source>
+        <translation>现在</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="101"/>
+        <source>-%1 min</source>
+        <translation>-%1 分钟</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficChartWindow.qml" line="102"/>
+        <source>-%1 s</source>
+        <translation>-%1 秒</translation>
+    </message>
 </context>
 <context>
     <name>networkview</name>

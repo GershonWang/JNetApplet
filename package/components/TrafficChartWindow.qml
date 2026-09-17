@@ -72,25 +72,38 @@ Window {
     // 这里仅决定 X 轴绘制范围与标签，不改变后端采集行为
     property int timeWindowSec: 300
 
-    // 时间窗口选项列表：由 (label, seconds) 键值对组成，供顶部状态条选择器遍历
-    // 及绘制逻辑按 timeWindowSec 反查标签/刻度使用
-    property var timeWindows: [
-        { label: "1m",  seconds: 60 },
-        { label: "5m",  seconds: 300 },
-        { label: "30m", seconds: 1800 }
-    ]
+    // 时间窗口选项列表：只保留秒数，显示文案统一由 formatWindowLabel 生成
+    // 设计原因：原实现把 "1m/5m/30m" 写死在模型里，绕过了翻译；
+    // 改为数据与文案分离后，选择器按钮与状态条标签共用同一份文案
+    property var timeWindows: [60, 300, 1800]
 
-    // 依据当前 timeWindowSec 反查 X 轴刻度标签数组：
-    // 设计原因：不同时间窗口下刻度粒度不同，1 分钟用 15 秒间隔、5 分钟用 1 分钟间隔、
-    // 30 分钟用 5 分钟间隔，保证标签数量适中（5~7 个）且刻度易读
-    readonly property var xAxisLabels: {
-        if (timeWindowSec <= 60)     return ["-1m", "-45s", "-30s", "-15s", "now"]
-        if (timeWindowSec <= 300)    return ["-5m", "-4m", "-3m", "-2m", "-1m", "now"]
-        return ["-30m", "-25m", "-20m", "-15m", "-10m", "-5m", "now"]
+    // 时间窗口显示文案：按秒数生成（供选择器按钮与状态条标签共用）
+    // 设计原因：不写死分钟数，便于后续新增窗口而不必再补文案映射
+    function formatWindowLabel(seconds) {
+        if (seconds <= 60)   return qsTr("1 min")
+        if (seconds <= 300)  return qsTr("5 min")
+        return qsTr("30 min")
     }
 
-    // 顶部状态条右侧的时间窗口标签文本（如 "· 5min"），随 timeWindowSec 动态显示
-    readonly property string timeWindowLabel: "· " + (timeWindowSec / 60) + "min"
+    // 依据当前 timeWindowSec 反查 X 轴刻度位置数组，元素为"距当前的秒数"（负值，0 表示现在）
+    // 设计原因：原实现直接把 "-45s"/"now" 这类英文串写进数组，无法翻译；
+    // 改为数据（秒数）与文案（formatTickLabel）分离，刻度数量与间隔逻辑保持不变：
+    // 1 分钟用 15 秒间隔 5 个刻度、5 分钟用 1 分钟间隔 6 个、30 分钟用 5 分钟间隔 7 个
+    readonly property var xAxisTicks: {
+        if (timeWindowSec <= 60)     return [-60, -45, -30, -15, 0]
+        if (timeWindowSec <= 300)    return [-300, -240, -180, -120, -60, 0]
+        return [-1800, -1500, -1200, -900, -600, -300, 0]
+    }
+
+    // 刻度文案：0 显示"现在"，整分钟用分钟表达，其余用秒表达
+    function formatTickLabel(seconds) {
+        if (seconds === 0) return qsTr("now")
+        if (seconds % 60 === 0) return qsTr("-%1 min").arg(-seconds / 60)
+        return qsTr("-%1 s").arg(-seconds)
+    }
+
+    // 顶部状态条右侧的时间窗口标签文本（如 "· 5 min"），随 timeWindowSec 动态显示
+    readonly property string timeWindowLabel: "· " + formatWindowLabel(timeWindowSec)
 
     // 窗口置顶状态：true 时 flags 附加 Qt.WindowStaysOnTopHint，窗口保持在
     // 所有非置顶窗口之上（便于边下载大文件边观察曲线）；由标题栏图钉按钮切换
@@ -307,7 +320,7 @@ Window {
 
                 Item { Layout.fillWidth: true }
 
-                // 时间窗口选择器：三个小按钮 1m / 5m / 30m，当前选中项用 accentBlue 高亮
+                // 时间窗口选择器：三个小按钮 1 分钟 / 5 分钟 / 30 分钟，当前选中项用 accentBlue 高亮
                 // 设计原因：时间窗口切换是图表最常用的操作，直接置于顶部状态条便于快速切换；
                 // 用比接口 chip 更小的尺寸（22x18）避免挤占状态条空间
                 Repeater {
@@ -315,7 +328,7 @@ Window {
 
                     Rectangle {
                         required property var modelData
-                        property bool isSelected: root.timeWindowSec === modelData.seconds
+                        property bool isSelected: root.timeWindowSec === modelData
 
                         width: 24
                         height: 18
@@ -329,7 +342,7 @@ Window {
 
                         Text {
                             anchors.centerIn: parent
-                            text: modelData.label
+                            text: root.formatWindowLabel(modelData)
                             font.pixelSize: 10
                             font.weight: isSelected ? Font.Bold : Font.Normal
                             color: isSelected ? "white" : (mouse.containsMouse ? common.accentBlue : theme.textSecondary)
@@ -341,8 +354,8 @@ Window {
                             cursorShape: Qt.PointingHandCursor
                             hoverEnabled: true
                             onClicked: {
-                                if (root.timeWindowSec !== modelData.seconds) {
-                                    root.timeWindowSec = modelData.seconds
+                                if (root.timeWindowSec !== modelData) {
+                                    root.timeWindowSec = modelData
                                     // 时间窗口变化后：清空 Hover（坐标系已变），并重绘图表
                                     root.hoverIndex = -1
                                     root.hoverHint = ""
@@ -450,17 +463,16 @@ Window {
                     }
 
                     // ---- X 轴刻度：按时间窗口参数化，均布于绘图区 ----
-                    // 标签数组由 root.xAxisLabels 依据 timeWindowSec 动态生成
-                    // （1 分钟用 15 秒间隔 5 个标签，5 分钟用 1 分钟间隔 6 个，
-                    // 30 分钟用 5 分钟间隔 7 个）；循环按数组长度参数化，两端左/右对齐
-                    var xLabels = root.xAxisLabels
+                    // 刻度位置由 root.xAxisTicks 依据 timeWindowSec 动态生成（秒数数组），
+                    // 文案由 formatTickLabel 生成；循环按数组长度参数化，两端左/右对齐
+                    var xTicks = root.xAxisTicks
                     ctx.fillStyle = root.axisTextColor
                     ctx.textBaseline = "alphabetic"
-                    for (i = 0; i < xLabels.length; i++) {
-                        var lx = pl + pw * i / (xLabels.length - 1)
+                    for (i = 0; i < xTicks.length; i++) {
+                        var lx = pl + pw * i / (xTicks.length - 1)
                         // 两端标签分别左/右对齐，避免文字越出卡片边缘被裁剪
-                        ctx.textAlign = i === 0 ? "left" : (i === xLabels.length - 1 ? "right" : "center")
-                        ctx.fillText(xLabels[i], lx, height - 8)
+                        ctx.textAlign = i === 0 ? "left" : (i === xTicks.length - 1 ? "right" : "center")
+                        ctx.fillText(root.formatTickLabel(xTicks[i]), lx, height - 8)
                     }
 
                     // ---- 空状态：画完空网格后中央提示，不画折线（规范 §5）----
