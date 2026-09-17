@@ -16,7 +16,7 @@
 //   （日期, 接口）记录；底部汇总所有显示记录的总下载/总上传/总流量
 // - 数据刷新：C++ 每 30 秒保存并发射 trafficLogChanged，本窗口据此重建表格
 // 触发方式：右键菜单"流量统计" -> show()/raise()/requestActivate()
-// 公共能力复用：窗口外壳（标题栏/位置持久化）取自 WindowShell，主题色经 root.theme 访问，
+// 公共能力复用：窗口外壳（标题栏/置顶/位置与置顶状态持久化）取自 WindowShell，主题色经 root.theme 访问，
 // 格式化函数取自 NetCommon.formatTotal
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
@@ -29,6 +29,8 @@ WindowShell {
     // 外壳参数：窗口标识（位置与置顶状态持久化用）与标题栏文字
     windowKey: "stats"
     title: qsTr("Traffic Statistics")
+    // 置顶按钮：统计窗口常用于"边看曲线/表格边做别的事"，与图表窗口一致提供置顶
+    pinnable: true
 
     // 公共格式化函数：集中定义于同目录 NetCommon.qml，
     // 与 networkview.qml、TrafficChartWindow 共享同一份实现

@@ -44,9 +44,8 @@ Window {
     property var applet: null
     // 关闭按钮 hover 高亮色：由各窗口传入 accentColor
     property color accentColor: common.accentRed
-    // 是否显示置顶按钮：置顶能力由外壳实现，但按钮是否出现取决于窗口是否需要
-    // 设计原因：此前只有图表窗口有置顶按钮，若改为三个窗口一律显示属于界面变化，
-    // 需产品确认；故用开关控制，将来要让某窗口支持置顶只需置 true
+    // 是否显示置顶按钮：三个业务窗口（图表/统计/TCP）均已开启，
+    // 保留该开关是为了让"不需要置顶"的窗口（或将来复用的新窗口）能不显示按钮
     property bool pinnable: false
     // 置顶状态：与窗口 flags（WindowStaysOnTopHint）联动并持久化
     property bool pinned: false

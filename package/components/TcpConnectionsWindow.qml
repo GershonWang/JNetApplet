@@ -15,7 +15,7 @@
 //   为 null 时组件可独立预览（显示空状态）
 // - 定时刷新：窗口可见时每 5 秒重建清单（与 C++ 后端降频周期一致），关闭时停止
 // 触发方式：右键菜单"TCP 连接清单" -> show()/raise()/requestActivate()
-// 公共能力复用：窗口外壳（标题栏/位置持久化）取自 WindowShell，主题色经 root.theme 访问
+// 公共能力复用：窗口外壳（标题栏/置顶/位置与置顶状态持久化）取自 WindowShell，主题色经 root.theme 访问
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
@@ -28,6 +28,8 @@ WindowShell {
     // 外壳参数：窗口标识（位置与置顶状态持久化用）与标题栏文字
     windowKey: "tcp"
     title: qsTr("TCP Connections")
+    // 置顶按钮：排查连接时常需对照其他窗口，提供置顶
+    pinnable: true
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 tcpConnectionList（QVariantList of QVariantMap）；为 null 时可独立预览（显示空状态）
