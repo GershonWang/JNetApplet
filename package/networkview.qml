@@ -343,11 +343,16 @@ AppletItem {
     // 弹窗内容由 NetworkPopup.qml 提供，传入 applet，内部自行派生颜色和数据
     PanelPopup {
         id: networkPopup
-        width: 330
-        // 高度需容纳弹窗内容：接口信息(76) + 实时速度(60) + 累计/包统计/TCP 三行 +
-        // 接口 chip 区(40) + 详情入口行(18) + 分隔线与间距；原 320 已接近内容总高，
-        // 新增详情入口后上调，避免 ColumnLayout 压缩固定高度分区
-        height: 348
+        // 尺寸跟随弹窗内容的隐式尺寸：
+        // PanelPopup 是独立窗口，超出窗口边界的内容会被直接裁掉。此前硬编码 330x348，
+        // 而中文文案下内容实测需要 412x377（最宽的包统计行 388px + 左右内边距；
+        // 高度需容纳底部详情入口行），结果是右侧（上传速度单位、错误/丢包、
+        // 第三个接口 chip）与底部（三个详情入口）被裁切。改为由内容实测尺寸驱动后，
+        // 翻译文案、字号、数值长度变化都不再引发裁切。
+        // 保留原值作为下限：占位态（未检测到接口）内容更矮更窄，
+        // 避免弹窗塌缩成一条，同时维持"打开即为稳定尺寸"的观感
+        width: Math.max(330, popupContent.implicitWidth)
+        height: Math.max(348, popupContent.implicitHeight)
         popupX: DockPanelPositioner.x
         popupY: DockPanelPositioner.y
 
