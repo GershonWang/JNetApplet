@@ -207,7 +207,7 @@ WindowShell {
 
                 // 时间窗口选择器：三个小按钮 1 分钟 / 5 分钟 / 30 分钟，当前选中项用 accentBlue 高亮
                 // 设计原因：时间窗口切换是图表最常用的操作，直接置于顶部状态条便于快速切换；
-                // 用比接口 chip 更小的尺寸（22x18）避免挤占状态条空间
+                // 用比接口 chip 更矮的尺寸（高 18px）避免挤占状态条空间
                 Repeater {
                     model: root.timeWindows
 
@@ -219,7 +219,11 @@ WindowShell {
                         Accessible.name: root.formatWindowLabel(modelData)
                         Accessible.checked: isSelected
 
-                        width: 24
+                        // 宽度按按钮文案实测：中文"1 分钟 / 5 分钟 / 30 分钟"在 10px 字号下
+                        // 约 28~33px，原固定 24px（按英文 1m/5m/30m 设计）会让文字居中溢出到
+                        // 相邻按钮和右侧接口标签上，视觉上连成一片；+12 为左右各 6px 内边距，
+                        // 保留下限 24 使极短文案（如将来新增的 "1m"）仍保持一致的点击热区
+                        width: Math.max(24, label.implicitWidth + 12)
                         height: 18
                         radius: 4
                         // 选中态：蓝色填充+白字；未选中态：透明背景+浅边框，hover 边框变蓝
@@ -234,6 +238,7 @@ WindowShell {
                                        : (mouse.containsMouse ? common.accentBlue : root.theme.lineColor)
 
                         Text {
+                            id: label
                             anchors.centerIn: parent
                             text: root.formatWindowLabel(modelData)
                             font.pixelSize: 10
