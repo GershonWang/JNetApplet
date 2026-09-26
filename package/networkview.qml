@@ -100,6 +100,17 @@ AppletItem {
         target.requestActivate()
     }
 
+    // 弹窗锚点矩形：以任务栏图标中心为锚，宽度取弹窗当前宽度
+    // 设计原因：常驻绑定（Component.onCompleted）与每次点击前的刷新必须走同一份计算。
+    // 此前两处各写一遍，且点击时用直接赋值覆盖——QML 中给已有绑定的属性直接赋值会拆掉绑定，
+    // 拆掉后 bounding 不再随弹窗宽度变化重算；而 DockPanelPositioner 默认取 bounding.width/2
+    // 作水平偏移，于是打开期间内容宽度变化时弹窗会按旧宽度居中（偏移量为宽度差的一半）。
+    // 故收敛为这一个函数，两处都用 Qt.binding 赋值：既刷新当前位置，又保住绑定语义。
+    function popupBounding() {
+        const point = root.mapToItem(null, root.width / 2, root.height / 2)
+        return Qt.rect(point.x, point.y, networkPopup.width, networkPopup.height)
+    }
+
     // 同步刷新面板定位器坐标：凡是"设置 bounding 后立刻 open()"的路径都必须在 open() 前调用
     // 背景：dde-shell ≤ 2.0.53 的 DockPositioner 把 boundingChanged 只连到 update()，
     // 而 update() 仅是启动 0ms 单次定时器，真正算坐标的 updatePosition() 要等下一轮事件循环。
@@ -402,10 +413,8 @@ AppletItem {
         }
 
         Component.onCompleted: {
-            DockPanelPositioner.bounding = Qt.binding(function () {
-                const point = root.mapToItem(null, root.width / 2, root.height / 2)
-                return Qt.rect(point.x, point.y, networkPopup.width, networkPopup.height)
-            })
+            // 保持为绑定而非一次性取值：弹窗宽度随内容变化时锚点要跟着重算
+            DockPanelPositioner.bounding = Qt.binding(function () { return root.popupBounding() })
         }
     }
 
@@ -510,8 +519,9 @@ AppletItem {
                 networkPopup.close()
             } else {
                 Panel.requestClosePopup()
-                const point = root.mapToItem(null, root.width / 2, root.height / 2)
-                networkPopup.DockPanelPositioner.bounding = Qt.rect(point.x, point.y, networkPopup.width, networkPopup.height)
+                // 图标可能已位移，重新求值锚点；用 Qt.binding 赋值以保留绑定语义
+                // （直接赋值会拆掉 Component.onCompleted 建立的绑定，弹窗宽度变化后不再重算）
+                networkPopup.DockPanelPositioner.bounding = Qt.binding(function () { return root.popupBounding() })
                 // 先同步坐标再 open，避免 dde-shell ≤2.0.53 下首帧用默认 (0,0) 闪现到面板原点
                 syncPanelPositioner(networkPopup.DockPanelPositioner)
                 networkPopup.open()
