@@ -143,6 +143,11 @@ Inherits from `DApplet`, provides:
 - `networkInterfaces`: List of available interfaces
 - `activeInterface`: Currently selected interface (persisted to `~/.config/jnetapplet/settings.ini`)
 - `ipAddress` / `ipv6Address`: IP address of the active interface
+- `linkDown`: Whether the active interface's link layer is down (`carrier == 0` or
+  `operstate != up`), read from sysfs by the 5-second low-frequency probe; the taskbar,
+  tooltip and popup render this as a disconnection state. Judgement is the pure static
+  `isLinkDown(carrier, operState)`, covered by the unit tests' truth table.
+  Note `ready` means "is any interface present", which is unrelated to link state.
 - `version`: Plugin version (from metadata, fallback to `PROJECT_VERSION` macro)
 - `textColor`: Taskbar font color (empty = follow system theme, persisted)
 - `speedHistoryDownload` / `speedHistoryUpload`: Per-interface speed history
