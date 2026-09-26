@@ -17,7 +17,8 @@
   而每次左键点击都用直接赋值覆盖——QML 中给已有绑定的属性直接赋值即等同拆掉绑定，此后
   `bounding` 不再随弹窗宽度变化重算；而 `DockPanelPositioner` 默认取 `bounding.width/2`
   作水平偏移，于是打开期间内容宽度变化时弹窗会按旧宽度居中（偏移量为宽度差的一半）。
-  现在锚点计算收敛到 `popupBounding()` 一个入口，常驻绑定与点击刷新都用 `Qt.binding` 赋值，
+  现在锚点计算收敛到 `panelAnchorRect()` 一个入口（弹窗经无参包装 `popupBounding()` 供
+  `Qt.binding` 求值，悬停提示直接复用），常驻绑定与点击刷新都用 `Qt.binding` 赋值，
   既刷新当前位置又保持绑定语义（详见 `package/networkview.qml`）。
 
 > 验证状态：2026-09-26 真机初步确认——安装含以上两项改动的构建并重启 `dde-shell@DDE` 后，

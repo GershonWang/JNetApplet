@@ -100,15 +100,24 @@ AppletItem {
         target.requestActivate()
     }
 
-    // 弹窗锚点矩形：以任务栏图标中心为锚，宽度取弹窗当前宽度
+    // 面板锚点矩形：以任务栏图标中心为锚，尺寸取被定位窗口的当前尺寸
+    // 设计原因：弹窗与悬停提示的锚点算法完全相同（图标中心 + 目标窗口尺寸），
+    // 此前弹窗绑定与 showToolTip 各写一遍 mapToItem + Qt.rect。收敛到这一个入口后，
+    // 锚点规则（尤其是 mapToItem(null, …) 这一坐标参照系的选择）只有一处定义，
+    // 以后要改参照系或加偏移量不会出现漏改。
+    function panelAnchorRect(targetWidth, targetHeight) {
+        const point = root.mapToItem(null, root.width / 2, root.height / 2)
+        return Qt.rect(point.x, point.y, targetWidth, targetHeight)
+    }
+
+    // 弹窗锚点：作为 Qt.binding 的求值入口使用（绑定表达式需要无参函数）
     // 设计原因：常驻绑定（Component.onCompleted）与每次点击前的刷新必须走同一份计算。
-    // 此前两处各写一遍，且点击时用直接赋值覆盖——QML 中给已有绑定的属性直接赋值会拆掉绑定，
+    // 此前点击时用直接赋值覆盖常驻绑定——QML 中给已有绑定的属性直接赋值会拆掉绑定，
     // 拆掉后 bounding 不再随弹窗宽度变化重算；而 DockPanelPositioner 默认取 bounding.width/2
     // 作水平偏移，于是打开期间内容宽度变化时弹窗会按旧宽度居中（偏移量为宽度差的一半）。
-    // 故收敛为这一个函数，两处都用 Qt.binding 赋值：既刷新当前位置，又保住绑定语义。
+    // 故两处都用 Qt.binding 赋值：既刷新当前位置，又保住绑定语义。
     function popupBounding() {
-        const point = root.mapToItem(null, root.width / 2, root.height / 2)
-        return Qt.rect(point.x, point.y, networkPopup.width, networkPopup.height)
+        return panelAnchorRect(networkPopup.width, networkPopup.height)
     }
 
     // 同步刷新面板定位器坐标：凡是"设置 bounding 后立刻 open()"的路径都必须在 open() 前调用
@@ -128,11 +137,10 @@ AppletItem {
 
     // 显示悬停提示：以图标中心为锚点定位后打开
     // 设计原因：图标 hover 与"弹窗关闭后恢复提示"两条路径共用同一份定位逻辑，
-    // 避免两处各写一遍 rect 计算
+    // 避免两处各写一遍 rect 计算；锚点算法本身取自 panelAnchorRect，不再就地展开
     // 首次 hover 也会命中上述首帧默认坐标问题，故定位后先同步坐标再 open
     function showToolTip() {
-        const point = root.mapToItem(null, root.width / 2, root.height / 2)
-        toolTip.DockPanelPositioner.bounding = Qt.rect(point.x, point.y, toolTip.width, toolTip.height)
+        toolTip.DockPanelPositioner.bounding = panelAnchorRect(toolTip.width, toolTip.height)
         syncPanelPositioner(toolTip.DockPanelPositioner)
         toolTip.open()
     }
