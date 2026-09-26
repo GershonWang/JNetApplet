@@ -44,6 +44,12 @@ AppletItem {
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
+    // 活动接口链路层是否断开（后端读 carrier/operstate 判定），供任务栏与提示展示断连态
+    readonly property bool linkDown: applet ? (applet.linkDown === true) : false
+    // 是否呈现断连态：必须在有接口的前提下才成立
+    // 设计原因：无接口时后端会把 linkDown 置回 false，但即便出现时序间隙，
+    // 也不该让"未检测到接口"的占位态与"接口断了"混为一谈
+    readonly property bool linkDownNow: ready && linkDown
 
     // 公共颜色与格式化函数：集中定义于 components/NetCommon.qml（随 import "components" 引入），
     // 与 NetworkPopup、TrafficChartWindow 共享同一份实现，消除跨组件重复定义
@@ -175,7 +181,9 @@ AppletItem {
     // 整数位数不同时小数点仍垂直对齐；箭头与数值间距固定不随位数变化
     Column {
         id: horizontalSpeed
-        visible: !root.isVerticalDock
+        // 断连时整组隐藏，改由本文件末尾的断连标识 Text 显示"—"
+        // （避免 0.00K 被误读为"网速很慢"）
+        visible: !root.isVerticalDock && !root.linkDownNow
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: 4
@@ -274,7 +282,7 @@ AppletItem {
     // 设计原因：竖向任务栏宽度仅 ~40px，水平布局的 "↓6.64K" 约 35px 勉强容纳但
     // 数值长度变化时易裁切；逐字符竖排每列仅 ~10px，双列 ~25px，舒适容纳且视觉对称
     RowLayout {
-        visible: root.isVerticalDock
+        visible: root.isVerticalDock && !root.linkDownNow
         anchors.top: parent.top
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.topMargin: 4
@@ -333,15 +341,30 @@ AppletItem {
         }
     }
 
+    // 断连标识：水平与竖向两套布局共用同一个"—"（断连时它们各自隐藏，不会重叠）
+    // 设计原因：0.00K 会被误读为"网速很慢"而非"链路断开"，故用符号替代数值；
+    // 颜色固定用次要色而非用户自定义的速度色——用户若选了红色，断连态会被误读成告警
+    Text {
+        visible: root.linkDownNow
+        anchors.centerIn: parent
+        text: "—"
+        font.pixelSize: root.dockSize * 0.30
+        font.weight: Font.Medium
+        color: common.secondaryText
+    }
+
     // 悬停提示：网卡名 + IPv4 单行，IPv6 在第二行（仅有 IPv6 时追加）
     // 设计原因：IPv6 地址较长，单行容纳不下；无 IPv6 时保持单行与原视觉一致
     PanelToolTip {
         id: toolTip
-        text: root.ready
-              ? (root.activeInterface
-                 + " · " + qsTr("IPv4: ") + (root.ipAddress || qsTr("None"))
-                 + (root.ipv6Address ? "\n" + qsTr("IPv6: ") + root.ipv6Address : ""))
-              : qsTr("No network interface detected")
+        text: !root.ready
+              ? qsTr("No network interface detected")
+              : (root.linkDownNow
+                 // 断连时只说明接口已断开，不再拼地址行（此时地址可能仍是残留值）
+                 ? (root.activeInterface + " · " + qsTr("Disconnected"))
+                 : (root.activeInterface
+                    + " · " + qsTr("IPv4: ") + (root.ipAddress || qsTr("None"))
+                    + (root.ipv6Address ? "\n" + qsTr("IPv6: ") + root.ipv6Address : "")))
         toolTipX: DockPanelPositioner.x
         toolTipY: DockPanelPositioner.y
     }
