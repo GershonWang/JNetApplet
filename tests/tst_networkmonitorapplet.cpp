@@ -4,7 +4,7 @@
 
 // NetworkMonitorApplet 单元测试
 // 覆盖核心纯逻辑函数：isPhysicalInterface、速度计算（含真实间隔/负值钳制/总量累加）、
-// setActiveInterface 接口校验
+// setActiveInterface 接口校验、isLinkDown 链路通断判定
 // 用 #define private public 技巧访问私有成员（friend 声明因 DS_BEGIN_NAMESPACE
 // 命名空间与 Q_OBJECT 宏交互而无法正确解析，此为 C++ 测试常用替代方案）
 
@@ -61,6 +61,10 @@ private slots:
     void testLoadTrafficLogInvalid();
     // ss 输出解析：IPv4/IPv6/无进程名/空输入
     void testParseTcpConnectionList();
+
+    // 链路断开判定：carrier 三态（读不到/无载波/有载波）与 operstate 组合的真值表
+    void testIsLinkDown_data();
+    void testIsLinkDown();
 };
 
 void NetworkMonitorAppletTest::testIsPhysicalInterface_data()
@@ -373,6 +377,43 @@ void NetworkMonitorAppletTest::testParseTcpConnectionList()
     QVERIFY(applet->parseTcpConnectionList(QString()).isEmpty());
 
     delete applet;
+}
+
+// 链路断开判定真值表
+// carrier 三态（-1 读不到 / 0 无载波 / 1 有载波）与 operstate 的组合，
+// 覆盖设计文档中的全部规则分支，规则顺序即短路顺序
+void NetworkMonitorAppletTest::testIsLinkDown_data()
+{
+    QTest::addColumn<int>("carrier");
+    QTest::addColumn<QString>("operState");
+    QTest::addColumn<bool>("expected");
+
+    // 规则 1：carrier 读不到 → 未知，判为未断开（宁可漏报不误报）
+    QTest::newRow("carrier-unreadable-up") << -1 << QStringLiteral("up") << false;
+    QTest::newRow("carrier-unreadable-down") << -1 << QStringLiteral("down") << false;
+    // 规则 2：operstate 为 up → 未断开（即使 carrier 读数为 0，以 operstate 为准）
+    QTest::newRow("up-with-carrier") << 1 << QStringLiteral("up") << false;
+    QTest::newRow("up-without-carrier") << 0 << QStringLiteral("up") << false;
+    // 规则 3：无载波 → 断开
+    QTest::newRow("down-without-carrier") << 0 << QStringLiteral("down") << true;
+    // 规则 4：虚拟接口的 unknown / 读不到的状态 → 只信 carrier
+    QTest::newRow("unknown-with-carrier") << 1 << QStringLiteral("unknown") << false;
+    QTest::newRow("unknown-without-carrier") << 0 << QStringLiteral("unknown") << true;
+    QTest::newRow("empty-state-with-carrier") << 1 << QString() << false;
+    QTest::newRow("empty-state-without-carrier") << 0 << QString() << true;
+    // 规则 5：其余状态 → 断开
+    QTest::newRow("dormant") << 1 << QStringLiteral("dormant") << true;
+    QTest::newRow("lowerlayerdown") << 1 << QStringLiteral("lowerlayerdown") << true;
+}
+
+void NetworkMonitorAppletTest::testIsLinkDown()
+{
+    QFETCH(int, carrier);
+    QFETCH(QString, operState);
+    QFETCH(bool, expected);
+
+    // isLinkDown 为静态纯函数，直接按值断言，不依赖 applet 实例状态
+    QCOMPARE(NetworkMonitorApplet::isLinkDown(carrier, operState), expected);
 }
 
 QTEST_MAIN(NetworkMonitorAppletTest)

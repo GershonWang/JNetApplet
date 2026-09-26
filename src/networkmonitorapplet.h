@@ -71,6 +71,10 @@ class NetworkMonitorApplet : public DApplet
     // 活动接口的链路协商速率（Mbps）：有线读 /sys/class/net/<iface>/speed，
     // 无线读失败时降级解析 `iw dev link` 的 bitrate；0 表示不可用
     Q_PROPERTY(int linkSpeed READ linkSpeed NOTIFY linkSpeedChanged)
+    // 活动接口链路层是否断开（carrier 为 0 或 operstate 非 up），供任务栏、悬停提示与弹窗显示断连态
+    // 设计原因：ready 表示"有没有接口"，与"接口是否连得通"无关，两者混淆会让"网线被拔"
+    // 显示成"未检测到接口"，故这里独立成一个属性；判定挂在 5 秒低频探测中（链路状态变化远慢于速度）
+    Q_PROPERTY(bool linkDown READ linkDown NOTIFY linkDownChanged)
     // 刷新间隔（毫秒），默认 1000，用户在设置窗口选择后持久化并即时生效
     Q_PROPERTY(int refreshInterval READ refreshInterval WRITE setRefreshInterval NOTIFY refreshIntervalChanged)
     // 当前活动接口的 TCP ESTABLISHED 连接数，供弹窗展示
@@ -126,6 +130,8 @@ public:
     quint64 txDropped() const;
     // 返回活动接口的链路协商速率（Mbps），0 表示不可用
     int linkSpeed() const;
+    // 返回活动接口链路层是否断开（carrier 为 0 或 operstate 非 up），true 表示断连
+    bool linkDown() const;
     // 返回刷新间隔（毫秒）
     int refreshInterval() const;
     // 设置刷新间隔（毫秒），校验后持久化并即时生效
@@ -178,6 +184,8 @@ signals:
     void packetStatsChanged();
     // 活动接口链路速率变化时通知 QML 更新
     void linkSpeedChanged();
+    // 活动接口链路断开状态变化时通知 QML 更新
+    void linkDownChanged();
     // 刷新间隔变化时通知 QML 更新
     void refreshIntervalChanged();
     // TCP ESTABLISHED 连接数变化时通知 QML 更新
@@ -215,6 +223,22 @@ private:
     int readSysfsLinkSpeed(const QString &iface) const;
     // 更新链路速率缓存，仅在值变化时发射 linkSpeedChanged
     void setLinkSpeed(int mbps);
+
+    // ---- 链路层通断检测（carrier / operstate）----
+    // 读取活动接口的 carrier 与 operstate 并更新 m_linkDown；
+    // 仅由低频探测在活动接口非空时调用（链路通断变化远慢于速度），不新增定时器
+    void updateLinkState();
+    // 读取 /sys/class/net/<iface>/carrier，返回 -1 表示读不到（接口已消失、权限不足等，
+    // 调用方按"未知"处理、不做断连判定），0 表示无载波，1 表示有载波
+    int readSysfsCarrier(const QString &iface) const;
+    // 读取 /sys/class/net/<iface>/operstate 原文并转小写（如 "up"/"down"/"unknown"），
+    // 读不到返回空串（与 carrier 读不到同样按"未知"处理）
+    QString readSysfsOperState(const QString &iface) const;
+    // 由 carrier 与 operstate 判定链路是否断开（纯函数，便于单元测试覆盖真值表）；
+    // carrier 取 -1/0/1，operstate 取 sysfs 原文小写，规则见实现处注释
+    static bool isLinkDown(int carrier, const QString &operState);
+    // 更新链路断开缓存，仅在值变化时发射 linkDownChanged，避免 QML 无效重绘
+    void setLinkDown(bool down);
     // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
     int parseIwBitrate(const QString &output) const;
     // 统计 /proc/net/tcp 与 tcp6 中 ESTABLISHED（状态 01）的连接数
@@ -287,6 +311,9 @@ private:
     int m_tcpConnections;
     // 活动接口的 WiFi 信号强度（dBm），0 表示不可用
     int m_wifiSignal;
+    // 活动接口链路层是否断开（carrier 为 0 或 operstate 非 up）
+    // 与 m_linkSpeed/m_wifiSignal 同属低频探测结果，故放在一起
+    bool m_linkDown;
     // 低频统计检测计数器：链路速率/WiFi 信号每 5 次 refresh 检测一次
     // 初始化 4 使首次 refresh 立即检测
     int m_lowFreqCounter;

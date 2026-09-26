@@ -48,6 +48,7 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_refreshInterval(1000)
     , m_tcpConnections(0)
     , m_wifiSignal(0)
+    , m_linkDown(false)
     , m_lowFreqCounter(4)
     , m_ipDetectCounter(4)
     , m_ready(false)
@@ -190,6 +191,8 @@ quint64 NetworkMonitorApplet::txDropped() const { return m_txDropped; }
 
 // 返回活动接口的链路协商速率（Mbps），0 表示不可用
 int NetworkMonitorApplet::linkSpeed() const { return m_linkSpeed; }
+
+bool NetworkMonitorApplet::linkDown() const { return m_linkDown; }
 
 // 返回刷新间隔（毫秒）
 int NetworkMonitorApplet::refreshInterval() const { return m_refreshInterval; }
@@ -794,12 +797,14 @@ void NetworkMonitorApplet::detectIpAddress()
     }
 }
 
-// 低频统计检测：链路速率与 WiFi 信号（每 5 秒或接口切换时），变化时发射对应信号
-// 设计原因：这两项数据变化频率极低（协商速率/信号强度基本稳定），
+// 低频统计检测：链路层状态、链路速率与 WiFi 信号（每 5 秒或接口切换时），变化时发射对应信号
+// 设计原因：这三项数据变化频率极低（链路通断/协商速率/信号强度基本稳定），
 // 无需每秒读取，降频降低系统调用与文件读取开销
 void NetworkMonitorApplet::detectLowFreqStats()
 {
     if (!m_activeInterface.isEmpty()) {
+        // 链路层状态：读 carrier 与 operstate 判断是否断连（一次微小的 sysfs 读取）
+        updateLinkState();
         // 链路速率：有线走同步 sysfs，无线走异步 iw；两者内部负责在变化时发射信号
         updateLinkSpeed();
         const int sig = detectWifiSignal(m_activeInterface);
@@ -808,7 +813,9 @@ void NetworkMonitorApplet::detectLowFreqStats()
             emit wifiSignalChanged();
         }
     } else {
-        // 无活动接口时归零，避免显示上一接口的残留数据
+        // 无活动接口时归零，避免显示上一接口的残留数据；
+        // 断连态一并清除，该场景由 QML 的"未检测到接口"占位态负责呈现
+        setLinkDown(false);
         setLinkSpeed(0);
         if (m_wifiSignal != 0) {
             m_wifiSignal = 0;
@@ -905,6 +912,83 @@ void NetworkMonitorApplet::setLinkSpeed(int mbps)
     }
     m_linkSpeed = mbps;
     emit linkSpeedChanged();
+}
+
+// 读取 /sys/class/net/<iface>/carrier
+// 返回值语义：-1 读不到（未知）、0 无载波、1 有载波
+// 设计原因：用三态而非 bool，是因为"读不到"与"无载波"含义完全不同——
+// 前者是接口刚消失或权限不足（应保持现状、不误报），后者才是真的断了
+int NetworkMonitorApplet::readSysfsCarrier(const QString &iface) const
+{
+    QFile f(QStringLiteral("/sys/class/net/%1/carrier").arg(iface));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return -1;
+    }
+    const QString val = QString::fromLatin1(f.readAll()).trimmed();
+    f.close();
+    if (val == QLatin1String("1")) {
+        return 1;
+    }
+    return val == QLatin1String("0") ? 0 : -1;
+}
+
+// 读取 /sys/class/net/<iface>/operstate 原文并转小写（如 "up"/"down"/"unknown"）
+// 读不到返回空串；调用方与 carrier 读不到一样按"未知"处理
+// 转小写：内核当前固定输出小写，此处不依赖该约定，避免个别环境差异导致比较失效
+QString NetworkMonitorApplet::readSysfsOperState(const QString &iface) const
+{
+    QFile f(QStringLiteral("/sys/class/net/%1/operstate").arg(iface));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QString();
+    }
+    const QString val = QString::fromLatin1(f.readAll()).trimmed().toLower();
+    f.close();
+    return val;
+}
+
+// 由 carrier 与 operstate 判定链路是否断开（纯函数，便于单元测试）
+// 规则按顺序短路，先命中先返回：
+//   1. carrier < 0（读不到）  → 未断开：未知状态宁可漏报也不误报，
+//      避免接口刚被删除或权限不足时任务栏闪一下断连
+//   2. operstate == "up"      → 未断开：内核已声明链路可用，不再看载波
+//      （存在 operstate 为 up 而 carrier 读数为 0 的驱动，此时以 operstate 为准）
+//   3. carrier == 0           → 断开：无载波（拔网线、接口 down、WiFi 未关联）
+//   4. operstate 为 "unknown" 或空串（读不到）→ 未断开：lo、docker0 等虚拟接口的
+//      operstate 常态即 unknown，这类接口没有真实载波语义，此时只信 carrier
+//   5. 其余（down / dormant / lowerlayerdown 等）→ 断开
+bool NetworkMonitorApplet::isLinkDown(int carrier, const QString &operState)
+{
+    if (carrier < 0) {
+        return false;
+    }
+    if (operState == QLatin1String("up")) {
+        return false;
+    }
+    if (carrier == 0) {
+        return true;
+    }
+    if (operState.isEmpty() || operState == QLatin1String("unknown")) {
+        return false;
+    }
+    return true;
+}
+
+// 读取活动接口的链路层状态并更新缓存
+// 调用时机：仅由 detectLowFreqStats 在活动接口非空时调用，未新增定时器
+void NetworkMonitorApplet::updateLinkState()
+{
+    setLinkDown(isLinkDown(readSysfsCarrier(m_activeInterface),
+                           readSysfsOperState(m_activeInterface)));
+}
+
+// 更新链路断开缓存，仅在值变化时发射 linkDownChanged，避免 QML 无效重绘
+void NetworkMonitorApplet::setLinkDown(bool down)
+{
+    if (m_linkDown == down) {
+        return;
+    }
+    m_linkDown = down;
+    emit linkDownChanged();
 }
 
 // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
