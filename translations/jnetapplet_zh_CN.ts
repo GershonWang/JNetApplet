@@ -67,6 +67,11 @@
         <translation>IPv6</translation>
     </message>
     <message>
+        <location filename="../package/components/NetworkPopup.qml" line="203"/>
+        <source>Link down</source>
+        <translation>链路已断开</translation>
+    </message>
+    <message>
         <location filename="../package/components/NetworkPopup.qml" line="324"/>
         <source>Download</source>
         <translation>下载</translation>
@@ -294,6 +299,11 @@
         <location filename="../package/networkview.qml" line="227"/>
         <source>No network interface detected</source>
         <translation>未检测到网络接口</translation>
+    </message>
+    <message>
+        <location filename="../package/networkview.qml" line="364"/>
+        <source>Disconnected</source>
+        <translation>已断开</translation>
     </message>
     <message>
         <location filename="../package/networkview.qml" line="303"/>

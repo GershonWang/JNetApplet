@@ -54,6 +54,10 @@ Control {
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
+    // 活动接口链路层是否断开，由后端低频检测；与 networkview.qml 的同名属性同源
+    readonly property bool linkDown: applet ? (applet.linkDown === true) : false
+    // 是否呈现断连态：无接口时不成立（该场景由上方占位态呈现，两者语义不能混）
+    readonly property bool linkDownNow: ready && linkDown
 
     // 活动接口的收发包/错误/丢包累计统计（自开机起），由 C++ 后端持续更新
     readonly property real rxPackets: applet ? (applet.rxPackets || 0) : 0
@@ -182,12 +186,24 @@ Control {
                     }
 
                     // 链路协商速率：speed>=1000 显示 Gbps，否则 Mbps；无速率时隐藏
+                    // 断连时也隐藏：此时协商速率是断连前的残留值，显示会引起歧义
                     Text {
                         text: popup.linkSpeed > 0 ? "· " + common.formatLinkSpeed(popup.linkSpeed) : ""
                         font.pixelSize: 12
                         color: popup.tertiaryText
-                        visible: popup.linkSpeed > 0
+                        visible: popup.linkSpeed > 0 && !popup.linkDownNow
                     }
+                }
+
+                // 断连状态行：链路断开时在接口名下方补一行说明
+                // 设计原因：断连时速度区显示"—"、地址行可能仍有残留值，
+                // 需要一行明确的文字说明断开原因，避免用户误判为"网速很慢"
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("Link down")
+                    font.pixelSize: 12
+                    color: common.accentRed
+                    visible: popup.linkDownNow
                 }
 
                 // 行2：IPv4 标签 + 地址 + 复制图标
@@ -373,9 +389,11 @@ Control {
                     }
 
                     // 箭头 + 数值（大号粗体）+ 单位（小号）
+                    // 断连时整行隐藏，由紧随其后的"—"替代，避免 0.00 KB/s 被误读为"网速很慢"
                     RowLayout {
                         spacing: 2
                         Layout.alignment: Qt.AlignHCenter
+                        visible: !popup.linkDownNow
 
                         Text {
                             text: "↓"
@@ -397,6 +415,17 @@ Control {
                             color: common.downloadValueColor(popup.downloadSpeed)
                             Layout.alignment: Qt.AlignBaseline
                         }
+                    }
+
+                    // 断连时的下载数值占位：与速度数值同字号同基线，保持新区块高度稳定，
+                    // 颜色用次要色（非强调色，断连不该被渲染成"高流量告警"）
+                    Text {
+                        visible: popup.linkDownNow
+                        text: "—"
+                        font.pixelSize: 24
+                        font.weight: Font.Bold
+                        color: popup.secondaryText
+                        Layout.alignment: Qt.AlignHCenter
                     }
                 }
             }
@@ -422,9 +451,11 @@ Control {
                     }
 
                     // 箭头 + 数值（大号粗体）+ 单位（小号）
+                    // 断连时整行隐藏，由紧随其后的"—"替代，与下载半区处理一致
                     RowLayout {
                         spacing: 2
                         Layout.alignment: Qt.AlignHCenter
+                        visible: !popup.linkDownNow
 
                         Text {
                             text: "↑"
@@ -446,6 +477,16 @@ Control {
                             color: popup.uploadValueColor
                             Layout.alignment: Qt.AlignBaseline
                         }
+                    }
+
+                    // 断连时的上传数值占位：与下载半区同字号、同颜色、同对齐
+                    Text {
+                        visible: popup.linkDownNow
+                        text: "—"
+                        font.pixelSize: 24
+                        font.weight: Font.Bold
+                        color: popup.secondaryText
+                        Layout.alignment: Qt.AlignHCenter
                     }
                 }
             }
