@@ -100,12 +100,29 @@ AppletItem {
         target.requestActivate()
     }
 
+    // 同步刷新面板定位器坐标：凡是"设置 bounding 后立刻 open()"的路径都必须在 open() 前调用
+    // 背景：dde-shell ≤ 2.0.53 的 DockPositioner 把 boundingChanged 只连到 update()，
+    // 而 update() 仅是启动 0ms 单次定时器，真正算坐标的 updatePosition() 要等下一轮事件循环。
+    // 本插件在同一个 JS 调用栈内"设置 bounding → 立刻 open()"，于是弹窗/提示的首帧
+    // 读到的是 DockPositioner 的默认坐标 (0,0)——相对面板左上角，dock 在屏幕底部时
+    // 即屏幕左下角，表现为空框先在左下角闪现一下，随后才被定时器算出的正确坐标移到图标上方。
+    // 上游已在 dde-shell 2.0.54（commit bcbfbdfb）把该路径改成同步计算；这里显式调用一次
+    // updatePosition()，让 ≤2.0.53 也能在 open() 前拿到正确坐标。新版本重复调用是幂等的
+    // （坐标未变时 setX/setY 直接返回），无副作用；接口缺失时静默退化为原行为，不因缺接口报错。
+    function syncPanelPositioner(attachedPositioner) {
+        if (attachedPositioner && typeof attachedPositioner.updatePosition === "function") {
+            attachedPositioner.updatePosition()
+        }
+    }
+
     // 显示悬停提示：以图标中心为锚点定位后打开
     // 设计原因：图标 hover 与"弹窗关闭后恢复提示"两条路径共用同一份定位逻辑，
     // 避免两处各写一遍 rect 计算
+    // 首次 hover 也会命中上述首帧默认坐标问题，故定位后先同步坐标再 open
     function showToolTip() {
         const point = root.mapToItem(null, root.width / 2, root.height / 2)
         toolTip.DockPanelPositioner.bounding = Qt.rect(point.x, point.y, toolTip.width, toolTip.height)
+        syncPanelPositioner(toolTip.DockPanelPositioner)
         toolTip.open()
     }
 
@@ -495,6 +512,8 @@ AppletItem {
                 Panel.requestClosePopup()
                 const point = root.mapToItem(null, root.width / 2, root.height / 2)
                 networkPopup.DockPanelPositioner.bounding = Qt.rect(point.x, point.y, networkPopup.width, networkPopup.height)
+                // 先同步坐标再 open，避免 dde-shell ≤2.0.53 下首帧用默认 (0,0) 闪现到面板原点
+                syncPanelPositioner(networkPopup.DockPanelPositioner)
                 networkPopup.open()
             }
             toolTip.close()
