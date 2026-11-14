@@ -48,15 +48,34 @@ Or use the install script:
 bash install.sh
 ```
 
-`cmake --install` needs `sudo` because the default `DDE_SHELL_PACKAGE_INSTALL_DIR`
-is `/usr/share/dde-shell` (a CMake CACHE variable on this system).
+`cmake --install` needs `sudo` because the install destinations live under `/usr`
+(default `DDE_SHELL_PACKAGE_INSTALL_DIR` = `/usr/share/dde-shell`).
 
-The plugin shared library installs to `/usr/lib/${_GNU_TRIPLET}/dde-shell/`, where
-the GNU triplet is derived at configure time from `dpkg --print-architecture`
-(amd64 -> `x86_64-linux-gnu`, arm64 -> `aarch64-linux-gnu`,
-loong64 -> `loongarch64-linux-gnu`), falling back to `CMAKE_LIBRARY_ARCHITECTURE`
-and then `x86_64-linux-gnu`. `install.sh` mirrors the same detection for its
-post-install verification output.
+Install paths come from variables exported by `DDEShellConfig.cmake` (verified by
+reading the installed file, not assumed):
+
+- `DDE_SHELL_PACKAGE_INSTALL_DIR` — default `/usr/share/dde-shell`; holds
+  `metadata.json`, the QML entry, `components/` and `translations/` under
+  `${DDE_SHELL_PACKAGE_INSTALL_DIR}/${PLUGIN_ID}/`.
+- `DDE_SHELL_PLUGIN_INSTALL_DIR` — default `/usr/lib/<triplet>/dde-shell`; holds
+  `space.jokul.JNetApplet.so`.
+
+These are **plain variables, not CACHE variables**, and the upstream triplet is
+already baked into `DDE_SHELL_PLUGIN_INSTALL_DIR` — so this project no longer
+derives a GNU triplet of its own or hardcodes `/usr` in `install(DESTINATION)`.
+That matters because absolute destinations silently ignore
+`CMAKE_INSTALL_PREFIX` and `cmake --install --prefix`. If an ancient dde-shell
+does not export them, `CMakeLists.txt` falls back to `GNUInstallDirs`
+(`${CMAKE_INSTALL_DATADIR}/dde-shell` and `${CMAKE_INSTALL_LIBDIR}/dde-shell`).
+
+`configure` prints the resolved locations, e.g.:
+
+```
+-- JNetApplet 安装位置：插件 /usr/lib/x86_64-linux-gnu/dde-shell，资源 /usr/share/dde-shell/space.jokul.JNetApplet
+```
+
+`install.sh` still detects a triplet, but only to print its post-install
+verification paths; it does not decide where files are installed.
 
 ### Deb packaging
 
@@ -72,11 +91,22 @@ After installation, restart dde-shell:
 systemctl --user restart dde-shell@DDE
 ```
 
-There is no lint, typecheck, or CI target. Verification:
+CI (`.github/workflows/static-check.yml`) runs only checks that do **not** need the
+deepin stack, because a GitHub-hosted runner cannot install DDEShell/DTK6:
+
+- `bash -n` + `shellcheck -S error` on `install.sh`/`build-deb.sh`
+- `python3 scripts/check-version.py` — CMake version vs CHANGELOG vs latest git tag
+- `python3 scripts/check-translations.py` — every `qsTr()` source string present in the `.ts`
+- `qmllint` syntax-level errors only (imports of `org.deepin.dtk`/`org.deepin.ds` cannot
+  resolve on the runner, so import warnings are deliberately filtered out)
+
+Verification (run these locally; CI cannot):
 
 - **Unit tests** (`tests/tst_networkmonitorapplet.cpp`, Qt Test) cover speed
-  calculation, negative-delta clamping, totals accumulation, interface validation,
-  traffic-log append/prune/corrupt-file degradation, and `iw`/`ss` output parsing:
+  calculation, negative-delta clamping, totals accumulation, baseline reset on
+  interface switching, interface selection, interface validation, traffic-log
+  append/prune/corrupt-and-unreadable degradation, `iw`/`ss` output parsing, and the
+  `isLinkDown` truth table:
 
   ```sh
   cmake -B build && cmake --build build && ctest --output-on-failure
@@ -85,8 +115,13 @@ There is no lint, typecheck, or CI target. Verification:
   `Qt6::Test` is an **optional** component: when it is missing the test target is
   not generated and `ctest` reports 0 tests — that means "not built", not "passed".
 
+  Tests are sandboxed: `initTestCase()` redirects `HOME`/`XDG_CONFIG_HOME` to a
+  `QTemporaryDir` and enables `QStandardPaths::setTestModeEnabled(true)`, so a run
+  never touches the real `~/.config/jnetapplet/{settings.ini,traffic_log.json}`.
+
 - **Manual**: install, then restart `dde-shell` (it discovers applets by scanning
-  the install dir for `metadata.json`). QML has no automated check in this repo.
+  the install dir for `metadata.json`). QML rendering/interaction still has no
+  automated check in this repo.
 
 ## Project structure
 

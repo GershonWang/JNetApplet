@@ -1,14 +1,31 @@
 # 静态检查工作流
-# 适用场景：push / PR 时对仓库内的 shell 脚本做静态检查
-# 设计原因：本项目的构建依赖 DDEShell / DTK6（deepin 仓库提供），
-# GitHub 托管 runner 上无法安装，因此无法在此做完整构建或单元测试；
-# 能自动化且不依赖 deepin 生态的只有 shell 脚本检查，故只做这一层。
-# QML 侧需要 dde-shell/DTK 的导入才能被 qmllint 正确解析，一并留给人工验证。
+# 适用场景：push / PR 时对仓库做自动化检查
+# 设计原因：本项目的构建依赖 DDEShell / DTK6（deepin 仓库提供），GitHub 托管
+# runner 上无法安装，因此无法在此做完整构建或单元测试——这一层只能覆盖
+# "不需要 deepin 生态"的检查，完整构建与 ctest 仍需在 deepin 环境执行（见 README）。
+#
+# 覆盖范围与取舍：
+#   - shellcheck：脚本语法与常见坑
+#   - 版本一致性：CMake / CHANGELOG / git tag 三处版本号漂移（scripts/check-version.py）
+#   - 翻译同步：源码 qsTr() 与 .ts 是否一一对应（scripts/check-translations.py）
+#   - QML 语法：用 ubuntu 的 Qt6 做 qmllint 语法级检查。注意 deepin 的
+#     org.deepin.dtk / org.deepin.ds 模块在 runner 上不存在，因此只能卡"语法错误"，
+#     不能卡 import 类告警，否则会整片飘红
+#   - shell 脚本语法：bash -n（比 shellcheck 更基础，作为兜底）
 name: static-check
 
 on:
   push:
   pull_request:
+
+# 只读权限即可；显式声明避免默认 token 权限过宽
+permissions:
+  contents: read
+
+# 同一分支的新推送取消上一次未完成的运行，避免排队浪费
+concurrency:
+  group: static-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   shellcheck:
@@ -16,8 +33,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: bash 语法检查
+        run: |
+          bash -n install.sh
+          bash -n build-deb.sh
+
       # -S error：只让 error 级别失败，warning/info 仍会打印但不阻断
       # 设计原因：既有脚本未做过 shellcheck 清理，若一次性拉满阈值会让 CI 长期为红，
       # 反而失去信号意义；先卡错误，警告随改动逐步收敛
       - name: shellcheck（error 级别）
         run: shellcheck -S error install.sh build-deb.sh
+
+  consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 版本一致性检查要读 git tag，浅克隆会拿不到标签
+          fetch-depth: 0
+
+      - name: 版本号一致性
+        run: python3 scripts/check-version.py
+
+      - name: 翻译同步
+        run: python3 scripts/check-translations.py
+
+  qml-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Qt6 QML 工具链
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-declarative-dev-tools
+
+      # 只把"语法级"错误视为失败：org.deepin.dtk / org.deepin.ds 在 runner 上
+      # 必然缺失，若把 import 告警也算失败，这个 job 会永远为红、失去信号价值。
+      # 因此这里显式过滤，仅当出现语法类错误时才退出非零。
+      - name: qmllint（仅语法级错误）
+        run: |
+          set -o pipefail
+          fail=0
+          for f in package/*.qml package/components/*.qml; do
+            # 收集输出后过滤掉 import 相关噪声
+            out=$(qmllint "$f" 2>&1 || true)
+            syntax=$(printf '%s\n' "$out" | grep -E "Syntax error|Expected token|Unable to assign|is not a type" || true)
+            if [ -n "$syntax" ]; then
+              echo "::error file=$f::$syntax"
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ] && echo "QML 语法检查通过"
+          exit "$fail"

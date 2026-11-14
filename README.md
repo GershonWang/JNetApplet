@@ -95,8 +95,9 @@ bash build-deb.sh
 
 ### 单元测试
 
-`tests/` 下为基于 Qt Test 的单元测试，覆盖速度计算、负值钳制、总量累加、接口校验、
-流量日志的累加/裁剪/损坏降级，以及 `iw` 与 `ss` 输出的解析逻辑：
+`tests/` 下为基于 Qt Test 的单元测试，覆盖速度计算（含真实间隔/负值钳制/总量累加）、
+**切换接口时重置速度基线**、接口选择与校验、流量日志的累加/裁剪/损坏与不可读降级、
+`iw` 与 `ss` 输出的解析、以及断连判定真值表：
 
 ```sh
 cmake -B build
@@ -106,6 +107,24 @@ ctest --output-on-failure
 
 Qt6 Test 属于**可选**依赖：缺失时不会生成测试目标，`ctest` 会显示 0 个测试
 ——这只说明"测试未构建"，不代表"测试通过"。
+
+测试自身是隔离的：`initTestCase()` 会把 `HOME` / `XDG_CONFIG_HOME` 重定向到一次性
+临时目录，并开启 `QStandardPaths::setTestModeEnabled(true)`。因此跑测试**不会**改动你
+真实的 `~/.config/jnetapplet/settings.ini` 与 `traffic_log.json`。
+
+### 其他自动化检查
+
+以下检查不需要 deepin 生态，已接入 CI（`.github/workflows/static-check.yml`），
+也可在本地直接运行：
+
+```sh
+python3 scripts/check-version.py        # CMake 版本 vs CHANGELOG vs git tag
+python3 scripts/check-translations.py   # qsTr() 源串是否都已收录进 .ts
+bash -n install.sh build-deb.sh         # 脚本语法
+```
+
+QML 侧 CI 只卡**语法级**错误：`org.deepin.dtk` / `org.deepin.ds` 在 GitHub runner 上
+不存在，若把 import 告警也视为失败，任务会长期为红而失去信号价值。
 
 ### 手动验证
 
