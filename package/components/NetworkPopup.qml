@@ -139,9 +139,9 @@ Control {
             spacing: 6
             visible: !popup.ready
 
-            Text {
-                text: "⚠"
-                font.pixelSize: common.fontSizeHuge
+            WarningIcon {
+                width: 40
+                height: 40
                 color: popup.tertiaryText
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -406,10 +406,11 @@ Control {
                         Layout.alignment: Qt.AlignHCenter
                         visible: !popup.linkDownNow
 
-                        Text {
-                            text: "↓"
-                            font.pixelSize: common.fontSizeHero
-                            font.weight: Font.Bold
+                        ArrowIcon {
+                            Layout.alignment: Qt.AlignVCenter
+                            width: common.fontSizeHero
+                            height: common.fontSizeHero
+                            downward: true
                             color: common.downloadValueColor(popup.downloadSpeed)
                         }
 
@@ -468,10 +469,11 @@ Control {
                         Layout.alignment: Qt.AlignHCenter
                         visible: !popup.linkDownNow
 
-                        Text {
-                            text: "↑"
-                            font.pixelSize: common.fontSizeHero
-                            font.weight: Font.Bold
+                        ArrowIcon {
+                            Layout.alignment: Qt.AlignVCenter
+                            width: common.fontSizeHero
+                            height: common.fontSizeHero
+                            downward: false
                             color: popup.uploadValueColor
                         }
 
@@ -526,10 +528,11 @@ Control {
                 color: popup.tertiaryText
             }
 
-            Text {
-                text: "↓"
-                font.pixelSize: common.fontSizeBody
-                font.weight: Font.Bold
+            ArrowIcon {
+                Layout.alignment: Qt.AlignVCenter
+                width: common.fontSizeBody
+                height: common.fontSizeBody
+                downward: true
                 color: popup.accentBlue
             }
 
@@ -539,10 +542,11 @@ Control {
                 color: popup.primaryText
             }
 
-            Text {
-                text: "↑"
-                font.pixelSize: common.fontSizeSubtitle
-                font.weight: Font.Bold
+            ArrowIcon {
+                Layout.alignment: Qt.AlignVCenter
+                width: common.fontSizeSubtitle
+                height: common.fontSizeSubtitle
+                downward: false
                 color: popup.accentGreen
             }
 
@@ -577,10 +581,11 @@ Control {
             }
 
             // 接收包数：蓝色下箭头（与流量总计行下载箭头一致）
-            Text {
-                text: "↓"
-                font.pixelSize: common.fontSizeBody
-                font.weight: Font.Bold
+            ArrowIcon {
+                Layout.alignment: Qt.AlignVCenter
+                width: common.fontSizeBody
+                height: common.fontSizeBody
+                downward: true
                 color: popup.accentBlue
             }
 
@@ -591,10 +596,11 @@ Control {
             }
 
             // 发送包数：绿色上箭头（与流量总计行上传箭头一致）
-            Text {
-                text: "↑"
-                font.pixelSize: common.fontSizeBody
-                font.weight: Font.Bold
+            ArrowIcon {
+                Layout.alignment: Qt.AlignVCenter
+                width: common.fontSizeBody
+                height: common.fontSizeBody
+                downward: false
                 color: popup.accentGreen
             }
 

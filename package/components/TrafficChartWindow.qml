@@ -193,10 +193,11 @@ WindowShell {
                 Layout.rightMargin: 16
                 spacing: 6
 
-                Text {
-                    text: "↓"
-                    font.pixelSize: common.fontSizeTitle
-                    font.weight: Font.Bold
+                ArrowIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    width: common.fontSizeTitle
+                    height: common.fontSizeTitle
+                    downward: true
                     color: root.downloadLineColor
                 }
 
@@ -209,10 +210,11 @@ WindowShell {
 
                 Item { Layout.preferredWidth: 10 }
 
-                Text {
-                    text: "↑"
-                    font.pixelSize: common.fontSizeTitle
-                    font.weight: Font.Bold
+                ArrowIcon {
+                    Layout.alignment: Qt.AlignVCenter
+                    width: common.fontSizeTitle
+                    height: common.fontSizeTitle
+                    downward: false
                     color: root.uploadLineColor
                 }
 

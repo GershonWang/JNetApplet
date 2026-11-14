@@ -275,9 +275,10 @@ AppletItem {
         RowLayout {
             spacing: 2
 
-            Text {
-                text: "↓"
-                font.pixelSize: root.dockSize * 0.20
+            ArrowIcon {
+                width: root.dockSize * 0.20
+                height: root.dockSize * 0.20
+                downward: true
                 color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -308,9 +309,10 @@ AppletItem {
         RowLayout {
             spacing: 2
 
-            Text {
-                text: "↑"
-                font.pixelSize: root.dockSize * 0.20
+            ArrowIcon {
+                width: root.dockSize * 0.20
+                height: root.dockSize * 0.20
+                downward: false
                 color: root.speedTextColor
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -353,9 +355,10 @@ AppletItem {
             spacing: 0
             Layout.alignment: Qt.AlignTop | Qt.AlignHCenter
 
-            Text {
-                text: "↓"
-                font.pixelSize: root.dockSize * 0.20
+            ArrowIcon {
+                width: root.dockSize * 0.20
+                height: root.dockSize * 0.20
+                downward: true
                 color: root.speedTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -384,9 +387,10 @@ AppletItem {
             spacing: 0
             Layout.alignment: Qt.AlignTop | Qt.AlignHCenter
 
-            Text {
-                text: "↑"
-                font.pixelSize: root.dockSize * 0.20
+            ArrowIcon {
+                width: root.dockSize * 0.20
+                height: root.dockSize * 0.20
+                downward: false
                 color: root.speedTextColor
                 anchors.horizontalCenter: parent.horizontalCenter
             }
