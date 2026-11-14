@@ -59,7 +59,7 @@ Item {
         anchors.leftMargin: 16
         anchors.verticalCenter: parent.verticalCenter
         text: titleBar.titleText
-        font.pixelSize: 15
+        font.pixelSize: common.fontSizeSection
         font.weight: Font.Bold
         color: titleBar.textColor
     }

@@ -104,6 +104,18 @@
   - 版本一致性脚本区分「仓库无标签」与「git 不可用」——后者此前静默按通过处理；
   - `IconButton` 暴露 `hovered`/`pressed`/`currentColor`，避免调用方去猜组件内部结构。
 
+- **HiDPI 与系统字号跟随**：全工程 129 处 `font.pixelSize` 硬编码收敛为 10 档语义阶梯
+  （`fontSizeCaption` … `fontSizeHuge`），定义在 `NetCommon`，随
+  `Qt.application.font.pixelSize` 等比缩放。用户在控制中心调大字号后，
+  弹窗与各独立窗口的文字同步变大。
+  - 基准值等于改造前的字面量，**默认外观零变化**；
+  - 缩放**下限锁在 1.0**（调小字号时界面不缩小）：插件已有大量 10~12px 小字，
+    再缩会让图表刻度与辅助说明不可读；放大方向完全跟随；
+  - `networkview.qml`（任务栏）刻意不接入：那里的字号本按 `dockSize` 比例推导，
+    天然跟随 DPI，混用两套口径会让速度数字忽大忽小；
+  - `WindowShell` 用 `property alias` 暴露 `common`，供继承它的窗口访问档位
+    （`property var common: common` 会自引用）。
+
 ### 修复
 
 - **切换活动接口不再产生假增量**：活动网卡热拔（USB 网卡、VPN 隧道消失）后，

@@ -310,7 +310,7 @@ WindowShell {
                         return label + " ↓" + common.formatTotal(root.periodTotals.rx)
                                 + " ↑" + common.formatTotal(root.periodTotals.tx)
                     }
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     color: root.theme.textTertiary
                 }
             }
@@ -326,35 +326,35 @@ WindowShell {
                 Text {
                     Layout.preferredWidth: root.colDate
                     text: root.currentTab === 0 ? qsTr("Date") : qsTr("Month")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colIface
                     text: qsTr("Interface")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: qsTr("Download")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: qsTr("Upload")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: qsTr("Total")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
@@ -391,7 +391,7 @@ WindowShell {
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("No traffic records yet")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeBody
                         color: root.theme.textTertiary
                     }
                 }
@@ -416,35 +416,35 @@ WindowShell {
                         Text {
                             Layout.preferredWidth: root.colDate
                             text: modelData.date
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colIface
                             text: modelData.iface
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: root.theme.textSecondary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colNum
                             text: common.formatTotal(modelData.rx)
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colNum
                             text: common.formatTotal(modelData.tx)
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colNum
                             text: common.formatTotal(modelData.total)
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             font.weight: Font.Medium
                             color: root.theme.textPrimary
                             elide: Text.ElideRight
@@ -484,14 +484,14 @@ WindowShell {
                     // 否则后续数值列会比表头对应列左移一个 colSpacing
                     Layout.preferredWidth: root.colDate + root.colSpacing + root.colIface
                     text: qsTr("All records")
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeBody
                     font.weight: Font.Bold
                     color: root.theme.textPrimary
                 }
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: common.formatTotal(root.totals.rx)
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeBody
                     font.weight: Font.Bold
                     color: common.accentBlue
                     elide: Text.ElideRight
@@ -499,7 +499,7 @@ WindowShell {
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: common.formatTotal(root.totals.tx)
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeBody
                     font.weight: Font.Bold
                     color: common.accentGreen
                     elide: Text.ElideRight
@@ -507,7 +507,7 @@ WindowShell {
                 Text {
                     Layout.preferredWidth: root.colNum
                     text: common.formatTotal(root.totals.total)
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeBody
                     font.weight: Font.Bold
                     color: root.theme.textPrimary
                     elide: Text.ElideRight
@@ -537,7 +537,7 @@ WindowShell {
             anchors.fill: parent
             anchors.margins: 8
             text: root.exportStatus
-            font.pixelSize: 11
+            font.pixelSize: common.fontSizeSmall
             color: root.theme.textSecondary
             wrapMode: Text.Wrap
             elide: Text.ElideMiddle

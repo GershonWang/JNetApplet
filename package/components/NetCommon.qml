@@ -67,6 +67,34 @@ QtObject {
     // 上传值颜色：固定绿色，不做高速警示
     readonly property color uploadValueColor: accentGreen
 
+    // ---- 字号阶梯 ----
+    // 设计原因：全工程此前有 129 处 font.pixelSize 直接写裸数字（10/11/12/13/14/
+    // 15/16/18/24/40 共 10 档），系统字号调大后窗口内文字完全不变——用户把控制中心
+    // 字号调大，任务栏和弹窗却是原来的小字，属于可感知的一致性问题。
+    // 现改为语义档位：调用方写 fontSizeBody 而不是 12，档位值只在本文件定义，
+    // 后续调整任一档只需改一处。
+    //
+    // 缩放口径（关键取舍）：以 Qt 默认字号 12 为基准，按 Qt.application.font.pixelSize
+    // 的比例缩放。**下限锁在 1.0**，即用户把系统字号调小时界面不跟着缩小——
+    // 本插件已有大量 10~12px 的小字，再缩会让图表刻度、辅助说明不可读；
+    // 放大方向则完全跟随用户设置（可读性优先，这也是用户调大字号的初衷）。
+    readonly property real systemFontSize: Qt.application.font.pixelSize > 0
+                                           ? Qt.application.font.pixelSize : 12
+    readonly property real fontScale: Math.max(1.0, systemFontSize / 12.0)
+
+    // 各档位的基准值（等于改造前的字面量，保证默认外观零变化）
+    // 命名按语义而非数值：调用方据"这段文字是什么角色"选档，而不是"看起来多大"
+    readonly property int fontSizeCaption: Math.round(10 * fontScale)   // 图表刻度、极小标注
+    readonly property int fontSizeSmall: Math.round(11 * fontScale)     // 次要说明、属性行
+    readonly property int fontSizeBody: Math.round(12 * fontScale)      // 正文（出现最多的一档）
+    readonly property int fontSizeSubtitle: Math.round(13 * fontScale)  // 强调文字、按钮文案
+    readonly property int fontSizeTitle: Math.round(14 * fontScale)     // 区块标题
+    readonly property int fontSizeSection: Math.round(15 * fontScale)   // 分区标题
+    readonly property int fontSizeHeading: Math.round(16 * fontScale)   // 大标题
+    readonly property int fontSizeLarge: Math.round(18 * fontScale)     // 窗口级标题
+    readonly property int fontSizeHero: Math.round(24 * fontScale)      // 弹窗速度大字
+    readonly property int fontSizeHuge: Math.round(40 * fontScale)      // 空状态图标
+
     // 判断接口名是否命中无线命名约定
     // 设计原因：deepin 25 上无线接口名为 wlo1，早期只匹配 wlp/wlan 导致漏判，故补齐 wlo/wlx。
     // 本函数是**排序**的唯一无线判据（排序不查后端，原因见 sortInterfaces）；

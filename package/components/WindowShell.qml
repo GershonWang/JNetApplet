@@ -61,6 +61,11 @@ Window {
     // 主题色对象：内容文件里经 root.theme.xxx 访问（内容定义在使用方文件，
     // 看不到本文件的 id，必须由属性暴露）
     readonly property var theme: themeObject
+    // 公共能力对象（字号阶梯等）：内容文件同样看不到本文件内 common 的 id，
+    // 故与 theme 一样由属性暴露。子窗口用 root.common.fontSizeBody 取字号档位。
+    // 用 alias 而非 property var：id 本身就叫 common，写成 `property var common: common`
+    // 会变成自引用（QML 里 id 与属性同名时解析到属性自身）
+    readonly property alias common: common
 
     // 置顶按钮 hover 底色：与图表窗口原取值一致（半透明白/黑），深浅主题下均可见
     readonly property color pinHoverBg: isDarkMode ? Qt.rgba(1, 1, 1, 0.10)

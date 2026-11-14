@@ -120,7 +120,7 @@ WindowShell {
                 Text {
                     // 动态刷新连接总数，显示筛选后数量/总数
                     text: qsTr("Active connections: ") + root.filteredModel.length + "/" + root.connCount
-                    font.pixelSize: 12
+                    font.pixelSize: root.common.fontSizeBody
                     font.weight: Font.Medium
                     color: root.theme.textPrimary
                 }
@@ -130,7 +130,7 @@ WindowShell {
                     id: searchField
                     Layout.preferredWidth: 200
                     placeholderText: qsTr("Search address, port, process...")
-                    font.pixelSize: 12
+                    font.pixelSize: root.common.fontSizeBody
                     color: root.theme.textPrimary
                     selectByMouse: true
                     onTextChanged: root.searchText = text
@@ -168,7 +168,7 @@ WindowShell {
 
                 Text {
                     text: qsTr("Refreshes every ") + ((root.applet ? root.applet.refreshInterval : 1000) / 1000) + qsTr(" seconds")
-                    font.pixelSize: 11
+                    font.pixelSize: root.common.fontSizeSmall
                     color: root.theme.textTertiary
                 }
             }
@@ -184,28 +184,28 @@ WindowShell {
                 Text {
                     Layout.preferredWidth: root.colLocal
                     text: qsTr("Local Address:Port")
-                    font.pixelSize: 11
+                    font.pixelSize: root.common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colRemote
                     text: qsTr("Remote Address:Port")
-                    font.pixelSize: 11
+                    font.pixelSize: root.common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.preferredWidth: root.colState
                     text: qsTr("State")
-                    font.pixelSize: 11
+                    font.pixelSize: root.common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("Process")
-                    font.pixelSize: 11
+                    font.pixelSize: root.common.fontSizeSmall
                     font.weight: Font.Bold
                     color: root.theme.textSecondary
                 }
@@ -241,7 +241,7 @@ WindowShell {
                     Text {
                         anchors.centerIn: parent
                         text: root.searchText.length > 0 ? qsTr("No matching connections") : qsTr("No active TCP connections")
-                        font.pixelSize: 13
+                        font.pixelSize: root.common.fontSizeBody
                         color: root.theme.textTertiary
                     }
                 }
@@ -266,21 +266,21 @@ WindowShell {
                         Text {
                             Layout.preferredWidth: root.colLocal
                             text: modelData.localAddress + ":" + modelData.localPort
-                            font.pixelSize: 12
+                            font.pixelSize: root.common.fontSizeBody
                             color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colRemote
                             text: modelData.remoteAddress + ":" + modelData.remotePort
-                            font.pixelSize: 12
+                            font.pixelSize: root.common.fontSizeBody
                             color: root.theme.textPrimary
                             elide: Text.ElideRight
                         }
                         Text {
                             Layout.preferredWidth: root.colState
                             text: modelData.state
-                            font.pixelSize: 12
+                            font.pixelSize: root.common.fontSizeBody
                             color: root.theme.textSecondary
                             elide: Text.ElideRight
                         }
@@ -288,7 +288,7 @@ WindowShell {
                             Layout.fillWidth: true
                             // 进程名可能为空（反查失败），显示占位符避免空白行
                             text: modelData.processName.length > 0 ? modelData.processName : "-"
-                            font.pixelSize: 12
+                            font.pixelSize: root.common.fontSizeBody
                             color: modelData.processName.length > 0 ? root.theme.textPrimary : root.theme.textTertiary
                             elide: Text.ElideRight
                         }
@@ -323,7 +323,7 @@ WindowShell {
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("Total: ") + root.filteredModel.length + "/" + root.connCount + qsTr(" connections")
-                    font.pixelSize: 12
+                    font.pixelSize: root.common.fontSizeBody
                     font.weight: Font.Bold
                     color: root.theme.textPrimary
                 }

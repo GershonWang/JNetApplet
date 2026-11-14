@@ -152,14 +152,14 @@ Control {
 
             Text {
                 text: "⚠"
-                font.pixelSize: 40
+                font.pixelSize: common.fontSizeHuge
                 color: popup.tertiaryText
                 Layout.alignment: Qt.AlignHCenter
             }
 
             Text {
                 text: qsTr("No network interface detected")
-                font.pixelSize: 14
+                font.pixelSize: common.fontSizeTitle
                 color: popup.secondaryText
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -194,7 +194,7 @@ Control {
                     // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
                     Text {
                         text: common.interfaceIcon(popup.activeInterface, popup.activeIsWireless)
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.tertiaryText
                     }
 
@@ -203,7 +203,7 @@ Control {
                     // 回退规则经 common.displayName()，与任务栏悬停提示共用一处实现
                     Text {
                         text: popup.displayName
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         color: popup.primaryText
                     }
 
@@ -211,7 +211,7 @@ Control {
                     // 断连时也隐藏：此时协商速率是断连前的残留值，显示会引起歧义
                     Text {
                         text: popup.linkSpeed > 0 ? "· " + common.formatLinkSpeed(popup.linkSpeed) : ""
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.tertiaryText
                         visible: popup.linkSpeed > 0 && !popup.linkDownNow
                     }
@@ -223,7 +223,7 @@ Control {
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Link down")
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeBody
                     color: common.accentRed
                     visible: popup.linkDownNow
                 }
@@ -239,7 +239,7 @@ Control {
                     // IPv4 标签：固定宽度，与 IPv6 标签列对齐
                     Text {
                         text: qsTr("IPv4")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.tertiaryText
                         Layout.preferredWidth: 32
                         horizontalAlignment: Text.AlignLeft
@@ -248,7 +248,7 @@ Control {
                     // IPv4 地址：超长截断 + hover tooltip
                     Text {
                         text: popup.ipAddress
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         color: popup.secondaryText
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -305,7 +305,7 @@ Control {
                     // IPv6 标签：固定宽度，与 IPv4 标签列对齐
                     Text {
                         text: qsTr("IPv6")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.tertiaryText
                         Layout.preferredWidth: 32
                         horizontalAlignment: Text.AlignLeft
@@ -314,7 +314,7 @@ Control {
                     // IPv6 地址：超长截断 + hover tooltip 显示完整地址
                     Text {
                         text: popup.ipv6Address
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.tertiaryText
                         elide: Text.ElideRight
                         Layout.fillWidth: true
@@ -368,7 +368,7 @@ Control {
 
                     Text {
                         text: qsTr("Signal") + " " + popup.wifiSignal.toFixed(0) + " dBm"
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.tertiaryText
                     }
                 }
@@ -405,7 +405,7 @@ Control {
                     // 下载标签
                     Text {
                         text: qsTr("Download")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -419,21 +419,21 @@ Control {
 
                         Text {
                             text: "↓"
-                            font.pixelSize: 24
+                            font.pixelSize: common.fontSizeHero
                             font.weight: Font.Bold
                             color: common.downloadValueColor(popup.downloadSpeed)
                         }
 
                         Text {
                             text: common.formatSpeedValue(popup.downloadSpeed)
-                            font.pixelSize: 24
+                            font.pixelSize: common.fontSizeHero
                             font.weight: Font.Bold
                             color: common.downloadValueColor(popup.downloadSpeed)
                         }
 
                         Text {
                             text: common.formatSpeedUnit(popup.downloadSpeed)
-                            font.pixelSize: 13
+                            font.pixelSize: common.fontSizeSubtitle
                             color: common.downloadValueColor(popup.downloadSpeed)
                             Layout.alignment: Qt.AlignBaseline
                         }
@@ -444,7 +444,7 @@ Control {
                     Text {
                         visible: popup.linkDownNow
                         text: "—"
-                        font.pixelSize: 24
+                        font.pixelSize: common.fontSizeHero
                         font.weight: Font.Bold
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter
@@ -467,7 +467,7 @@ Control {
                     // 上传标签
                     Text {
                         text: qsTr("Upload")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -481,21 +481,21 @@ Control {
 
                         Text {
                             text: "↑"
-                            font.pixelSize: 24
+                            font.pixelSize: common.fontSizeHero
                             font.weight: Font.Bold
                             color: popup.uploadValueColor
                         }
 
                         Text {
                             text: common.formatSpeedValue(popup.uploadSpeed)
-                            font.pixelSize: 24
+                            font.pixelSize: common.fontSizeHero
                             font.weight: Font.Bold
                             color: popup.uploadValueColor
                         }
 
                         Text {
                             text: common.formatSpeedUnit(popup.uploadSpeed)
-                            font.pixelSize: 13
+                            font.pixelSize: common.fontSizeSubtitle
                             color: popup.uploadValueColor
                             Layout.alignment: Qt.AlignBaseline
                         }
@@ -505,7 +505,7 @@ Control {
                     Text {
                         visible: popup.linkDownNow
                         text: "—"
-                        font.pixelSize: 24
+                        font.pixelSize: common.fontSizeHero
                         font.weight: Font.Bold
                         color: popup.secondaryText
                         Layout.alignment: Qt.AlignHCenter
@@ -533,33 +533,33 @@ Control {
 
             Text {
                 text: qsTr("Session Total")
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
             }
 
             Text {
                 text: "↓"
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 font.weight: Font.Bold
                 color: popup.accentBlue
             }
 
             Text {
                 text: common.formatTotal(popup.totalDownload)
-                font.pixelSize: 13
+                font.pixelSize: common.fontSizeSubtitle
                 color: popup.primaryText
             }
 
             Text {
                 text: "↑"
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeSubtitle
                 font.weight: Font.Bold
                 color: popup.accentGreen
             }
 
             Text {
                 text: common.formatTotal(popup.totalUpload)
-                font.pixelSize: 13
+                font.pixelSize: common.fontSizeSubtitle
                 color: popup.primaryText
             }
 
@@ -583,42 +583,42 @@ Control {
             // 与上一行"本次会话累计"口径不同，不标注会让用户误读为同一基准
             Text {
                 text: qsTr("Packets (since boot)")
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
             }
 
             // 接收包数：蓝色下箭头（与流量总计行下载箭头一致）
             Text {
                 text: "↓"
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 font.weight: Font.Bold
                 color: popup.accentBlue
             }
 
             Text {
                 text: popup.rxPackets.toFixed(0)
-                font.pixelSize: 13
+                font.pixelSize: common.fontSizeSubtitle
                 color: popup.primaryText
             }
 
             // 发送包数：绿色上箭头（与流量总计行上传箭头一致）
             Text {
                 text: "↑"
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 font.weight: Font.Bold
                 color: popup.accentGreen
             }
 
             Text {
                 text: popup.txPackets.toFixed(0)
-                font.pixelSize: 13
+                font.pixelSize: common.fontSizeSubtitle
                 color: popup.primaryText
             }
 
             // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
             Text {
                 text: qsTr("Errors") + " " + popup.rxErrors.toFixed(0) + "/" + popup.txErrors.toFixed(0)
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
             }
@@ -626,7 +626,7 @@ Control {
             // 丢包数：仅在存在错误或丢包时显示，格式 "丢包 {rxD}/{txD}"
             Text {
                 text: qsTr("Dropped") + " " + popup.rxDropped.toFixed(0) + "/" + popup.txDropped.toFixed(0)
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
             }
@@ -645,7 +645,7 @@ Control {
 
             Text {
                 text: qsTr("TCP Connections") + " " + popup.tcpConnections.toFixed(0)
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
             }
 
@@ -771,7 +771,7 @@ Control {
                             id: chipLabel
                             visible: false
                             text: modelData
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             font.weight: Font.Bold
                         }
                     }
@@ -824,7 +824,7 @@ Control {
                     id: entryLabel_chart
                     anchors.centerIn: parent
                     text: qsTr("Traffic Chart")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     // 按下加深一档，与 hover 区分（颜色由按钮状态驱动，不猜内部结构）
                     color: parent.parent ? parent.parent.pressed
                            ? Qt.darker(popup.accentBlue, 1.2)
@@ -847,7 +847,7 @@ Control {
                     id: entryLabel_stats
                     anchors.centerIn: parent
                     text: qsTr("Traffic Statistics")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     // 按下加深一档，与 hover 区分（颜色由按钮状态驱动）
                     color: parent.parent ? parent.parent.pressed
                            ? Qt.darker(popup.accentBlue, 1.2)
@@ -870,7 +870,7 @@ Control {
                     id: entryLabel_tcp
                     anchors.centerIn: parent
                     text: qsTr("TCP Connections")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     // 按下加深一档，与 hover 区分（颜色由按钮状态驱动）
                     color: parent.parent ? parent.parent.pressed
                            ? Qt.darker(popup.accentBlue, 1.2)

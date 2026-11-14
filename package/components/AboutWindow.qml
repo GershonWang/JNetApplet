@@ -96,7 +96,7 @@ Window {
 
                 Text {
                     text: qsTr("Network Speed Monitor")
-                    font.pixelSize: 18
+                    font.pixelSize: common.fontSizeLarge
                     font.weight: Font.Bold
                     color: theme.textPrimary
                     Layout.fillWidth: true
@@ -105,7 +105,7 @@ Window {
 
                 Text {
                     text: "JNetApplet"
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeBody
                     color: theme.textTertiary
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
@@ -145,7 +145,7 @@ Window {
 
                     Text {
                         text: qsTr("Version")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
@@ -153,7 +153,7 @@ Window {
 
                     Text {
                         text: version.length > 0 ? version : "—"
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: theme.textPrimary
                         Layout.fillWidth: true
                     }
@@ -166,7 +166,7 @@ Window {
 
                     Text {
                         text: qsTr("Author")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
@@ -174,7 +174,7 @@ Window {
 
                     Text {
                         text: "Jokul"
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: theme.textPrimary
                         Layout.fillWidth: true
                     }
@@ -187,7 +187,7 @@ Window {
 
                     Text {
                         text: qsTr("Description")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
@@ -195,7 +195,7 @@ Window {
 
                     Text {
                         text: qsTr("Monitor network speed and traffic")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: theme.textPrimary
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
@@ -209,7 +209,7 @@ Window {
 
                     Text {
                         text: qsTr("Repository")
-                        font.pixelSize: 12
+                        font.pixelSize: common.fontSizeBody
                         color: common.accentBlueBright
                         Layout.preferredWidth: 56
                         Layout.alignment: Qt.AlignTop
@@ -217,7 +217,7 @@ Window {
 
                     Text {
                         text: "github.com/GershonWang/JNetApplet"
-                        font.pixelSize: 11
+                        font.pixelSize: common.fontSizeBody
                         color: theme.textTertiary
                         Layout.fillWidth: true
                         wrapMode: Text.WrapAnywhere
@@ -247,7 +247,7 @@ Window {
                                 id: copiedHintText
                                 anchors.centerIn: parent
                                 text: qsTr("Copied")
-                                font.pixelSize: 10
+                                font.pixelSize: common.fontSizeSmall
                                 color: common.accentGreen
                             }
                         }

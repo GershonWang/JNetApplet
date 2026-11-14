@@ -168,7 +168,7 @@ Window {
                     // 网络接口选择区
                     Text {
                         text: qsTr("Network Interface")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
                         color: theme.textSecondary
                     }
@@ -288,7 +288,7 @@ Window {
                                                 Layout.preferredWidth: 20
                                                 horizontalAlignment: Text.AlignHCenter
                                                 text: common.interfaceIcon(modelData, ifaceRow.isWireless)
-                                                font.pixelSize: 14
+                                                font.pixelSize: common.fontSizeTitle
                                                 color: ifaceRow.isActive ? ifaceRow.activeColor : theme.iconGray
                                             }
 
@@ -320,7 +320,7 @@ Window {
                                                 Layout.alignment: Qt.AlignVCenter
                                                 Layout.fillWidth: true
                                                 text: modelData
-                                                font.pixelSize: 13
+                                                font.pixelSize: common.fontSizeSubtitle
                                                 font.weight: ifaceRow.isActive ? Font.Medium : Font.Normal
                                                 color: ifaceRow.isActive ? ifaceRow.activeColor : theme.textPrimary
                                                 elide: Text.ElideRight
@@ -330,7 +330,7 @@ Window {
                                             Text {
                                                 Layout.alignment: Qt.AlignVCenter
                                                 text: common.interfaceDescription(modelData, ifaceRow.isWireless)
-                                                font.pixelSize: 12
+                                                font.pixelSize: common.fontSizeBody
                                                 color: theme.textTertiary
                                             }
                                         }
@@ -343,7 +343,7 @@ Window {
                         Text {
                             anchors.centerIn: parent
                             text: qsTr("No network interface detected")
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textTertiary
                             visible: networkInterfaces.length === 0
                         }
@@ -354,7 +354,7 @@ Window {
                     // ~/.config/jnetapplet/settings.ini，重启 dde-shell 后仍生效
                     Text {
                         text: qsTr("Font Color")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
                         color: theme.textSecondary
                     }
@@ -373,7 +373,7 @@ Window {
                     // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
                     Text {
                         text: qsTr("Refresh Interval")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
                         color: theme.textSecondary
                     }
@@ -416,7 +416,7 @@ Window {
                     // 故提供显式选择。选择结果经 applet.speedUnit 持久化并即时生效
                     Text {
                         text: qsTr("Speed Unit")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
                         color: theme.textSecondary
                     }
@@ -464,7 +464,7 @@ Window {
                     // 合计口径排除 tun/docker/veth 等虚拟接口，避免与物理网卡重复计数
                     Text {
                         text: qsTr("Taskbar Display")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
                         color: theme.textSecondary
                     }
@@ -504,7 +504,7 @@ Window {
                     // 说明文字：用户需要知道"合计"到底包含哪些接口，以及 VPN 为何不在内
                     Text {
                         text: qsTr("Combined mode sums all physical network cards; VPN and container interfaces are excluded to avoid double counting.")
-                        font.pixelSize: 11
+                        font.pixelSize: common.fontSizeSmall
                         color: theme.textTertiary
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
@@ -519,7 +519,7 @@ Window {
                     // 填 0 或留空表示关闭提醒
                     Text {
                         text: qsTr("Traffic Alerts")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
                         color: theme.textSecondary
                     }
@@ -530,7 +530,7 @@ Window {
                         text: qsTr("Today used: %1 GB · This month: %2 GB")
                               .arg(((applet ? applet.todayUsedBytes : 0) / 1e9).toFixed(2))
                               .arg(((applet ? applet.monthUsedBytes : 0) / 1e9).toFixed(2))
-                        font.pixelSize: 11
+                        font.pixelSize: common.fontSizeSmall
                         color: theme.textTertiary
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
@@ -543,7 +543,7 @@ Window {
 
                         Text {
                             text: qsTr("Daily limit")
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textPrimary
                             Layout.preferredWidth: 90
                         }
@@ -555,7 +555,7 @@ Window {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 30
                             placeholderText: qsTr("0 = off")
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textPrimary
                             selectByMouse: true
                             // 校验器限制为最多两位小数的非负数：从源头挡掉字母与负号，
@@ -576,7 +576,7 @@ Window {
 
                         Text {
                             text: "GB"
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textTertiary
                         }
                     }
@@ -587,7 +587,7 @@ Window {
 
                         Text {
                             text: qsTr("Monthly limit")
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textPrimary
                             Layout.preferredWidth: 90
                         }
@@ -597,7 +597,7 @@ Window {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 30
                             placeholderText: qsTr("0 = off")
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textPrimary
                             selectByMouse: true
                             validator: DoubleValidator {
@@ -614,7 +614,7 @@ Window {
 
                         Text {
                             text: "GB"
-                            font.pixelSize: 12
+                            font.pixelSize: common.fontSizeBody
                             color: theme.textTertiary
                         }
                     }
@@ -665,7 +665,7 @@ Window {
                             anchors.right: parent.right
                             anchors.margins: 8
                             text: qsTr("Uninstall Plugin")
-                            font.pixelSize: 13
+                            font.pixelSize: common.fontSizeSubtitle
                             font.weight: Font.Medium
                             color: accentColor
                             horizontalAlignment: Text.AlignHCenter
@@ -680,7 +680,7 @@ Window {
                         Layout.topMargin: -4
                         visible: root.uninstallCopied
                         text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
-                        font.pixelSize: 11
+                        font.pixelSize: common.fontSizeSmall
                         color: common.accentGreen
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
@@ -717,7 +717,7 @@ Window {
 
             Text {
                 text: qsTr("Warning")
-                font.pixelSize: 16
+                font.pixelSize: common.fontSizeHeading
                 font.weight: Font.Bold
                 color: accentColor
                 Layout.alignment: Qt.AlignHCenter
@@ -725,7 +725,7 @@ Window {
 
             Text {
                 text: qsTr("The following command uninstalls the plugin and restarts dde-shell. Please copy and run it in terminal:")
-                font.pixelSize: 12
+                font.pixelSize: common.fontSizeBody
                 color: theme.textPrimary
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
@@ -744,7 +744,7 @@ Window {
                     anchors.fill: parent
                     anchors.margins: 10
                     text: root.uninstallCommand
-                    font.pixelSize: 10
+                    font.pixelSize: common.fontSizeCaption
                     font.family: "monospace"
                     color: theme.textSecondary
                     wrapMode: Text.WordWrap
@@ -772,7 +772,7 @@ Window {
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("Cancel")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         color: theme.textPrimary
                     }
 
@@ -798,7 +798,7 @@ Window {
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("Copy Command")
-                        font.pixelSize: 13
+                        font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Medium
                         color: "white"
                     }

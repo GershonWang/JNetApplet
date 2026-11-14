@@ -195,7 +195,7 @@ WindowShell {
 
                 Text {
                     text: "↓"
-                    font.pixelSize: 14
+                    font.pixelSize: common.fontSizeTitle
                     font.weight: Font.Bold
                     color: root.downloadLineColor
                 }
@@ -203,7 +203,7 @@ WindowShell {
                 Text {
                     // applet 为空时兜底为 0，保证独立预览不报错
                     text: common.formatSpeed(root.applet ? root.applet.downloadSpeed : 0)
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeSubtitle
                     color: root.theme.textPrimary
                 }
 
@@ -211,14 +211,14 @@ WindowShell {
 
                 Text {
                     text: "↑"
-                    font.pixelSize: 14
+                    font.pixelSize: common.fontSizeTitle
                     font.weight: Font.Bold
                     color: root.uploadLineColor
                 }
 
                 Text {
                     text: common.formatSpeed(root.applet ? root.applet.uploadSpeed : 0)
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeSubtitle
                     color: root.theme.textPrimary
                 }
 
@@ -267,7 +267,7 @@ WindowShell {
                             id: windowLabel
                             visible: false
                             text: root.formatWindowLabel(modelData)
-                            font.pixelSize: 10
+                            font.pixelSize: common.fontSizeCaption
                             font.weight: Font.Bold
                         }
                     }
@@ -276,7 +276,7 @@ WindowShell {
                 Text {
                     text: (root.applet && root.applet.activeInterface
                            ? root.applet.activeInterface : "—") + " " + root.timeWindowLabel
-                    font.pixelSize: 12
+                    font.pixelSize: common.fontSizeSmall
                     color: root.theme.textTertiary
                 }
             }
@@ -569,7 +569,7 @@ WindowShell {
                     anchors.centerIn: parent
                     text: root.hoverHint.length > 0
                           ? root.hoverHint : qsTr("Hover over the curve for details")
-                    font.pixelSize: 11
+                    font.pixelSize: common.fontSizeSmall
                     color: root.hoverHint.length > 0 ? root.theme.textPrimary : root.theme.textTertiary
                 }
             }
