@@ -31,6 +31,12 @@
   - 顺带把三处重复的空结构初始化收敛为 `makeEmptyTrafficLog()`，避免字段名漂移；
   - 新增回归用例 `testLoadTrafficLogUnreadableBlocksSave`（以 root 运行时自动跳过）。
 
+- **补齐许可证与 deb 合规文件**：源码各处 SPDX 头声明 LGPL-3.0-or-later，但仓库
+  此前没有 LICENSE 文件，deb 内也没有 `/usr/share/doc/jnetapplet/{copyright,changelog.gz}`。
+  现补入 LGPL-3.0 全文；打包时生成 DEP-5 格式 `copyright` 与由 `CHANGELOG.md`
+  自动生成的 `changelog.Debian.gz`（不再手工维护第二份变更记录）。
+  顺带修正 README 中"仓库暂无 CI"的过时描述——实际已有 shellcheck 工作流。
+
 ## v2.3.0 - 2026-09-26
 
 ### 新功能

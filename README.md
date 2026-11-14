@@ -116,7 +116,9 @@ bash install.sh
 systemctl --user restart dde-shell@DDE
 ```
 
-仓库暂无 CI，QML 界面部分没有自动化检查，需人工确认显示与交互。
+仓库现有 CI（`.github/workflows/static-check.yml`）**只做 shell 脚本静态检查**：
+GitHub 托管 runner 装不上 DDEShell/DTK6，无法编译插件或运行单元测试。
+C++ 逻辑依赖上文 `ctest`，QML 界面仍无自动化检查，需人工确认显示与交互。
 
 ## 项目结构
 
@@ -147,3 +149,15 @@ systemctl --user restart dde-shell@DDE
 ├── README.md                               # 本文件
 └── AGENTS.md                               # AI 代理工作指引
 ```
+
+## 许可证
+
+本项目采用 **LGPL-3.0-or-later**（GNU Lesser General Public License v3.0 或更高版本），
+全文见仓库根目录的 `LICENSE`。所有源码文件头部均带 SPDX 标识：
+
+```
+SPDX-License-Identifier: LGPL-3.0-or-later
+```
+
+通过 deb 安装时，许可证与变更记录随包分发在 `/usr/share/doc/jnetapplet/` 下
+（`copyright` 为 DEP-5 机器可读格式，`changelog.Debian.gz` 由 `CHANGELOG.md` 生成）。
