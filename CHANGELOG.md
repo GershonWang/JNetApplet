@@ -13,18 +13,59 @@
     （该场景留作后续增强，需要时把 `linkDown` 升级为枚举即可）。
   - 判定挂在既有的 5 秒低频探测（`detectLowFreqStats`）中，**不新增定时器**、
     不新增子进程；仅由低频探测在活动接口非空时读取两个微小 sysfs 文件。
-  - 为避免误报做了三处取舍：`carrier` 读不到按"未知"处理（宁可漏报不误报）；
-    `operstate` 为 `up` 时以其为准（存在 `operstate` 为 up 而 `carrier` 读数为 0 的驱动）；
-    `operstate` 为 `unknown` 或读不到（`lo`、`docker0` 等虚拟接口的常态）时回退只信 `carrier`。
+  - 判定规则为静态纯函数 `isLinkDown(carrier, operState)`，单元测试覆盖真值表
+    全部 15 行分支（`tests/tst_networkmonitorapplet.cpp`）。
+  - **真机第一版失败并修正**：初版规则是 `carrier < 0` 直接判为"未知、不算断开"，
+    但真机上 WiFi 断开后 `/sys/class/net/wlo1/carrier` 返回 `EINVAL`（读数为 `-1`），
+    而 `operstate` 已明确为 `down`——先判 carrier 的写法把 `down` 这个明确信号丢掉了，
+    导致断连状态在真机上完全不出现。现改为 `operstate` 优先发言：
+    `operstate == "up"` 判为连通；否则 `carrier == 0` 判为断开；
+    再否则 `operstate` 非空且非 `unknown` 判为断开；其余为"未知、不当断开"。
   - `ready == false`（无任何接口）仍走原有"未检测到网络接口"占位态，不与断连混淆。
-  - 判定规则抽为静态纯函数 `isLinkDown(carrier, operState)`，单元测试覆盖真值表
-    全部 11 行分支（`tests/tst_networkmonitorapplet.cpp`）。
 
-> 验证状态：已完成代码改动与静态复核，**真机验证待执行**——需 `bash build-deb.sh`
-> 安装后重启 `dde-shell@DDE`，确认 `ip link set <iface> down` 或拔网线后 5 秒内任务栏
-> 变为 `—`、提示与弹窗同步、恢复后数值自动回来；并回归切换接口立即重测、`lo` 等虚拟
-> 接口不误报、竖向任务栏断连标识正常、无接口时仍显示原占位态。
-> 仓库环境无 C++ 编译器与 QML 运行时，`ctest` 与界面均未在本地运行。
+- **无线接口判定不再依赖命名前缀**：原先在 4 处各自硬编码 `wlp`/`wlan` 前缀，
+  而 deepin 25 的无线接口名为 `wlo1`，两个前缀都不匹配，导致**协商速率恒为 0、
+  WiFi 信号强度恒为 0、接口被当成有线、自动选择接口时被排除**。现改为优先探测
+  内核能力 `/sys/class/net/<iface>/wireless` 目录是否存在（与命名约定无关），
+  探测不到时回退前缀匹配（`wlp`/`wlan`/`wlo`/`wlx`）。判定收敛为唯一入口
+  `isWirelessInterface()`，并新增只读属性 `wirelessInterfaces`（无线接口名列表）
+  供 QML 查询；弹窗与设置窗口据此判定图标/类型文案，不再各自维护一套前缀规则。
+  - **为何是属性而非 Q_INVOKABLE 方法**：QML 侧若在绑定里调用后端方法，一旦调用
+    抛错（当时的方法未正确暴露给 QML，报 `Property ... is not a function`），绑定值
+    会变成 `undefined` 并中断，真机表现为接口列表整列消失。改为属性读取后，
+    绑定依赖清晰且已在 `networkInterfaces` 上长期验证稳定。
+  真机确认：接口名行显示 `wlo1 · 867 Mbps`，信号强度 `-47 dBm`。
+  - **`iw` 输出解析同步修正**：真机 `iw dev wlo1 link` 的实际格式为每行带
+    `rx bitrate:` / `tx bitrate:` 方向前缀、单位为 `MBit/s`（大写 B），
+    原实现按行首 `bitrate:` 匹配且大小写敏感，全部解析失败。现正则接受可选的
+    方向前缀并忽略大小写，且**优先取 tx**（协商速率以发送方向为准），
+    tx 缺失时回退 rx。
+
+- **接口类型图标改用高覆盖率字形**：`interfaceIcon()` 原用 `∿`(U+223F)、
+  `⚿`(U+26BF)、`⋈`(U+22C8)、`↻`(U+21BB) 等冷僻区块字形，真机实测**全部渲染为空白**
+  （QML 未指定 `font.family`，系统字体回退链不覆盖这些码点；实测覆盖率分别为
+  13/3/19/27 个字体）。现改用覆盖率 ≥129 的等义符号（`≈`/`⇅`/`⊕`/`⇋` 等），
+  并新增 `testIsWirelessInterface`（9 行）与 `isPhysicalInterface` 的 `wlo1`/`wlx` 回归行。
+
+> 验证状态：**真机已验证，但第一版失败并经过修正**。
+> 已完成真机确认的部分：断连后任务栏显示灰色 `—`、提示与弹窗同步说明断开状态；
+> 接口名行显示 `wlo1 · 867 Mbps`、信号强度 `-47 dBm`（无线判定与 `iw` 解析生效）。
+> 尚未完成真机确认的部分：接口类型图标改用新字形后的显示效果、
+> 断连恢复后数值自动回来、切换接口立即重测、竖向任务栏断连标识。
+> 仓库环境无 C++ 编译器与 QML 运行时（且无 `libQt6Test.so.6`），
+> 单元测试与 QML 界面均**未在本地运行**，本轮新增测试尚无执行证据。
+
+### 已知回归（已修复）
+
+- **接口列表整体消失**：为让 QML 排序与后端无线判定一致，曾把后端判定回调
+  `function(n) { return applet.isWireless(n) }` 作为参数传入 `sortInterfaces`，
+  而该函数被 `Repeater.model` 直接绑定求值。绑定中调用 C++ 方法会使绑定
+  反复重求值并中断，真机表现为设置窗口与弹窗的接口列表**整列消失**
+  （卡片边框与高度仍在，说明数据源非空，仅 `model` 求值失败）。
+  现已改为：排序只用命名匹配（`wlo`/`wlx` 已补齐，归类结果与后端一致），
+  不调用后端；无线判定则预先算成属性（`SettingsWindow` 的 `ifaceRow.isWireless`、
+  `NetworkPopup` 的 `activeIsWireless`）供图标/文案绑定使用，
+  既避免绑定中调用 C++ 方法，也避免同一行重复触发 sysfs 探测。
 
 ## v2.2.1 - 2026-09-26
 

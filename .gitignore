@@ -2,6 +2,8 @@
 build/
 CMakeFiles/
 cmake-build-*/
+# ctest 运行产物目录（Testing/Temporary/LastTest.log 等）
+Testing/
 
 # IDE files
 .vscode/
