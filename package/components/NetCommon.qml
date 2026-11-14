@@ -79,6 +79,12 @@ QtObject {
     // 判断是否为物理网卡（QML 侧排序用，与 C++ isPhysicalInterface 逻辑一致）
     // 无线判定走 isWirelessName（命名集合已含 wlo/wlx），有线匹配 enp/eth；
     // 排序不查询后端：该函数被 Repeater.model 绑定，绑定中触达后端数据易导致求值异常
+    // 判断是否为物理网卡（**仅用于接口列表排序**，与 C++ isPhysicalInterface 语义对齐）
+    // 注意：后端已改为"排除已知虚拟接口"的判定（能覆盖 eno1/ens33/enx 等命名），
+    // 但本函数刻意保留为纯命名白名单：
+    // 它被 Repeater.model 绑定求值，不能调用后端方法（见 sortInterfaces 的注释）。
+    // 后果仅是排序归类——eno1 之类可能排在虚拟接口之后，不影响任何数据统计，
+    // 也不影响后端的物理接口判定与聚合计算
     function isPhysicalIf(name) {
         return isWirelessName(name)
             || name.startsWith("enp") || name.startsWith("eth")

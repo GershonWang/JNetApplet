@@ -84,13 +84,13 @@ Window {
     // 底部"卸载插件"区域可能被压缩到难以点击；放开上限后内容优先按 preferred 高度展示
     // 注意：像素是否够用需在多网卡环境实测，必要时可改为整块内容放入滚动容器
     width: 350
-    // 高度随分区增加而调整：
-    //   520（初版）→ 580（新增「速度单位」分区）→ 700（新增「流量提醒」分区：
-    //   标题 + 已用回显 + 日/月两行输入，约 150px）
-    // 若不加高，多网卡机器上接口列表会被进一步挤压（该区是 Layout.fillHeight 的
-    // ScrollView，被挤压后可视行数过少）。上限仍受 maximumHeight 约束，
-    // 小屏下由接口列表滚动承受压缩
-    height: 700
+    // 高度：分区已增至 7 个（接口/字体颜色/刷新间隔/速度单位/任务栏显示/流量提醒/卸载），
+    // 实测内容合计约 900px。因此内容区改为整体可滚动（见下方 ScrollView），
+    // 窗口高度不再随分区数量线性增长——继续加高只会在小屏上被 maximumHeight 压回去，
+    // 反而让底部按钮更难触达。
+    // 640 是在 1080p（上限 864）与 768p（上限 614）之间取的经验值：
+    // 常见屏幕下都不至于顶到上限，内容超出部分由滚动承载
+    height: 640
     minimumWidth: 350
     maximumWidth: 350
     minimumHeight: 360
@@ -141,14 +141,29 @@ Window {
             }
 
             // 内容区域
-            Item {
+            // 用 ScrollView 而非裸 ColumnLayout：分区已增加到 7 个（接口/字体颜色/
+            // 刷新间隔/速度单位/任务栏显示/流量提醒/卸载），实测内容合计约 900px，
+            // 超过 1080p 屏幕下 maximumHeight 的上限（0.8*1080=864）。
+            // 若不滚动，底部「卸载插件」会被裁掉——那正是用户需要点击的区域。
+            // 设计原因：宁可让内容整体滚动，也不再继续加高窗口（小屏会被压得更狠）
+            ScrollView {
+                id: contentScroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                clip: true
+                // 需要垂直滚动条：内容高度超过视口时出现
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                contentWidth: availableWidth
 
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
+                    // 宽度锁定为视口宽度（减去滚动条占位），避免子项把内容撑宽导致横向滚动
+                    width: contentScroll.availableWidth
                     spacing: 12
+                    // 内边距：与原 anchors.margins: 16 保持一致的观感
+                    topPadding: 16
+                    bottomPadding: 16
+                    leftPadding: 16
+                    rightPadding: 16
 
                     // 网络接口选择区
                     Text {
@@ -461,6 +476,75 @@ Window {
                                 }
                             }
                         }
+                    }
+
+                    Item { Layout.preferredHeight: 4 }
+
+                    // ---- 任务栏显示口径：单接口 / 所有物理网卡合计 ----
+                    // 设计原因：多网卡场景（有线 + 无线同时工作、或容器宿主多网口）下，
+                    // 只看单卡会低估实际吞吐；而多数用户只需看主网卡，故做成显式开关，
+                    // 默认保持原来的单接口视图，不改变既有观感。
+                    // 合计口径排除 tun/docker/veth 等虚拟接口，避免与物理网卡重复计数
+                    Text {
+                        text: qsTr("Taskbar Display")
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        color: theme.textSecondary
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        // 与速度单位那组同款按钮，两个选项互斥
+                        Repeater {
+                            model: [
+                                [qsTr("Active interface"), false],
+                                [qsTr("All interfaces"), true]
+                            ]
+
+                            Rectangle {
+                                id: aggregateOption
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: modelData[0]
+                                Accessible.checked: applet && applet.aggregateSpeed === modelData[1]
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 34
+                                radius: 8
+                                color: applet && applet.aggregateSpeed === modelData[1]
+                                       ? (aggregateMouse.pressed ? Qt.darker(root.selBg, 1.12) : root.selBg)
+                                       : (aggregateMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
+                                                                 : (aggregateMouse.containsMouse ? theme.hoverBg : theme.cardBg))
+                                border.width: 1
+                                border.color: applet && applet.aggregateSpeed === modelData[1]
+                                              ? root.selBorder : theme.lineColor
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData[0]
+                                    font.pixelSize: 12
+                                    color: applet && applet.aggregateSpeed === modelData[1]
+                                           ? root.selText : theme.textPrimary
+                                }
+
+                                MouseArea {
+                                    id: aggregateMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: if (applet) applet.aggregateSpeed = modelData[1]
+                                }
+                            }
+                        }
+                    }
+
+                    // 说明文字：用户需要知道"合计"到底包含哪些接口，以及 VPN 为何不在内
+                    Text {
+                        text: qsTr("Combined mode sums all physical network cards; VPN and container interfaces are excluded to avoid double counting.")
+                        font.pixelSize: 11
+                        color: theme.textTertiary
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
 
                     Item { Layout.preferredHeight: 4 }

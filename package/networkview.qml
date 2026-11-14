@@ -52,8 +52,19 @@ AppletItem {
 
     readonly property var applet: Applet
     readonly property bool ready: applet ? applet.ready : false
-    readonly property real downloadSpeed: applet ? applet.downloadSpeed : 0
-    readonly property real uploadSpeed: applet ? applet.uploadSpeed : 0
+    // 单接口瞬时速度（活动接口），始终取自后端，供弹窗与趋势图使用
+    readonly property real activeDownloadSpeed: applet ? applet.downloadSpeed : 0
+    readonly property real activeUploadSpeed: applet ? applet.uploadSpeed : 0
+    // 任务栏显示用的速度：按"合计"开关在单接口与全物理接口合计之间二选一。
+    // 设计原因：多网卡场景（有线+无线同时工作）只看单卡会低估实际吞吐；
+    // 但单卡视图对多数用户更直观，故由用户显式切换，默认保持单接口
+    readonly property bool showAggregate: applet ? (applet.aggregateSpeed === true) : false
+    readonly property real downloadSpeed: showAggregate
+                                          ? (applet ? applet.totalDownloadSpeed : 0)
+                                          : activeDownloadSpeed
+    readonly property real uploadSpeed: showAggregate
+                                        ? (applet ? applet.totalUploadSpeed : 0)
+                                        : activeUploadSpeed
     readonly property real totalDownload: applet ? applet.totalDownload : 0
     readonly property real totalUpload: applet ? applet.totalUpload : 0
     readonly property string activeInterface: applet ? (applet.activeInterface || "") : ""
@@ -389,7 +400,11 @@ AppletItem {
               : (root.linkDownNow
                  // 断连时只说明接口已断开，不再拼地址行（此时地址可能仍是残留值）
                  ? (root.displayName + " · " + qsTr("Disconnected"))
-                 : (root.displayName
+                 // 合计模式下任务栏数字不是单卡速度，提示里必须说明口径，
+                 // 否则用户会把"有线+无线之和"误认为当前网卡的速率
+                 : ((root.showAggregate
+                     ? qsTr("All interfaces (combined)")
+                     : root.displayName)
                     + " · " + qsTr("IPv4: ") + (root.ipAddress || qsTr("None"))
                     + (root.ipv6Address ? "\n" + qsTr("IPv6: ") + root.ipv6Address : "")))
         toolTipX: DockPanelPositioner.x
