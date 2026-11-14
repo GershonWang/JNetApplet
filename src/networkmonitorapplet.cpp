@@ -113,6 +113,9 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     // 已提醒周期键必须跨重启保留，否则重启 dde-shell 会在同一周期重复提醒
     m_notifiedDay = settings.value(QStringLiteral("notifiedDay")).toString();
     m_notifiedMonth = settings.value(QStringLiteral("notifiedMonth")).toString();
+
+    // 任务栏是否显示所有物理网卡合计速率（默认 false，保持原"只看活动接口"的行为）
+    m_aggregateSpeed = settings.value(QStringLiteral("aggregateSpeed"), false).toBool();
 }
 
 NetworkMonitorApplet::~NetworkMonitorApplet()
@@ -493,6 +496,35 @@ double NetworkMonitorApplet::monthUsedBytes() const
     return static_cast<double>(periodUsedBytes(
         m_trafficLog, QStringLiteral("byMonth"),
         QDate::currentDate().toString(QStringLiteral("yyyy-MM"))));
+}
+
+// ---- 多接口聚合 ----
+
+bool NetworkMonitorApplet::aggregateSpeed() const
+{
+    return m_aggregateSpeed;
+}
+
+// 切换任务栏显示口径：false=单接口（默认），true=所有物理网卡合计
+void NetworkMonitorApplet::setAggregateSpeed(bool enabled)
+{
+    if (m_aggregateSpeed == enabled) {
+        return;
+    }
+    m_aggregateSpeed = enabled;
+    persistSetting(QStringLiteral("aggregateSpeed"), m_aggregateSpeed);
+    emit aggregateSpeedChanged();
+}
+
+// 所有物理网卡的速率之和（字节/秒），由 calculateSpeed 每轮更新
+double NetworkMonitorApplet::totalDownloadSpeed() const
+{
+    return m_totalDownloadSpeed;
+}
+
+double NetworkMonitorApplet::totalUploadSpeed() const
+{
+    return m_totalUploadSpeed;
 }
 
 // 计算指定周期键下所有接口的 rx+tx 合计
@@ -1002,7 +1034,10 @@ void NetworkMonitorApplet::calculateSpeed()
         m_downloadSpeed = 0;
         m_uploadSpeed = 0;
     } else if (elapsedSec > 0 && !m_activeInterface.isEmpty()) {
-        // 按真实流逝时间计算速度（字节/秒），避免定时器抖动失真
+        // 按真实流逝时间计算速度（字节/秒），避免定时器抖动失真。
+        // 这里只算"活动接口的瞬时速度"，用于任务栏（单接口模式）与详情弹窗；
+        // 会话总量与日/月流量日志改由下方"所有接口"循环按物理网卡分别累加，
+        // 原因见该循环的注释——放在这里会导致只统计活动接口，且与聚合口径不一致
         const qint64 currentRxBytes = getActiveRxBytes();
         const qint64 currentTxBytes = getActiveTxBytes();
         // 计数器回绕/接口重置时差值可能为负，钳制为 0 避免显示负速度
@@ -1012,13 +1047,6 @@ void NetworkMonitorApplet::calculateSpeed()
         const qint64 txDeltaClamped = txDelta > 0 ? txDelta : 0;
         m_downloadSpeed = rxDeltaClamped / elapsedSec;
         m_uploadSpeed = txDeltaClamped / elapsedSec;
-        // 会话总量：累加差值（dde-shell 启动至今的流量），重启清零
-        // 设计原因：用户期望"本次会话"是本次 dde-shell 运行期间的流量，
-        // 与流量统计窗口的"今日累计"（从0点起）区分，数值不会超过今日累计
-        m_totalDownload += rxDeltaClamped;
-        m_totalUpload += txDeltaClamped;
-        // 累加日/月流量日志（仅活动接口增量，与速度计算口径一致）
-        appendToTrafficLog(rxDeltaClamped, txDeltaClamped);
         m_lastRxBytes = currentRxBytes;
         m_lastTxBytes = currentTxBytes;
     }
@@ -1054,7 +1082,15 @@ void NetworkMonitorApplet::calculateSpeed()
     // ---- 为所有接口采集速度历史（非仅活动接口）----
     // 设计原因：原仅采集活动接口，切换到非活动接口时趋势图为空需等待数分钟。
     // 改为遍历所有接口计算各自速度并追加历史，切换接口时趋势图立即有数据。
+    //
+    // 本次改造：这个循环同时承担三件事，避免三次遍历各自求差（易漂移）：
+    //   1. 为每个接口追加趋势历史
+    //   2. 累加所有物理网卡的合计速率（多接口聚合）
+    //   3. 把每个物理接口的增量分别写入日/月流量日志（修正"只计活动接口"的口径）
     if (elapsedSec > 0) {
+        double sumDown = 0;
+        double sumUp = 0;
+
         for (const QString &name : m_interfaceList) {
             if (!m_interfaces.contains(name)) continue;
             const NetworkInterface &iface = m_interfaces[name];
@@ -1068,11 +1104,14 @@ void NetworkMonitorApplet::calculateSpeed()
 
             const qint64 iRxDelta = iface.rxBytes - m_lastRxBytesByIface[name];
             const qint64 iTxDelta = iface.txBytes - m_lastTxBytesByIface[name];
+            // 计数器回绕/接口重置时差值可能为负，钳制为 0 避免出现负速度
+            const qint64 rxClamped = iRxDelta > 0 ? iRxDelta : 0;
+            const qint64 txClamped = iTxDelta > 0 ? iTxDelta : 0;
 
             SpeedSample sample;
             sample.timestamp = nowSec;
-            sample.downloadSpeed = (iRxDelta > 0 ? iRxDelta : 0) / elapsedSec;
-            sample.uploadSpeed = (iTxDelta > 0 ? iTxDelta : 0) / elapsedSec;
+            sample.downloadSpeed = rxClamped / elapsedSec;
+            sample.uploadSpeed = txClamped / elapsedSec;
             m_speedHistory[name].append(sample);
 
             // 滑动窗口裁剪：超过 MAX_HISTORY_SAMPLES（1800）点时丢弃最旧的
@@ -1081,15 +1120,35 @@ void NetworkMonitorApplet::calculateSpeed()
                 samples.removeFirst();
             }
 
+            // 只有物理网卡参与聚合与流量统计：tun/docker/veth 的流量实际仍走物理网卡，
+            // 计入会造成重复计数（例如代理软件的 tun0 与底层 eno1 各算一遍）
+            if (isPhysicalInterface(name)) {
+                sumDown += sample.downloadSpeed;
+                sumUp += sample.uploadSpeed;
+                // 会话总量（dde-shell 启动至今）与日/月流量日志同源累加，
+                // 二者口径必须一致：都按物理接口分别统计，避免"总量含 A 卡、日志只含 B 卡"
+                m_totalDownload += rxClamped;
+                m_totalUpload += txClamped;
+                // 按接口分别累加日/月流量：统计窗口本就按接口分行展示，
+                // 只算活动接口会让"切网卡后另一块的流量凭空消失"
+                appendToTrafficLog(name, rxClamped, txClamped);
+            }
+
             m_lastRxBytesByIface[name] = iface.rxBytes;
             m_lastTxBytesByIface[name] = iface.txBytes;
         }
+
+        m_totalDownloadSpeed = sumDown;
+        m_totalUploadSpeed = sumUp;
+
         // 历史采样点已追加，标记脏缓存，QML 下次读取时重建
         m_historyDirty = true;
         emit speedHistoryChanged();
     }
 
-    // 仅在速度/总量实际变化时发射信号，避免空闲时每秒触发 QML 无效重绘
+    // 仅在速度/总量实际变化时发射信号，避免空闲时每秒触发 QML 无效重绘。
+    // 合计速率也挂在 speedChanged 上：它每秒随采样更新，与单接口速度同一节拍，
+    // 单独造一个信号只会让 QML 多一处 Connections
     if (m_downloadSpeed != oldDownload || m_uploadSpeed != oldUpload) {
         emit speedChanged();
     }
@@ -1662,16 +1721,57 @@ int NetworkMonitorApplet::detectWifiSignal(const QString &iface)
     return sig;
 }
 
-// 判断是否为物理网卡
-// 有线前缀：enp/eth；无线判定不再就地硬编码前缀，统一委托 isWirelessInterface
-// （该方法优先探测 /sys/class/net/<iface>/wireless，能覆盖 wlo1 等非 wlp/wlan 命名）
-// 虚拟接口（Meta/tun/tap/docker/veth/br-）返回 false，
-// 用于自动选择时优先真实网卡而非代理 TUN 接口
+// 判断是否为物理网卡（用于"自动选择默认接口"与"多接口聚合"两处）
+//
+// 实现方式：从"前缀白名单"改为"已知虚拟接口的排除法"。
+// 设计原因（实测缺陷）：原白名单只认无线判定 + enp/eth，而板载网卡常见 eno1、
+// 虚拟机常见 ens33、USB 有线常见 enx<MAC>——这些全部被判为"非物理"。
+// 后果有两层：自动选择时会跳过真正的主网卡；多接口聚合若用它做白名单，
+// 这些网卡的流量会被静默漏算（用户完全看不出少了什么）。
+// 排除法天然覆盖未知命名：只要不是已知虚拟接口，就按物理网卡对待。
+//
+// 已知虚拟接口（Linux 上常见的几类）：
+//   lo          回环
+//   tun/tap/wg   VPN 隧道
+//   docker/veth  容器
+//   br-/virbr    网桥（含容器网桥、虚拟化网桥）
+//   Meta         deepin 的代理接口
+//   vnet         虚拟化（KVM/libvirt 的 vnetN）
+//   ifb          流量整形
+// 无线接口不在此处区分——调用方若需判断无线，另有 isWirelessInterface()
 bool NetworkMonitorApplet::isPhysicalInterface(const QString &name) const
 {
-    return isWirelessInterface(name)
-        || name.startsWith(QLatin1String("enp"))
-        || name.startsWith(QLatin1String("eth"));
+    if (name.isEmpty()) {
+        return false;
+    }
+    // 精确匹配的虚拟接口名
+    static const QStringList exactVirtual{
+        QStringLiteral("lo"),
+        QStringLiteral("Meta"),
+    };
+    if (exactVirtual.contains(name)) {
+        return false;
+    }
+    // 按前缀匹配的虚拟接口族
+    // 注意 wg 的边界：WireGuard 隧道名是 wg0/wg1 这类「wg + 纯数字」，
+    // 而无线 p2p 接口是 wgp2s0（以 wg 开头却属于物理网卡）。
+    // 这类冲突不能靠加长前缀表穷举，故对 wg 单独要求「其后全为数字」。
+    // 该场景由 testIsPhysicalInterface(wgp) 固定住
+    static const QRegularExpression wgTunnelRe(QStringLiteral("^wg\\d+$"));
+    if (wgTunnelRe.match(name).hasMatch()) {
+        return false;
+    }
+    static const QStringList virtualPrefixes{
+        QStringLiteral("tun"), QStringLiteral("tap"),
+        QStringLiteral("docker"), QStringLiteral("veth"), QStringLiteral("br-"),
+        QStringLiteral("virbr"), QStringLiteral("vnet"), QStringLiteral("ifb"),
+    };
+    for (const QString &prefix : virtualPrefixes) {
+        if (name.startsWith(prefix)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // ---- 流量日志（日/月持久化）----
@@ -1766,12 +1866,15 @@ void NetworkMonitorApplet::saveTrafficLog()
 // 将本次流量增量累加到当日/当月/当前活动接口的日志记录中（每秒调用，纯内存操作）
 // 跨日/跨月检测：日期或月份与上次记录不同时切换当前记录，不累加到昨天的记录；
 // 只累加活动接口（与 m_totalDownload 口径一致），避免多接口重复计数
-void NetworkMonitorApplet::appendToTrafficLog(qint64 rxDelta, qint64 txDelta)
+void NetworkMonitorApplet::appendToTrafficLog(const QString &iface,
+                                              qint64 rxDelta, qint64 txDelta)
 {
     if (rxDelta <= 0 && txDelta <= 0) {
         return;
     }
-    if (m_activeInterface.isEmpty()) {
+    // 由调用方明确指定接口：原先只认 m_activeInterface，导致切换网卡后
+    // 另一块网卡的流量完全不计入历史（统计窗口按接口分行展示，却永远缺一行）
+    if (iface.isEmpty()) {
         return;
     }
 
@@ -1785,24 +1888,24 @@ void NetworkMonitorApplet::appendToTrafficLog(qint64 rxDelta, qint64 txDelta)
     //（直接赋值 double 会导致超过 2^53 的字节数精度丢失）
     QJsonObject byDay = m_trafficLog.value(QStringLiteral("byDay")).toObject();
     QJsonObject dayEntry = byDay.value(date).toObject();
-    QJsonObject ifaceDay = dayEntry.value(m_activeInterface).toObject();
+    QJsonObject ifaceDay = dayEntry.value(iface).toObject();
     ifaceDay[QStringLiteral("rx")] =
         ifaceDay.value(QStringLiteral("rx")).toVariant().toLongLong() + rxDelta;
     ifaceDay[QStringLiteral("tx")] =
         ifaceDay.value(QStringLiteral("tx")).toVariant().toLongLong() + txDelta;
-    dayEntry[m_activeInterface] = ifaceDay;
+    dayEntry[iface] = ifaceDay;
     byDay[date] = dayEntry;
     m_trafficLog[QStringLiteral("byDay")] = byDay;
 
     // 累加到按月记录：byMonth[month][iface] = {rx, tx}
     QJsonObject byMonth = m_trafficLog.value(QStringLiteral("byMonth")).toObject();
     QJsonObject monthEntry = byMonth.value(month).toObject();
-    QJsonObject ifaceMonth = monthEntry.value(m_activeInterface).toObject();
+    QJsonObject ifaceMonth = monthEntry.value(iface).toObject();
     ifaceMonth[QStringLiteral("rx")] =
         ifaceMonth.value(QStringLiteral("rx")).toVariant().toLongLong() + rxDelta;
     ifaceMonth[QStringLiteral("tx")] =
         ifaceMonth.value(QStringLiteral("tx")).toVariant().toLongLong() + txDelta;
-    monthEntry[m_activeInterface] = ifaceMonth;
+    monthEntry[iface] = ifaceMonth;
     byMonth[month] = monthEntry;
     m_trafficLog[QStringLiteral("byMonth")] = byMonth;
 }

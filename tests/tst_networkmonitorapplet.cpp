@@ -139,6 +139,13 @@ private slots:
     // 流量提醒：阈值设置的归一化（负数/NaN 按关闭处理）
     void testQuotaLimitSetting();
 
+    // 多接口聚合：合计速率只累加物理网卡
+    void testAggregateSpeedOnlyPhysical();
+    // 多接口聚合：流量日志按接口分别累加（修正"只计活动接口"）
+    void testTrafficLogAllInterfaces();
+    // 多接口聚合：开关的持久化与幂等
+    void testAggregateSpeedSetting();
+
     // 流量日志：当日/当月累加与按接口分桶
     void testAppendToTrafficLog();
     // 流量日志：超期裁剪（按日 30 条、按月 12 条）
@@ -171,8 +178,23 @@ void NetworkMonitorAppletTest::testIsPhysicalInterface_data()
     // USB 无线网卡常见命名 wlx<MAC>
     QTest::newRow("wlx00c0ca") << "wlx00c0ca" << true;
 
+    // 回归：板上网卡常见 eno1、虚拟机常见 ens33、USB 有线常见 enx<MAC>，
+    // 原白名单只认 enp/eth，这三类全被判为非物理——自动选择会跳过主网卡，
+    // 多接口聚合会静默漏算它们的流量
+    QTest::newRow("eno1") << "eno1" << true;
+    QTest::newRow("ens33") << "ens33" << true;
+    QTest::newRow("enx00e04c") << "enx00e04c" << true;
+    // 排除法对未知命名同样成立（未来新命名不会被漏判）
+    QTest::newRow("unknown-but-not-virtual") << "foo0" << true;
+    QTest::newRow("wgp") << "wgp2s0" << true;   // 无线 p2p 接口，非 wg 隧道
+
     // 非物理接口
     QTest::newRow("lo") << "lo" << false;
+    QTest::newRow("wg0") << "wg0" << false;
+    QTest::newRow("tap0") << "tap0" << false;
+    QTest::newRow("virbr0") << "virbr0" << false;
+    QTest::newRow("vnet0") << "vnet0" << false;
+    QTest::newRow("ifb0") << "ifb0" << false;
     QTest::newRow("docker0") << "docker0" << false;
     QTest::newRow("veth0") << "veth0" << false;
     QTest::newRow("br-xxx") << "br-xxx" << false;
@@ -723,12 +745,15 @@ void NetworkMonitorAppletTest::testAppendToTrafficLog()
     const QString today = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
     const QString month = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
 
-    applet->m_activeInterface = QStringLiteral("eth0");
-    applet->appendToTrafficLog(100, 50);
-    applet->appendToTrafficLog(200, 20);
+    // 接口由调用方显式指定（不再依赖 m_activeInterface）：
+    // 原先只累加活动接口，切换网卡后另一块的流量完全不入账
+    applet->appendToTrafficLog(QStringLiteral("eth0"), 100, 50);
+    applet->appendToTrafficLog(QStringLiteral("eth0"), 200, 20);
 
     // 零增量应被直接忽略
-    applet->appendToTrafficLog(0, 0);
+    applet->appendToTrafficLog(QStringLiteral("eth0"), 0, 0);
+    // 空接口名同样忽略（防御性：调用方传空不应产生以空串为键的记录）
+    applet->appendToTrafficLog(QString(), 999, 999);
 
     QJsonObject dayEntry = applet->m_trafficLog.value(QStringLiteral("byDay")).toObject()
                                .value(today).toObject();
@@ -742,9 +767,8 @@ void NetworkMonitorAppletTest::testAppendToTrafficLog()
     QCOMPARE(monthEntry.value(QStringLiteral("eth0")).toObject()
                  .value(QStringLiteral("rx")).toVariant().toLongLong(), qint64(300));
 
-    // 切换接口后写入新接口的桶，原有接口数据不受影响
-    applet->m_activeInterface = QStringLiteral("wlan0");
-    applet->appendToTrafficLog(7, 3);
+    // 另一个接口写入独立的桶，原有接口数据不受影响
+    applet->appendToTrafficLog(QStringLiteral("wlan0"), 7, 3);
 
     dayEntry = applet->m_trafficLog.value(QStringLiteral("byDay")).toObject()
                    .value(today).toObject();
@@ -752,6 +776,8 @@ void NetworkMonitorAppletTest::testAppendToTrafficLog()
                  .value(QStringLiteral("rx")).toVariant().toLongLong(), qint64(300));
     QCOMPARE(dayEntry.value(QStringLiteral("wlan0")).toObject()
                  .value(QStringLiteral("rx")).toVariant().toLongLong(), qint64(7));
+    // 空接口名不应产生记录
+    QVERIFY(!dayEntry.contains(QString()));
 
     delete applet;
 }
@@ -1025,6 +1051,122 @@ void NetworkMonitorAppletTest::testQuotaLimitSetting()
     QCOMPARE(applet->monthlyLimitGb(), 0.0);
     applet->setMonthlyLimitGb(std::numeric_limits<double>::infinity());
     QCOMPARE(applet->monthlyLimitGb(), 0.0);
+
+    delete applet;
+}
+
+// 多接口聚合：合计速率只累加物理网卡
+// 设计原因：tun/docker/veth 的流量实际仍走物理网卡，计入会重复计数
+//（代理软件场景下 tun0 与底层 eno1 各算一遍，数字翻倍）
+void NetworkMonitorAppletTest::testAggregateSpeedOnlyPhysical()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    // 两块物理网卡 + 一个 VPN 隧道
+    applet->m_interfaceList = QStringList() << "eno1" << "wlo1" << "tun0";
+    auto setIface = [applet](const QString &name, qint64 rx, qint64 tx) {
+        NetworkInterface i;
+        i.name = name;
+        i.rxBytes = rx;
+        i.txBytes = tx;
+        applet->m_interfaces[name] = i;
+    };
+    setIface("eno1", 1000, 500);
+    setIface("wlo1", 2000, 800);
+    setIface("tun0", 3000, 900);
+
+    // 第一轮：为每个接口建立基线（首轮不产出速度）
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+
+    // 第二轮：每接口各增加固定字节数
+    setIface("eno1", 1000 + 100, 500 + 50);    // +100 / +50
+    setIface("wlo1", 2000 + 200, 800 + 80);    // +200 / +80
+    setIface("tun0", 3000 + 900, 900 + 900);   // VPN 增量很大，但不应计入合计
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+
+    // 合计 = 物理网卡之和（约 300 / 130 字节每秒），不含 tun0 的 900
+    QVERIFY(applet->totalDownloadSpeed() > 250 && applet->totalDownloadSpeed() < 350);
+    QVERIFY(applet->totalUploadSpeed() > 100 && applet->totalUploadSpeed() < 160);
+
+    // 单接口速度仍只反映活动接口，两者并存不冲突
+    QVERIFY(applet->downloadSpeed() >= 0);
+
+    delete applet;
+}
+
+// 多接口聚合：流量日志按接口分别累加
+// 设计原因（缺陷回归）：原实现只累加活动接口，切换网卡后另一块的流量凭空消失，
+// 而统计窗口是按接口分行展示的，于是永远缺一行
+void NetworkMonitorAppletTest::testTrafficLogAllInterfaces()
+{
+    NetworkMonitorApplet *applet = createApplet();
+    const QString today = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
+
+    applet->m_interfaceList = QStringList() << "eno1" << "wlo1" << "tun0";
+    auto setIface = [applet](const QString &name, qint64 rx, qint64 tx) {
+        NetworkInterface i;
+        i.name = name;
+        i.rxBytes = rx;
+        i.txBytes = tx;
+        applet->m_interfaces[name] = i;
+    };
+    setIface("eno1", 1000, 500);
+    setIface("wlo1", 2000, 800);
+    setIface("tun0", 3000, 900);
+    // 活动接口设为 eno1：旧实现只会把 eno1 的增量写进日志
+    applet->m_activeInterface = "eno1";
+
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+
+    setIface("eno1", 1000 + 100, 500 + 50);
+    setIface("wlo1", 2000 + 200, 800 + 80);
+    setIface("tun0", 3000 + 900, 900 + 900);
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+
+    const QJsonObject dayEntry = applet->m_trafficLog.value(QStringLiteral("byDay"))
+                                     .toObject().value(today).toObject();
+
+    // 两块物理网卡都要有记录——这正是旧实现缺失的部分
+    QVERIFY(dayEntry.contains(QStringLiteral("eno1")));
+    QVERIFY(dayEntry.contains(QStringLiteral("wlo1")));
+    // VPN 隧道不计入，避免与物理网卡重复统计
+    QVERIFY(!dayEntry.contains(QStringLiteral("tun0")));
+
+    QCOMPARE(dayEntry.value(QStringLiteral("eno1")).toObject()
+                 .value(QStringLiteral("rx")).toVariant().toLongLong(), qint64(100));
+    QCOMPARE(dayEntry.value(QStringLiteral("wlo1")).toObject()
+                 .value(QStringLiteral("rx")).toVariant().toLongLong(), qint64(200));
+    QCOMPARE(dayEntry.value(QStringLiteral("wlo1")).toObject()
+                 .value(QStringLiteral("tx")).toVariant().toLongLong(), qint64(80));
+
+    // 会话总量同样是物理网卡之和（100 + 200），不含 tun0
+    QCOMPARE(applet->m_totalDownload, qint64(300));
+    QCOMPARE(applet->m_totalUpload, qint64(130));
+
+    delete applet;
+}
+
+// 聚合开关：默认关闭，切换生效并持久化
+void NetworkMonitorAppletTest::testAggregateSpeedSetting()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    // 默认关闭：保持原有"只看活动接口"的行为
+    QVERIFY(!applet->aggregateSpeed());
+
+    applet->setAggregateSpeed(true);
+    QVERIFY(applet->aggregateSpeed());
+
+    // 幂等：重复设置同值不应产生额外副作用
+    applet->setAggregateSpeed(true);
+    QVERIFY(applet->aggregateSpeed());
+
+    applet->setAggregateSpeed(false);
+    QVERIFY(!applet->aggregateSpeed());
 
     delete applet;
 }
