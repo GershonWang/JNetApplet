@@ -477,8 +477,8 @@ AppletItem {
         // 尺寸跟随弹窗内容的隐式尺寸：
         // PanelPopup 是独立窗口，超出窗口边界的内容会被直接裁掉。此前硬编码 330x348，
         // 而中文文案下内容实测需要 412x377（最宽的包统计行 388px + 左右内边距；
-        // 高度需容纳底部详情入口行），结果是右侧（上传速度单位、错误/丢包、
-        // 第三个接口 chip）与底部（三个详情入口）被裁切。改为由内容实测尺寸驱动后，
+        // 高度需容纳底部详情入口行），结果是右侧（上传速度单位、错误/丢包）
+        // 与底部（三个详情入口）被裁切。改为由内容实测尺寸驱动后，
         // 翻译文案、字号、数值长度变化都不再引发裁切。
         // 保留原值作为下限：占位态（未检测到接口）内容更矮更窄，
         // 避免弹窗塌缩成一条，同时维持"打开即为稳定尺寸"的观感
@@ -490,8 +490,6 @@ AppletItem {
         onPopupVisibleChanged: {
             if (popupVisible) {
                 toolTip.close()
-                // popup 打开时确保活动 chip 完整可见
-                Qt.callLater(function() { popupContent.scrollToActiveChip(false) })
             } else if (hoverHandler.hovered) {
                 // 关闭弹窗时鼠标仍停在图标上（hovered 未变化，不会触发 onHoveredChanged），
                 // 若不在此恢复，提示气泡要等到鼠标移出再移入才会回来

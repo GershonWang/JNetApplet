@@ -202,7 +202,7 @@ Window {
                             // 内容宽度跟随可视宽度（自动减去滚动条占位），禁止水平滚动
                             contentWidth: availableWidth
 
-                            // 自定义滚动条样式：与 networkview.qml chip 滚动条一致（4px 圆角矩形），
+                            // 自定义滚动条样式：4px 圆角矩形细条，
                             // 颜色使用主题感知灰色系（随 isDarkMode 切换深浅）；
                             // AsNeeded 策略保证接口少时不显示滚动条
                             ScrollBar.vertical: ScrollBar {
@@ -229,7 +229,7 @@ Window {
                                 // 行样式：类型图标 + 单选圆点 + 名称 + 右侧类型描述；
                                 // hover 底、选中底与边框颜色均随 isDarkMode 切换深浅
                                 Repeater {
-                                    // 与弹窗接口 chip 共用同一排序规则，避免两处顺序不一致
+                                    // 排序规则统一由 common.sortInterfaces 提供，确保各处顺序一致
                                     model: common.sortInterfaces(networkInterfaces)
                                     delegate: Rectangle {
                                         id: ifaceRow

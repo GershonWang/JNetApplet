@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 // 网络速度监控弹窗内容组件
-// 通透分区布局：去掉自绘卡片背景，用分隔线+留白划分四个区域
-// （接口信息 / 实时速度 / 累计流量 / 接口切换），速度数字放大为视觉锚点
+// 通透分区布局：去掉自绘卡片背景，用分隔线+留白划分三个区域
+// （接口信息 / 实时速度 / 累计流量），速度数字放大为视觉锚点。
+// 本弹窗只**展示**当前活动网卡，不提供切换——网卡切换的唯一入口是右键设置窗口，
+// 避免同一操作有两个入口、也让左键弹窗的语义单纯是"查看" 
 // 由 networkview.qml 的 PanelPopup 实例化，传入 applet 属性
 // 毛玻璃背景、圆角、阴影由 PanelPopup 自动提供，本组件不自绘背景
 // 颜色与格式化函数统一取自同目录 NetCommon.qml（common.xxx），数据由 applet 提供
@@ -82,7 +84,7 @@ Control {
     readonly property int wifiSignal: applet ? (applet.wifiSignal || 0) : 0
 
     // 用户自定义字体色：非空时覆盖 primaryText，空串回退 DTK 调色板派生
-    // 仅作用于主要文字（接口名、速度数值、累计数值、chip 未选中文字）
+    // 仅作用于主要文字（接口名、速度数值、累计数值等正文）
     // secondaryText/tertiaryText/强调色不跟随，保持系统主题层次不崩
     readonly property string userTextColor: applet ? (applet.textColor || "") : ""
     readonly property color primaryText: userTextColor.length > 0
@@ -109,25 +111,12 @@ Control {
     // 由 networkview.qml 统一接信号后关闭弹窗并打开目标窗口
     signal detailsRequested(string key)
 
-    // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
-    // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
-    // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
-    // 排序规则统一由 common.sortInterfaces 提供（与设置窗口共用，确保两处顺序一致）；
-    // 排序内部只用命名匹配（wlo/wlx 已补齐），不调用后端方法：该属性会被 Repeater.model
-    // 绑定，绑定中调用 C++ 方法会因依赖重求值中断，导致 chip 列表整体消失
-    readonly property var sortedInterfaces: popup.ready ? common.sortInterfaces(popup.networkInterfaces) : []
-
     // 活动接口是否为无线：从后端的无线接口名列表中查找。
     // 设计原因：不用 Q_INVOKABLE 方法（真机实测 QML 报 "Property ... is not a function"），
     // 改走 Q_PROPERTY 属性读取——与 networkInterfaces 同一机制，已验证稳定；
     // 且属性读取不会在绑定求值时触发 C++ 调用，绑定依赖清晰
     readonly property bool activeIsWireless: popup.activeInterface !== ""
         && popup.wirelessInterfaces.indexOf(popup.activeInterface) !== -1
-
-    // 供外部调用：popup 打开时滚动到活动 chip
-    function scrollToActiveChip(animated) {
-        chipFlickable.scrollToActiveChip(animated)
-    }
 
     // 一键复制：用隐藏 TextEdit 的 selectAll()+copy() 写入系统剪贴板
     // QML 无直接剪贴板 API，此为项目既定模式（SettingsWindow/AboutWindow 同模式）
@@ -658,141 +647,6 @@ Control {
             Layout.preferredHeight: 1
             color: popup.cardBorder
             visible: popup.ready
-        }
-
-        // ==================== 分区4：接口切换 chip 列表 ====================
-        // 水平滚动，物理网卡在前、虚拟网卡在后，顺序稳定不随切换变化
-        // chip 少时分散撑满一行；chip 多超出宽度时固定宽度 + 水平滚动
-        // 活动 chip 不在可视区域或被截断时，自动滚动露出完整样式（见 scrollToActiveChip）
-        Flickable {
-            id: chipFlickable
-            Layout.fillWidth: true
-            // 高度需容纳 chip（28px）+ 水平滚动条（~6px）+ 上下间距
-            Layout.preferredHeight: 40
-            visible: popup.ready && popup.networkInterfaces.length > 1
-            contentWidth: Math.max(chipRow.width, width)
-            contentHeight: chipRow.height
-            flickableDirection: Flickable.HorizontalFlick
-            clip: true
-
-            // 平滑滚动动画：直接赋值 contentX 会被 Flickable 的拖拽/回弹行为覆盖，
-            // 用 NumberAnimation 驱动 contentX 实现自动滚动，平滑且不冲突
-            NumberAnimation {
-                id: chipScrollAnim
-                target: chipFlickable
-                property: "contentX"
-                duration: 200
-                easing.type: Easing.OutCubic
-            }
-
-            // 用户开始拖拽/滑动时停止自动滚动，避免动画与用户操作争抢
-            onMovementStarted: chipScrollAnim.stop()
-
-            // 自动滚动使活动接口的 chip 完整可见：
-            // 列表顺序稳定后活动 chip 可能位于可视区域外或被截断，
-            // 切换接口或 popup 打开时调用，将其滚动露出完整样式。
-            // animated=false 用于 popup 刚打开时立即定位，跳过滚动过程
-            function scrollToActiveChip(animated) {
-                if (!visible || width <= 0) return
-                var idx = popup.sortedInterfaces.indexOf(popup.activeInterface)
-                if (idx < 0) return
-                var chip = chipRepeater.itemAt(idx)
-                if (!chip) return
-                var targetX = contentX
-                if (chip.x < contentX) {
-                    // chip 在可视区左侧之外：回滚使 chip 左边缘与可视区左缘对齐
-                    targetX = chip.x
-                } else if (chip.x + chip.width > contentX + width) {
-                    // chip 在可视区右侧之外或被截断：滚动使 chip 右边缘与可视区右缘对齐
-                    targetX = chip.x + chip.width - width
-                }
-                // 钳制到合法滚动范围 [0, contentWidth - width]，避免触发边界回弹
-                targetX = Math.max(0, Math.min(targetX, Math.max(0, contentWidth - width)))
-                if (Math.abs(targetX - contentX) < 1) return
-                chipScrollAnim.stop()
-                if (animated) {
-                    chipScrollAnim.to = targetX
-                    chipScrollAnim.start()
-                } else {
-                    contentX = targetX
-                }
-            }
-
-            // 活动接口变化时（用户点击 chip 或后端自动切换）自动滚动露出活动 chip
-            Connections {
-                target: popup
-                function onActiveInterfaceChanged() {
-                    chipFlickable.scrollToActiveChip(true)
-                }
-            }
-
-            // 等宽分配宽度：假设所有 chip 等宽撑满时的单个宽度
-            readonly property real equalChipWidth: popup.sortedInterfaces.length > 0
-                ? (width - 6 * (popup.sortedInterfaces.length - 1)) / popup.sortedInterfaces.length
-                : 0
-
-            Row {
-                id: chipRow
-                spacing: 6
-
-                Repeater {
-                    id: chipRepeater
-                    model: popup.sortedInterfaces
-
-                    // 接口 chip：改用公共 ChoiceButton（单选项）。
-                    // 宽度仍按原公式计算——chip 少时等宽撑满一行、多时固定宽度水平滚动，
-                    // chipText 的隐式宽度借组件内的文字测量得到
-                    ChoiceButton {
-                        // 宽度取等宽和自然宽度的较大值：
-                        // chip 少时 equalChipWidth > 自然宽度 -> 分散撑满一行
-                        // chip 多时 自然宽度 > equalChipWidth -> 固定宽度 + 水平滚动
-                        width: Math.max(chipFlickable.equalChipWidth, chipLabel.implicitWidth + 24)
-                        height: 28
-                        radius: 8
-                        text: modelData
-                        accessibleName: modelData
-                        fontSize: 12
-                        checked: modelData === popup.activeInterface
-                        selectedColor: popup.accentBlue
-                        selectedBorderColor: popup.accentBlue
-                        selectedTextColor: "white"
-                        baseColor: "transparent"
-                        baseBorderColor: popup.cardBorder
-                        // 未选中按下：用卡片底色提高透明度给出反馈（与原实现一致）
-                        hoverColor: "transparent"
-                        textColor: popup.primaryText
-                        hoverTextColor: popup.accentBlue
-                        onClicked: {
-                            if (popup.applet) popup.applet.setActiveInterface(modelData)
-                        }
-
-                        // 供上面的宽度公式读取文字隐式宽度（与组件内显示的是同一串文字）
-                        Text {
-                            id: chipLabel
-                            visible: false
-                            text: modelData
-                            font.pixelSize: common.fontSizeBody
-                            font.weight: Font.Bold
-                        }
-                    }
-                }
-            }
-
-            // 自定义滚动条样式：默认 ScrollBar 在面板配色下可能不可见，
-            // 用 contentItem 显式绘制，颜色派生自 basePalette 适配深浅主题
-            ScrollBar.horizontal: ScrollBar {
-                id: chipScrollBar
-                policy: ScrollBar.AsNeeded
-                interactive: true
-
-                contentItem: Rectangle {
-                    implicitHeight: 4
-                    radius: 2
-                    // 按压时加深、悬停时中等、默认稍淡，保证滚动条在深浅主题下均可见
-                    color: chipScrollBar.pressed ? popup.secondaryText
-                          : (chipScrollBar.hovered ? popup.secondaryText : popup.tertiaryText)
-                }
-            }
         }
 
         // ==================== 详情入口 ====================
