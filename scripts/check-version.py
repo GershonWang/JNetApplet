@@ -44,26 +44,44 @@ def changelog_version() -> Optional[str]:
     return None
 
 
-def latest_tag() -> Optional[str]:
-    """取最近的 git tag（按版本序）。"""
+def latest_tag() -> tuple[Optional[str], Optional[str]]:
+    """取最近的 git tag（按版本序）。
+
+    返回 (tag, error)：
+      - 成功且有标签 -> (版本号, None)
+      - 成功但仓库无标签 -> (None, None)
+      - 无法执行 git（未安装/非 git 目录）-> (None, 原因)
+
+    设计原因（实测缺陷）：原实现把"git 不可用"和"仓库无标签"都返回 None，
+    调用方无从区分。在 PATH 里没有 git 的环境下，脚本会静默按"无标签"通过——
+    版本一致性的三道校验直接少了一道，且完全没有提示。
+    """
     try:
-        out = subprocess.run(
+        proc = subprocess.run(
             ["git", "tag", "--list", "v*", "--sort=-v:refname"],
-            cwd=ROOT, capture_output=True, text=True, check=True,
-        ).stdout.split()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-    return out[0].lstrip("v") if out else None
+            cwd=ROOT, capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        return None, "git 未安装或不在 PATH 中"
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip().splitlines()
+        detail = stderr[0] if stderr else f"退出码 {proc.returncode}"
+        return None, f"git 执行失败：{detail}"
+    tags = proc.stdout.split()
+    return (tags[0].lstrip("v") if tags else None), None
 
 
 def main() -> int:
     version = cmake_version()
     log_version = changelog_version()
-    tag_version = latest_tag()
+    tag_version, tag_error = latest_tag()
 
     print(f"CMakeLists.txt : {version}")
     print(f"CHANGELOG.md   : {log_version or '（未找到）'}")
-    print(f"最近 git tag   : {tag_version or '（无标签）'}")
+    if tag_error:
+        print(f"最近 git tag   : 无法读取（{tag_error}）")
+    else:
+        print(f"最近 git tag   : {tag_version or '（无标签）'}")
 
     # metadata 模板必须保留占位符，否则版本会被写死
     metadata = (ROOT / "package" / "metadata.json.in").read_text(encoding="utf-8")
@@ -87,6 +105,9 @@ def main() -> int:
             print(f"[不一致] {item}", file=sys.stderr)
         return 1
 
+    if tag_error:
+        # 不视为版本漂移（可能与本次改动无关），但必须让人看见"这道校验没跑"
+        print(f"[警告] 跳过 git tag 校验：{tag_error}", file=sys.stderr)
     print("[OK] 版本号一致")
     return 0
 
