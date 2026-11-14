@@ -58,6 +58,40 @@ jobs:
       - name: 翻译同步
         run: python3 scripts/check-translations.py
 
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装编译工具链
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake qt6-base-dev
+
+      # 只编译纯逻辑核心库与其测试，**不编译主插件**：
+      # NetworkMonitorApplet 继承 DApplet，需要 Dtk6::Core 与 Dde::Shell，
+      # 这两者只在 deepin 仓库提供，GitHub runner 装不了。
+      # jnetcore 只依赖 Qt6::Core，因此这段能在通用环境真实跑通。
+      - name: 构建核心库并运行单元测试
+        run: |
+          set -e
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
+                -DJNET_BUILD_PLUGIN=OFF 2>&1 | tail -20
+          cmake --build build --target tst_core -j"$(nproc)"
+          # 显式断言测试确实存在：Qt6::Test 缺失时 ctest 会报 0 个测试，
+          # 那种情况下"通过"毫无意义
+          ctest --test-dir build --output-on-failure -R tst_core
+
+      # 兜底：确认测试二进制真的产生了用例（防止 configure 静默跳过测试目标）
+      - name: 校验测试数量非零
+        run: |
+          count=$(./build/tst_core 2>&1 | grep -oP 'Totals: \K[0-9]+' | head -1)
+          echo "执行用例数：$count"
+          if [ -z "$count" ] || [ "$count" -eq 0 ]; then
+            echo "::error::单元测试未执行任何用例，检查 Qt6::Test 是否安装"
+            exit 1
+          fi
+
   qml-syntax:
     runs-on: ubuntu-latest
     steps:

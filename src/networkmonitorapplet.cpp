@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "networkmonitorapplet.h"
+// 纯逻辑核心库：解析/判定/日志操作，只依赖 Qt6::Core，可在无 deepin 环境单测
+#include "core/netparsers.h"
+#include "core/netstate.h"
+#include "core/trafficlog.h"
 #include <pluginfactory.h>
 
 #include <QFile>
@@ -537,18 +541,9 @@ double NetworkMonitorApplet::totalUploadSpeed() const
 qint64 NetworkMonitorApplet::periodUsedBytes(const QJsonObject &trafficLog,
                                              const QString &section,
                                              const QString &periodKey)
+
 {
-    const QJsonObject periods = trafficLog.value(section).toObject();
-    const QJsonObject interfaces = periods.value(periodKey).toObject();
-    qint64 total = 0;
-    for (auto it = interfaces.constBegin(); it != interfaces.constEnd(); ++it) {
-        const QJsonObject rec = it.value().toObject();
-        // 用 toVariant().toLongLong() 而非 toDouble()：累计字节数可能超过 2^53，
-        // 走 double 会丢精度（Qt6 的 QJsonValue 对整数按整数存储，此路径无损）
-        total += rec.value(QStringLiteral("rx")).toVariant().toLongLong();
-        total += rec.value(QStringLiteral("tx")).toVariant().toLongLong();
-    }
-    return total;
+    return JNetCore::periodUsedBytes(trafficLog, section, periodKey);
 }
 
 // 判定本次是否应当提醒（纯函数）
@@ -558,19 +553,9 @@ qint64 NetworkMonitorApplet::periodUsedBytes(const QJsonObject &trafficLog,
 bool NetworkMonitorApplet::shouldNotifyQuota(qint64 usedBytes, double limitGb,
                                              const QString &currentPeriod,
                                              const QString &notifiedPeriod)
+
 {
-    // 阈值为 0、负数、NaN 或无穷大 = 关闭提醒。
-    // 无穷大若不排除，limitBytes 会溢出成未定义值，可能导致"一启动就提醒"
-    if (!qIsFinite(limitGb) || !(limitGb > 0)) {
-        return false;
-    }
-    // 十进制 GB：运营商套餐口径，1 GB = 1000³ 字节
-    const qint64 limitBytes = static_cast<qint64>(limitGb * 1000.0 * 1000.0 * 1000.0);
-    if (usedBytes < limitBytes) {
-        return false;
-    }
-    // 同一周期只提醒一次；跨周期（键不同）自然重新允许
-    return notifiedPeriod != currentPeriod;
+    return JNetCore::shouldNotifyQuota(usedBytes, limitGb, currentPeriod, notifiedPeriod);
 }
 
 // 检查日/月阈值并发送通知
@@ -639,36 +624,10 @@ void NetworkMonitorApplet::sendNotification(const QString &summary, const QStrin
 // 抽为独立函数的另一原因：CSV 与 JSON 若各排一次序，两处规则迟早漂移
 static QVariantList flattenTrafficRows(const QJsonObject &trafficLog, const QString &section)
 {
-    const QJsonObject periods = trafficLog.value(section).toObject();
-
-    // 先取所有周期键并降序排列（"yyyy-MM-dd"/"yyyy-MM" 字典序即时间序）
-    QStringList dates = periods.keys();
-    dates.sort();
-    std::reverse(dates.begin(), dates.end());
-
-    QVariantList rows;
-    for (const QString &date : dates) {
-        const QJsonObject interfaces = periods.value(date).toObject();
-        // 同一周期内按接口名升序
-        QStringList names = interfaces.keys();
-        names.sort();
-        for (const QString &iface : names) {
-            const QJsonObject rec = interfaces.value(iface).toObject();
-            // 走 qint64 而非 double：累计字节数可能超过 2^53，double 会丢精度
-            const qint64 rx = rec.value(QStringLiteral("rx")).toVariant().toLongLong();
-            const qint64 tx = rec.value(QStringLiteral("tx")).toVariant().toLongLong();
-
-            QVariantMap row;
-            row[QStringLiteral("date")] = date;
-            row[QStringLiteral("iface")] = iface;
-            row[QStringLiteral("rx")] = rx;
-            row[QStringLiteral("tx")] = tx;
-            row[QStringLiteral("total")] = rx + tx;
-            rows.append(row);
-        }
-    }
-    return rows;
+    // 排序口径（日期降序、同日接口名升序）与界面共用同一实现，避免导出与展示不一致
+    return JNetCore::flattenTraffic(trafficLog, section);
 }
+
 
 // CSV 字段转义（RFC 4180）
 // 设计原因：字段含逗号、双引号或换行时必须用双引号包裹，内部双引号成对转义；
@@ -1583,19 +1542,9 @@ QString NetworkMonitorApplet::readSysfsOperState(const QString &iface) const
 //   5. 其余（operstate 为 unknown/空且 carrier > 0）→ 未断开：lo、docker0 等虚拟接口的
 //      operstate 常态即 unknown，这类接口没有真实载波语义，有载波即视为可用
 bool NetworkMonitorApplet::isLinkDown(int carrier, const QString &operState)
+
 {
-    if (operState == QLatin1String("up")) {
-        return false;
-    }
-    if (carrier == 0) {
-        return true;
-    }
-    // 走到这里 operstate 非 up：明确断开态判为断开，含糊态（unknown/空）继续往下看 carrier
-    if (!operState.isEmpty() && operState != QLatin1String("unknown")) {
-        return true;
-    }
-    // operstate 含糊：carrier 读不到则无依据（未知），读得到且非 0 视为可用
-    return false;
+    return JNetCore::isLinkDown(carrier, operState);
 }
 
 // 读取活动接口的链路层状态并更新缓存
@@ -1628,18 +1577,9 @@ void NetworkMonitorApplet::setLinkDown(bool down)
 //      多行的 \s* 会吃掉换行符，把下一行的 "freq: 5180" 当成 SSID 返回。
 //      该场景已被单元测试 testParseIwSsid(ssid-empty-value) 固定住
 QString NetworkMonitorApplet::parseIwSsid(const QString &output)
+
 {
-    static const QRegularExpression re(QStringLiteral("^\\s*SSID:\\s*(.*)$"));
-    const QStringList lines = output.split(QLatin1Char('\n'));
-    for (const QString &line : lines) {
-        const QRegularExpressionMatch m = re.match(line.trimmed());
-        if (m.hasMatch()) {
-            // SSID 为空视为未连接（返回空串），与"无 SSID 行"同样交由调用方回退
-            const QString ssid = m.captured(1).trimmed();
-            return ssid.isEmpty() ? QString() : ssid;
-        }
-    }
-    return QString();
+    return JNetCore::parseIwSsid(output);
 }
 
 // 更新 WiFi 名称缓存，仅在值变化时发射 activeSsidChanged，避免 QML 无效重绘
@@ -1668,34 +1608,9 @@ void NetworkMonitorApplet::setActiveSsid(const QString &ssid)
 // 取值：优先 tx（发送）——发送方向通常代表链路协商上限，也与有线接口
 // /sys/class/net/<iface>/speed 的量级一致；无 tx 行时回退到 rx 行。
 int NetworkMonitorApplet::parseIwBitrate(const QString &output) const
-{
-    static const QRegularExpression re(
-        "^\\s*(?:(rx|tx)\\s+)?bitrate:\\s*([\\d.]+)\\s*(M|G)bit/s",
-        QRegularExpression::CaseInsensitiveOption);
-    const QStringList lines = output.split(QLatin1Char('\n'));
 
-    // 一次扫描：记录 tx 与"无方向/rx"各自的候选值，扫描结束后按 tx 优先取值。
-    // 不用两轮扫描，是因为"先找 tx 再找 rx"需要重复遍历并在第二轮排除 tx，
-    // 逻辑绕；这里各留一个候选，O(n) 一遍即可，也更易读。
-    int txCandidate = 0;
-    int rxOrPlainCandidate = 0;
-    for (const QString &rawLine : lines) {
-        const QRegularExpressionMatch m = re.match(rawLine.trimmed());
-        if (!m.hasMatch()) {
-            continue;
-        }
-        const double val = m.captured(2).toDouble();
-        // 大小写不敏感后 captured(3) 可能是 "m"/"g"，比较亦需不敏感
-        const bool isGigabit =
-            m.captured(3).compare(QLatin1String("G"), Qt::CaseInsensitive) == 0;
-        const int mbps = isGigabit ? qRound(val * 1000.0) : qRound(val);
-        if (m.captured(1).compare(QLatin1String("tx"), Qt::CaseInsensitive) == 0) {
-            txCandidate = mbps;
-        } else if (rxOrPlainCandidate == 0) {
-            rxOrPlainCandidate = mbps;
-        }
-    }
-    return txCandidate > 0 ? txCandidate : rxOrPlainCandidate;
+{
+    return JNetCore::parseIwBitrate(output);
 }
 
 // 统计 /proc/net/tcp 与 /proc/net/tcp6 中 ESTABLISHED（状态 01）的连接数
@@ -1772,59 +1687,9 @@ void NetworkMonitorApplet::requestTcpConnectionList()
 // 解析 ss -tnp 输出为连接列表（QVariantList of QVariantMap）
 // 拆为纯函数的原因：解析逻辑与子进程调度解耦后可直接单元测试，无需启动真实 ss
 QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output) const
+
 {
-    QVariantList list;
-
-    // static const：正则仅首次编译一次，避免每条连接重复编译
-    static const QRegularExpression lineRe(QStringLiteral("(\\S+)\\s+(\\S+)\\s+(\\S+):(\\d+)\\s+(\\S+):(\\d+)\\s*(.*)"));
-    static const QRegularExpression nameRe(QStringLiteral("\\(\"([^\"]+)\""));
-
-    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-    for (int i = 0; i < lines.size(); ++i) {
-        if (i == 0) continue; // 跳过表头（Recv-Q Send-Q ...）
-
-        const QString line = lines[i].trimmed();
-        if (line.isEmpty()) continue;
-
-        // ss 输出按多空格分割：Recv-Q Send-Q Local:Port Peer:Port [Process]
-        // 注意 Process 列可能为空，且 IPv6 地址形如 [::1]:port（方括号内无空格），
-        // 用正则提取更可靠，可容忍列之间任意空白
-        QRegularExpressionMatch match = lineRe.match(line);
-        if (!match.hasMatch()) continue;
-
-        QString localAddress = match.captured(3);
-        const QString localPort = match.captured(4);
-        QString remoteAddress = match.captured(5);
-        const QString remotePort = match.captured(6);
-        const QString processField = match.captured(7).trimmed();
-
-        // 去掉地址中的接口后缀（如 192.168.3.83%wlp3s0 -> 192.168.3.83）
-        localAddress = localAddress.split(QLatin1Char('%')).first();
-        remoteAddress = remoteAddress.split(QLatin1Char('%')).first();
-        // 去掉 IPv6 地址的方括号（[::1] -> ::1）
-        if (localAddress.startsWith(QLatin1Char('['))) localAddress = localAddress.mid(1, localAddress.size() - 2);
-        if (remoteAddress.startsWith(QLatin1Char('['))) remoteAddress = remoteAddress.mid(1, remoteAddress.size() - 2);
-
-        // 提取进程名：users:(("进程名",pid=xxx,fd=xxx))，取第一个双引号内的内容
-        QString processName;
-        if (processField.startsWith(QStringLiteral("users:"))) {
-            QRegularExpressionMatch nameMatch = nameRe.match(processField);
-            if (nameMatch.hasMatch()) {
-                processName = nameMatch.captured(1);
-            }
-        }
-
-        QVariantMap item;
-        item[QStringLiteral("localAddress")] = localAddress;
-        item[QStringLiteral("localPort")] = localPort.toInt();
-        item[QStringLiteral("remoteAddress")] = remoteAddress;
-        item[QStringLiteral("remotePort")] = remotePort.toInt();
-        item[QStringLiteral("state")] = QStringLiteral("ESTABLISHED");
-        item[QStringLiteral("processName")] = processName;
-        list.append(item);
-    }
-
-    return list;
+    return JNetCore::parseTcpConnections(output);
 }
 
 // 判断接口是否为无线网卡（判定统一入口，链路上所有"是否无线"的决策都走这里）
@@ -1836,21 +1701,19 @@ QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output)
 // 探测失败（目录不存在、权限不足、虚拟接口）时回退到前缀匹配兜底，避免漏判主流命名。
 // 前缀集合含 wlo（deepin/部分发行版）与 wlx（USB 无线网卡常见命名）。
 bool NetworkMonitorApplet::isWirelessInterface(const QString &iface)
+
 {
     if (iface.isEmpty()) {
         return false;
     }
-    // 优先：内核是否在该接口下暴露 wireless 目录（最可靠的判据）
+    // 优先：内核是否在该接口下暴露 wireless 目录（最可靠的判据，与命名约定无关）。
+    // 这一步涉及文件系统访问，故留在本类；纯命名判定已抽到 JNetCore 供单测
     const QFileInfo wirelessDir(
         QStringLiteral("/sys/class/net/%1/wireless").arg(iface));
     if (wirelessDir.isDir()) {
         return true;
     }
-    // 回退：按命名约定匹配（wlp/wlan/wlo/wlx）
-    return iface.startsWith(QLatin1String("wlp"))
-        || iface.startsWith(QLatin1String("wlan"))
-        || iface.startsWith(QLatin1String("wlo"))
-        || iface.startsWith(QLatin1String("wlx"));
+    return JNetCore::isWirelessByPrefix(iface);
 }
 
 // 读取指定接口的 WiFi 信号强度（dBm）
@@ -1910,38 +1773,9 @@ int NetworkMonitorApplet::detectWifiSignal(const QString &iface)
 //   ifb          流量整形
 // 无线接口不在此处区分——调用方若需判断无线，另有 isWirelessInterface()
 bool NetworkMonitorApplet::isPhysicalInterface(const QString &name) const
+
 {
-    if (name.isEmpty()) {
-        return false;
-    }
-    // 精确匹配的虚拟接口名
-    static const QStringList exactVirtual{
-        QStringLiteral("lo"),
-        QStringLiteral("Meta"),
-    };
-    if (exactVirtual.contains(name)) {
-        return false;
-    }
-    // 按前缀匹配的虚拟接口族
-    // 注意 wg 的边界：WireGuard 隧道名是 wg0/wg1 这类「wg + 纯数字」，
-    // 而无线 p2p 接口是 wgp2s0（以 wg 开头却属于物理网卡）。
-    // 这类冲突不能靠加长前缀表穷举，故对 wg 单独要求「其后全为数字」。
-    // 该场景由 testIsPhysicalInterface(wgp) 固定住
-    static const QRegularExpression wgTunnelRe(QStringLiteral("^wg\\d+$"));
-    if (wgTunnelRe.match(name).hasMatch()) {
-        return false;
-    }
-    static const QStringList virtualPrefixes{
-        QStringLiteral("tun"), QStringLiteral("tap"),
-        QStringLiteral("docker"), QStringLiteral("veth"), QStringLiteral("br-"),
-        QStringLiteral("virbr"), QStringLiteral("vnet"), QStringLiteral("ifb"),
-    };
-    for (const QString &prefix : virtualPrefixes) {
-        if (name.startsWith(prefix)) {
-            return false;
-        }
-    }
-    return true;
+    return JNetCore::isPhysicalInterface(name);
 }
 
 // ---- 流量日志（日/月持久化）----
@@ -2038,70 +1872,23 @@ void NetworkMonitorApplet::saveTrafficLog()
 // 只累加活动接口（与 m_totalDownload 口径一致），避免多接口重复计数
 void NetworkMonitorApplet::appendToTrafficLog(const QString &iface,
                                               qint64 rxDelta, qint64 txDelta)
+
 {
-    if (rxDelta <= 0 && txDelta <= 0) {
-        return;
-    }
-    // 由调用方明确指定接口：原先只认 m_activeInterface，导致切换网卡后
-    // 另一块网卡的流量完全不计入历史（统计窗口按接口分行展示，却永远缺一行）
-    if (iface.isEmpty()) {
-        return;
-    }
-
-    // 直接取当前日期/月份作为键：跨日/跨月时键自然变化，新键从零累加，旧键保留不再增长
-    // 设计原因：无需维护额外的"上次日期"状态，每次按当天/当月取键即可保证语义正确
-    const QString date = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
-    const QString month = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
-
-    // 累加到按日记录：byDay[date][iface] = {rx, tx}
-    // 用 toVariant().toLongLong() 读取并写回 qint64，保留整数精度
-    //（直接赋值 double 会导致超过 2^53 的字节数精度丢失）
-    QJsonObject byDay = m_trafficLog.value(QStringLiteral("byDay")).toObject();
-    QJsonObject dayEntry = byDay.value(date).toObject();
-    QJsonObject ifaceDay = dayEntry.value(iface).toObject();
-    ifaceDay[QStringLiteral("rx")] =
-        ifaceDay.value(QStringLiteral("rx")).toVariant().toLongLong() + rxDelta;
-    ifaceDay[QStringLiteral("tx")] =
-        ifaceDay.value(QStringLiteral("tx")).toVariant().toLongLong() + txDelta;
-    dayEntry[iface] = ifaceDay;
-    byDay[date] = dayEntry;
-    m_trafficLog[QStringLiteral("byDay")] = byDay;
-
-    // 累加到按月记录：byMonth[month][iface] = {rx, tx}
-    QJsonObject byMonth = m_trafficLog.value(QStringLiteral("byMonth")).toObject();
-    QJsonObject monthEntry = byMonth.value(month).toObject();
-    QJsonObject ifaceMonth = monthEntry.value(iface).toObject();
-    ifaceMonth[QStringLiteral("rx")] =
-        ifaceMonth.value(QStringLiteral("rx")).toVariant().toLongLong() + rxDelta;
-    ifaceMonth[QStringLiteral("tx")] =
-        ifaceMonth.value(QStringLiteral("tx")).toVariant().toLongLong() + txDelta;
-    monthEntry[iface] = ifaceMonth;
-    byMonth[month] = monthEntry;
-    m_trafficLog[QStringLiteral("byMonth")] = byMonth;
+    // 键在此处取（依赖 QDate），数据操作交给 core——core 保持无时间依赖，便于用固定日期断言
+    const QDate today = QDate::currentDate();
+    JNetCore::appendTraffic(m_trafficLog, iface,
+                            today.toString(QStringLiteral("yyyy-MM-dd")),
+                            today.toString(QStringLiteral("yyyy-MM")),
+                            rxDelta, txDelta);
 }
 
 // 裁剪超期记录：按日最多 30 天、按月最多 12 个月，超出删除最旧记录
 // 日期/月份均为 ISO 格式（"yyyy-MM-dd"/"yyyy-MM"），字典序即时间序，
 // 排序后取最小的超量个删除，保证始终保留最近的记录
 void NetworkMonitorApplet::pruneTrafficLog()
-{
-    QJsonObject byDay = m_trafficLog.value(QStringLiteral("byDay")).toObject();
-    QStringList dayKeys = byDay.keys();
-    dayKeys.sort();
-    while (dayKeys.size() > MAX_DAY_ENTRIES) {
-        byDay.remove(dayKeys.first());
-        dayKeys.removeFirst();
-    }
-    m_trafficLog[QStringLiteral("byDay")] = byDay;
 
-    QJsonObject byMonth = m_trafficLog.value(QStringLiteral("byMonth")).toObject();
-    QStringList monthKeys = byMonth.keys();
-    monthKeys.sort();
-    while (monthKeys.size() > MAX_MONTH_ENTRIES) {
-        byMonth.remove(monthKeys.first());
-        monthKeys.removeFirst();
-    }
-    m_trafficLog[QStringLiteral("byMonth")] = byMonth;
+{
+    JNetCore::pruneTraffic(m_trafficLog, MAX_DAY_ENTRIES, MAX_MONTH_ENTRIES);
 }
 
 D_APPLET_CLASS(NetworkMonitorApplet)

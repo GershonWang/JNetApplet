@@ -36,3 +36,6 @@ docs/superpowers/
 .verify-build/
 .verify-libs/
 .verify-stage/
+
+# 核心库独立验证目录
+.verify-core/

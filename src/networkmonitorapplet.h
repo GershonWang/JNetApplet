@@ -355,16 +355,16 @@ private:
     // 读取 /sys/class/net/<iface>/operstate 原文并转小写（如 "up"/"down"/"unknown"），
     // 读不到返回空串（与 carrier 读不到同样按"未知"处理）
     QString readSysfsOperState(const QString &iface) const;
-    // 由 carrier 与 operstate 判定链路是否断开（纯函数，便于单元测试覆盖真值表）；
-    // carrier 取 -1/0/1，operstate 取 sysfs 原文小写，规则见实现处注释
+    // 由 carrier 与 operstate 判定链路是否断开（实现在 src/core/netstate.cpp）。
+    // 真值表由 tests/core 覆盖——那里不需要 deepin 依赖，可进 CI
     static bool isLinkDown(int carrier, const QString &operState);
     // 更新链路断开缓存，仅在值变化时发射 linkDownChanged，避免 QML 无效重绘
     void setLinkDown(bool down);
     // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
     int parseIwBitrate(const QString &output) const;
-    // 解析 `iw dev <iface> link` 输出中的 SSID，未连接或输出无 SSID 行时返回空串。
-    // 抽为静态纯函数的原因：与 bitrate 解析一样，输出样本固定、可直接单测，
-    // 无需真的启动 iw 子进程
+    // 解析 `iw dev <iface> link` 输出中的 SSID（实现在 src/core/netparsers.cpp，
+    // 那里只依赖 Qt6::Core，可在无 deepin 环境单测）。
+    // 此处仅保留同名包装，避免调用点大改
     static QString parseIwSsid(const QString &output);
     // 更新 WiFi 名称缓存，仅在值变化时发射 activeSsidChanged，避免 QML 无效重绘
     void setActiveSsid(const QString &ssid);
@@ -377,15 +377,14 @@ private:
     QVariantList parseTcpConnectionList(const QString &output) const;
     // 读取指定接口的 WiFi 信号强度（dBm），非无线接口或不可用时返回 0
     int detectWifiSignal(const QString &iface);
-    // 判断是否为物理网卡（无线走 isWirelessInterface，有线匹配 enp/eth），
-    // 用于自动选择时优先真实网卡而非虚拟代理接口（如 Meta/tun0）
+    // 判断是否为物理网卡（实现在 src/core/netstate.cpp 的 JNetCore::isPhysicalInterface）。
+    // 用排除法而非前缀白名单：板载 eno1 / 虚拟机 ens33 / USB 有线 enx* 原先全被判为
+    // 非物理，导致自动选择跳过主网卡、多接口聚合漏算流量
     bool isPhysicalInterface(const QString &name) const;
     // 判断接口是否为无线网卡（链路上"是否无线"的唯一判定入口）：
     // 优先探测 /sys/class/net/<iface>/wireless 目录是否存在（不依赖命名约定），
-    // 探测不到时回退前缀匹配 wlp/wlan/wlo/wlx。
-    // 设计原因：原先多处硬编码 wlp/wlan 前缀，deepin 25 上的 wlo1 全部漏判
-    // （协商速率恒 0、WiFi 信号恒 0、被当成有线、自动选择时被排除），
-    // 收敛为单一入口后新增命名只需改这一处
+    // 探测不到时回退 JNetCore::isWirelessByPrefix() 的命名匹配。
+    // 切分点：探测涉及文件系统访问，保留在此；纯命名判定已抽到 core 供单测
     static bool isWirelessInterface(const QString &iface);
     qint64 getActiveRxBytes() const;
     qint64 getActiveTxBytes() const;
@@ -407,12 +406,14 @@ private:
     // usedBytes：当前周期已用字节；limitGb：阈值（GB，<=0 表示关闭）；
     // currentPeriod：当前周期键（"yyyy-MM-dd" 或 "yyyy-MM"）；
     // notifiedPeriod：上一次已提醒的周期键（空串表示从未提醒）
+    // 实现在 src/core/netstate.cpp；阈值边界/周期去重由 tests/core 覆盖
     static bool shouldNotifyQuota(qint64 usedBytes, double limitGb,
                                   const QString &currentPeriod,
                                   const QString &notifiedPeriod);
     // 计算指定周期键下所有接口的 rx+tx 合计（纯函数，输入为流量日志 JSON）。
     // 抽出来的原因：与「流量统计」窗口的周期合计口径必须一致（该周期下所有接口相加），
     // 直接单测即可保证两处不会各算一套
+    // 实现在 src/core/trafficlog.cpp；口径为"该周期下所有接口 rx+tx 相加"
     static qint64 periodUsedBytes(const QJsonObject &trafficLog,
                                   const QString &section, const QString &periodKey);
     // 检查日/月阈值并在超限且本周期未提醒时发送系统通知（挂在 30 秒保存周期上）
