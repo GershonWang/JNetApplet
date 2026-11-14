@@ -267,7 +267,10 @@ void NetworkMonitorAppletTest::testSetActiveInterfaceValidation()
     delete applet;
 }
 
-// iw dev link 输出的 bitrate 解析：M/G 单位换算与非法输入
+// iw dev link 输出的 bitrate 解析：M/G 单位换算、rx/tx 方向、非法输入
+// 设计原因：此前的用例只用了"以 bitrate: 开头"的理想化输入，而真实 iw 输出
+// 带 rx/tx 前缀且单位是 MBit/s（大写 B），导致用例全绿但真机始终解析不出速率。
+// 故这里补入真机实测的完整输出样本，保证用例与真实数据同构。
 void NetworkMonitorAppletTest::testParseIwBitrate_data()
 {
     QTest::addColumn<QString>("output");
@@ -275,9 +278,29 @@ void NetworkMonitorAppletTest::testParseIwBitrate_data()
 
     QTest::newRow("empty") << QString() << 0;
     QTest::newRow("no-bitrate") << QStringLiteral("Connected to 11:22:33:44:55:66 (on wlp3s0)") << 0;
+
+    // 真机实测样本（wlo1，deepin 25）：rx/tx 前缀 + MBit/s 大写 B + 制表符缩进
+    // 取值约定为 tx 优先（发送方向代表协商上限）
+    QTest::newRow("real-iw-output")
+        << QStringLiteral("Connected to 8c:de:f9:xx:xx:xx (on wlo1)\n"
+                          "\tSSID: Home\n"
+                          "\tfreq: 5180\n"
+                          "\tsignal: -52 dBm\n"
+                          "\ttx bitrate: 866.7 MBit/s VHT-MCS 9 80MHz short GI VHT-NSS 2\n"
+                          "\trx bitrate: 390.0 MBit/s VHT-MCS 8 80MHz short GI VHT-NSS 1")
+        << 867;
+    // rx 在 tx 之前时仍应取 tx
+    QTest::newRow("tx-preferred-over-rx")
+        << QStringLiteral("\trx bitrate: 390.0 MBit/s\n\ttx bitrate: 866.7 MBit/s") << 867;
+    // 仅 rx 时回退取 rx
+    QTest::newRow("rx-fallback") << QStringLiteral("\trx bitrate: 390.0 MBit/s") << 390;
+
+    // 理想化的裸 bitrate 行（保留原有覆盖，兼容其它输出形态）
     QTest::newRow("mbps") << QStringLiteral("    bitrate: 54.0 MBit/s") << 54;
     QTest::newRow("mbps-fraction") << QStringLiteral("    bitrate: 866.7 MBit/s") << 867;
     QTest::newRow("gbps") << QStringLiteral("    bitrate: 1.2 Gbit/s") << 1200;
+    // 单位小写也接受（不同 iw 版本/本地化差异）
+    QTest::newRow("lowercase-unit") << QStringLiteral("    bitrate: 72.2 mbit/s") << 72;
 }
 
 void NetworkMonitorAppletTest::testParseIwBitrate()

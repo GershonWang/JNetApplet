@@ -963,30 +963,37 @@ QString NetworkMonitorApplet::readSysfsOperState(const QString &iface) const
 }
 
 // 由 carrier 与 operstate 判定链路是否断开（纯函数，便于单元测试）
-// 规则按顺序短路，先命中先返回：
-//   1. carrier < 0（读不到）  → 未断开：未知状态宁可漏报也不误报，
-//      避免接口刚被删除或权限不足时任务栏闪一下断连
-//   2. operstate == "up"      → 未断开：内核已声明链路可用，不再看载波
+// 规则按顺序短路，先命中先返回。优先级依据：operstate 是内核给出的权威状态，
+// 只要它明确表态（up 或 down/dormant 等），就以它为准；只有它含糊（unknown/读不到）时
+// 才回退看 carrier。
+//   1. operstate == "up"      → 未断开：内核已声明链路可用
 //      （存在 operstate 为 up 而 carrier 读数为 0 的驱动，此时以 operstate 为准）
-//   3. carrier == 0           → 断开：无载波（拔网线、接口 down、WiFi 未关联）
-//   4. operstate 为 "unknown" 或空串（读不到）→ 未断开：lo、docker0 等虚拟接口的
-//      operstate 常态即 unknown，这类接口没有真实载波语义，此时只信 carrier
-//   5. 其余（down / dormant / lowerlayerdown 等）→ 断开
+//   2. carrier == 0           → 断开：无载波（拔网线、接口 down、WiFi 未关联）
+//   3. operstate 明确为断开态（非 up 且非 unknown，如 down / dormant / lowerlayerdown）
+//                             → 断开
+//      设计原因（真机实测修正）：原实现把 carrier < 0（读不到）放在最前面一律返回
+//      "未断开"，结果无线接口被 `ip link set down` 后 carrier 读取返回 EINVAL（读不到）
+//      而 operstate 明确为 "down"，这个明确信号被短路丢掉，断连态永不显示。
+//      实测：`ip link set wlo1 down` → carrier 报"无效的参数"、operstate=down、state DOWN。
+//      故 carrier 读不到不能再无条件视为"未知"，必须让 operstate 先表态。
+//   4. carrier < 0（读不到）  → 未断开：走到这里 operstate 已含糊（unknown/空），
+//      无任何明确依据，宁可漏报也不误报（接口刚被删除或权限不足时任务栏不该闪断连）
+//   5. 其余（operstate 为 unknown/空且 carrier > 0）→ 未断开：lo、docker0 等虚拟接口的
+//      operstate 常态即 unknown，这类接口没有真实载波语义，有载波即视为可用
 bool NetworkMonitorApplet::isLinkDown(int carrier, const QString &operState)
 {
-    if (carrier < 0) {
-        return false;
-    }
     if (operState == QLatin1String("up")) {
         return false;
     }
     if (carrier == 0) {
         return true;
     }
-    if (operState.isEmpty() || operState == QLatin1String("unknown")) {
-        return false;
+    // 走到这里 operstate 非 up：明确断开态判为断开，含糊态（unknown/空）继续往下看 carrier
+    if (!operState.isEmpty() && operState != QLatin1String("unknown")) {
+        return true;
     }
-    return true;
+    // operstate 含糊：carrier 读不到则无依据（未知），读得到且非 0 视为可用
+    return false;
 }
 
 // 读取活动接口的链路层状态并更新缓存
