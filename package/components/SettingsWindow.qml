@@ -156,14 +156,19 @@ Window {
                 contentWidth: availableWidth
 
                 ColumnLayout {
-                    // 宽度锁定为视口宽度（减去滚动条占位），避免子项把内容撑宽导致横向滚动
-                    width: contentScroll.availableWidth
+                    // 宽度锁定为视口宽度（减去滚动条占位），避免子项把内容撑宽导致横向滚动。
+                    // 内边距不能靠 ColumnLayout 的 padding 实现（它没有这些属性，
+                    // 那是 Control 的属性；误写会让本文件整体加载失败、插件从任务栏消失），
+                    // 也不能用 margins——margins 不改 width，内容会横向溢出。
+                    // 故改为「宽度减去左右边距」，与原先 anchors.margins: 16 的观感一致
+                    width: contentScroll.availableWidth - 32
+                    // 左右与上边距用 x/y 偏移实现：布局容器没有 padding/margin 属性，
+                    // 误用会让本文件整体加载失败、插件随即从任务栏消失
+                    x: 16
+                    y: 16
                     spacing: 12
-                    // 内边距：与原 anchors.margins: 16 保持一致的观感
-                    topPadding: 16
-                    bottomPadding: 16
-                    leftPadding: 16
-                    rightPadding: 16
+                    // 让内容高度自然撑开（ColumnLayout 会按子项累加 implicitHeight），
+                    // 底部留白由 ScrollView 的 contentHeight 与 viewport 差值承担
 
                     // 网络接口选择区
                     Text {
