@@ -67,7 +67,16 @@ echo "[1/7] 检查构建依赖..."
 # 设计原因：用户 clone 后直接运行 build-deb.sh 经常因缺少 -dev 包导致
 # CMake 配置失败，但原脚本用 tail -3 吞掉关键错误，用户无法定位问题。
 # 在构建前主动预检可提前给出明确指引。
-DEPS=(qt6-base-dev qt6-declarative-dev libdtkcommon-dev libdtk6gui-dev libxkbcommon-dev libdde-shell-dev)
+# 依赖清单与 CMakeLists.txt 的 find_package 逐项对应（包名取自 dpkg 数据库核实）：
+#   Qt6 Core/Quick/Network -> qt6-base-dev, qt6-declarative-dev
+#   Qt6 LinguistTools      -> qt6-tools-dev          ← 曾遗漏，导致"预检通过、配置失败"
+#   Dtk6 Core              -> libdtk6core-dev, libdtkcommon-dev
+#   DDEShell               -> libdde-shell-dev
+#   间接依赖                -> libdtk6gui-dev（DDEShell 依赖）、libxkbcommon-dev（Qt6 Gui 依赖）
+# 注意：新增 find_package 时必须同步此处，否则用户按提示装完仍会在配置阶段失败
+DEPS=(qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+      libdtk6core-dev libdtkcommon-dev libdtk6gui-dev \
+      libxkbcommon-dev libdde-shell-dev)
 MISSING=()
 for pkg in "${DEPS[@]}"; do
     if ! dpkg -s "$pkg" &> /dev/null 2>&1; then
@@ -105,13 +114,23 @@ mkdir -p "$STAGE_DIR/DEBIAN"
 # 计算安装后大小（KB）
 INSTALLED_SIZE=$(du -sk "$STAGE_DIR/usr" | cut -f1)
 
+# Depends 只列"dde-shell 未覆盖"的直接依赖。
+# 逐项核实过（.so 的 NEEDED × 宿主 dpkg 数据库 × dde-shell 的 Depends 链）：
+#   插件 NEEDED：libdde-shell / libQt6Network / libdtk6core / libQt6Gui /
+#                libQt6DBus / libQt6Core / libstdc++ / libgcc_s / libc
+#   其中 libdde-shell、libQt6Core/Gui/DBus、libdtk6core、libstdc++6、
+#   libgcc-s1、libc6 均已在 dde-shell 主包的 Depends 中声明（传递覆盖）；
+#   **libqt6network6 不在其中**，必须本级声明，否则干净系统上装完无法加载。
+# 原清单的问题：libqt6quick6 并不在本 .so 的 NEEDED 里（多余），
+# 而 dde-shell 已覆盖的项又被重复列出。现按实际 NEEDED 收敛——
+# 声明用不到的包会给用户增加无谓的安装体积与解析时间。
 cat > "$STAGE_DIR/DEBIAN/control" << EOF
 Package: ${PKG_NAME}
 Version: ${VERSION}
 Architecture: ${ARCH}
 Maintainer: Jokul
 Installed-Size: ${INSTALLED_SIZE}
-Depends: dde-shell, libc6, libqt6core6, libqt6gui6, libqt6quick6, libqt6network6, libdtk6core
+Depends: dde-shell, libqt6network6
 Section: utils
 Priority: optional
 Description: 网络速度监控 dde-shell 任务栏插件
