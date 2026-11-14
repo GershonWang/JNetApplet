@@ -32,3 +32,7 @@ Thumbs.db
 # 各有一个文件在该规则加入之前就已提交，因此它们仍留在版本库中；
 # 若要把它们真正移出版本库，需要单独执行 git rm --cached（会从远程仓库删除）
 docs/superpowers/
+# 本次验证用的临时构建/库目录（不属于项目产物）
+.verify-build/
+.verify-libs/
+.verify-stage/
