@@ -33,6 +33,8 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_refreshTimer(nullptr)
     , m_lastRxBytes(0)
     , m_lastTxBytes(0)
+    // m_baselineInterface 默认构造为空：首轮 calculateSpeed 因 m_firstUpdate 直接记录基线
+    , m_baselineInterface()
     , m_lastTimestampMs(0)
     , m_downloadSpeed(0)
     , m_uploadSpeed(0)
@@ -466,35 +468,93 @@ void NetworkMonitorApplet::setActiveInterface(const QString &interface)
         return;
     }
 
-    if (m_activeInterface != interface) {
-        m_activeInterface = interface;
-        m_firstUpdate = true;
+    // 用户显式选择：切换并持久化，下次启动自动恢复
+    applyActiveInterface(interface, true);
+}
 
-        // 接口切换后历史数据变化，标记脏缓存让趋势图立即重建
-        m_historyDirty = true;
-
-        // 接口切换后包统计指向新接口，旧值不再有效，重置并通知 QML
-        // 设计原因：包统计为各接口独立的累计值，切换后应显示新接口的数据
-        m_rxPackets = 0;
-        m_txPackets = 0;
-        m_rxErrors = 0;
-        m_txErrors = 0;
-        m_rxDropped = 0;
-        m_txDropped = 0;
-        emit packetStatsChanged();
-
-        // 持久化到配置文件，下次启动自动加载用户选择的网卡
-        // 设计原因：弹窗 chip 和设置窗口都调用此方法，统一持久化保证两处选择一致
-        persistSetting(QStringLiteral("activeInterface"), m_activeInterface);
-
-        emit activeInterfaceChanged();
-        // 接口切换后通知 QML 趋势图切换显示新接口的历史数据
-        emit speedHistoryChanged();
-        // 接口切换后立即检测新接口的 IP 地址
-        detectIpAddress();
-        // 接口切换后立即读取新接口的链路速率与 WiFi 信号
-        detectLowFreqStats();
+// 切换活动接口的唯一入口（用户选择与接口热插拔自动回退都走这里）
+// 设计原因：原实现只有 setActiveInterface() 做了"重置基线 + 刷新派生状态"，
+// 而 readNetworkStats() 在活动接口消失时是直接改写 m_activeInterface 的——
+// 基线没重置，下一轮 calculateSpeed 会拿"新接口自开机累计 − 旧接口累计"当增量，
+// 数百 GB 的差值会显示成数百 GB/s，并被永久累加进 m_totalDownload 与日/月流量日志。
+// 把两条路径收敛到同一入口后，这类"只改名字、不改派生状态"的漏洞不再有落点。
+// persist 仅用户显式选择时为 true：自动回退属于临时兜底，不应覆盖用户保存的选择
+void NetworkMonitorApplet::applyActiveInterface(const QString &interface, bool persist)
+{
+    if (m_activeInterface == interface) {
+        return;
     }
+
+    m_activeInterface = interface;
+    // 不在此处直接重置 m_firstUpdate：基线是否需要重记，统一由 calculateSpeed() 里
+    // "基线接口是否等于当前接口"这一处判断决定。两处同时维护会再次出现"状态没同步"的隐患，
+    // 而本缺陷的根因正是"改了接口名、忘了改基线"。
+
+    // 接口切换后历史数据变化，标记脏缓存让趋势图立即重建
+    m_historyDirty = true;
+
+    // 接口切换后包统计指向新接口，旧值不再有效，重置并通知 QML
+    // 设计原因：包统计为各接口独立的累计值，切换后应显示新接口的数据
+    m_rxPackets = 0;
+    m_txPackets = 0;
+    m_rxErrors = 0;
+    m_txErrors = 0;
+    m_rxDropped = 0;
+    m_txDropped = 0;
+    emit packetStatsChanged();
+
+    // 链路速率/信号/断连同属"上一接口的观测结果"，切换后立即归零再重测。
+    // 设计原因：无线接口走异步 iw，最长约 1 秒才返回；若不清零，这段时间
+    // 弹窗会显示上一块网卡的协商速率，属于明显的错误信息
+    setLinkSpeed(0);
+    setLinkDown(false);
+    if (m_wifiSignal != 0) {
+        m_wifiSignal = 0;
+        emit wifiSignalChanged();
+    }
+
+    // 仅在用户显式选择时持久化；自动回退（网卡拔出）不覆盖用户保存的选择，
+    // 否则原网卡插回后无法自动恢复
+    if (persist) {
+        persistSetting(QStringLiteral("activeInterface"), m_activeInterface);
+    }
+
+    emit activeInterfaceChanged();
+    // 接口切换后通知 QML 趋势图切换显示新接口的历史数据
+    emit speedHistoryChanged();
+    // 接口切换后立即检测新接口的 IP 地址
+    detectIpAddress();
+    // 接口切换后立即读取新接口的链路速率、WiFi 信号与链路通断
+    detectLowFreqStats();
+}
+
+// 自动选择默认活动接口：优先"有流量的物理网卡"，其次"有流量的任意接口"，最后第一个
+// 提取为独立函数的原因：选择规则本身是纯决策逻辑，与"切换后的状态重置"无关；
+// 拆开后 readNetworkStats() 只负责"决定选谁"，applyActiveInterface() 负责"切过去"
+QString NetworkMonitorApplet::chooseDefaultInterface() const
+{
+    if (m_interfaceList.isEmpty()) {
+        return QString();
+    }
+    // 优先选择物理网卡中有流量的接口，避免选中 Meta/tun0 等虚拟代理接口作为默认显示
+    for (const QString &name : m_interfaceList) {
+        if (!isPhysicalInterface(name)) {
+            continue;
+        }
+        const NetworkInterface &iface = m_interfaces[name];
+        if (iface.rxBytes > 0 || iface.txBytes > 0) {
+            return name;
+        }
+    }
+    // 其次选择任意有流量的接口（物理网卡都无流量时的兜底）
+    for (const QString &name : m_interfaceList) {
+        const NetworkInterface &iface = m_interfaces[name];
+        if (iface.rxBytes > 0 || iface.txBytes > 0) {
+            return name;
+        }
+    }
+    // 最后选第一个（无任何流量时）
+    return m_interfaceList.first();
 }
 
 void NetworkMonitorApplet::readNetworkStats()
@@ -557,38 +617,17 @@ void NetworkMonitorApplet::readNetworkStats()
             }
         }
 
-        // 保存的接口已不在当前列表中（如 USB 网卡拔出），清空让自动选择接管
-        if (!m_activeInterface.isEmpty() && !m_interfaceList.contains(m_activeInterface)) {
-            m_activeInterface.clear();
-        }
-
-        // 自动选择活动接口
-        if (m_activeInterface.isEmpty() && !m_interfaceList.isEmpty()) {
-            // 优先选择物理网卡（wlp/wlan/enp/eth）中有流量的接口，
-            // 避免选中 Meta/tun0 等虚拟代理接口作为默认显示
-            for (const QString &name : m_interfaceList) {
-                if (!isPhysicalInterface(name)) continue;
-                const NetworkInterface &iface = m_interfaces[name];
-                if (iface.rxBytes > 0 || iface.txBytes > 0) {
-                    m_activeInterface = name;
-                    break;
-                }
-            }
-            // 其次选择任意有流量的接口（物理网卡都无流量时的兜底）
-            if (m_activeInterface.isEmpty()) {
-                for (const QString &name : m_interfaceList) {
-                    const NetworkInterface &iface = m_interfaces[name];
-                    if (iface.rxBytes > 0 || iface.txBytes > 0) {
-                        m_activeInterface = name;
-                        break;
-                    }
-                }
-            }
-            // 最后选第一个（无任何流量时）
-            if (m_activeInterface.isEmpty()) {
-                m_activeInterface = m_interfaceList.first();
-            }
-            emit activeInterfaceChanged();
+        // 活动接口已消失（如 USB 网卡拔出）或尚未选择时，重新确定目标接口。
+        // 两种情形都走统一入口 applyActiveInterface()：它负责重置速度基线、清空上一接口的
+        // 派生状态（IP/协商速率/信号/断连）并立即重测，避免"新接口名 + 旧接口数据"的错配。
+        // persist 固定为 false：自动回退属于临时兜底，不覆盖用户显式保存的接口选择，
+        // 这样原网卡插回后仍能自动恢复
+        if (m_interfaceList.isEmpty()) {
+            // 列表变空：清空活动接口（若本就为空则是空操作），让 QML 回到占位态
+            applyActiveInterface(QString(), false);
+        } else if (m_activeInterface.isEmpty()
+                   || !m_interfaceList.contains(m_activeInterface)) {
+            applyActiveInterface(chooseDefaultInterface(), false);
         }
         
         m_ready = !m_interfaceList.isEmpty();
@@ -634,9 +673,17 @@ void NetworkMonitorApplet::calculateSpeed()
     const qint64 oldTotalUpload = m_totalUpload;
 
     // ---- 活动接口速度计算（用于任务栏显示和总量累加）----
-    if (m_firstUpdate) {
+    // 基线与接口绑定：m_lastRxBytes/m_lastTxBytes 只对 m_baselineInterface 有效。
+    // 两者不一致（首次采样、用户切换、网卡热拔后自动回退都属此列）时只记录基线、
+    // 不产出速度与总量——否则差值 = 新接口累计 − 旧接口累计，会得到数量级完全错误的增量。
+    // 设计原因：把"是否需要重记基线"收敛到这一处判断，任何改写活动接口的代码路径
+    //（包括将来新增的）都自动被覆盖，不需要各自记得重置 m_firstUpdate
+    const bool needBaseline = m_firstUpdate || m_baselineInterface != m_activeInterface;
+
+    if (needBaseline) {
         // 首次更新或接口切换后：仅记录基线，不计算速度
         m_firstUpdate = false;
+        m_baselineInterface = m_activeInterface;
         m_lastRxBytes = getActiveRxBytes();
         m_lastTxBytes = getActiveTxBytes();
     } else if (elapsedSec > 0 && !m_activeInterface.isEmpty()) {

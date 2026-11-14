@@ -221,6 +221,12 @@ private:
     void readNetworkStats();
     void calculateSpeed();
     void detectInterfaces();
+    // 切换活动接口的唯一入口：重置速度基线、派生状态并发送相应信号。
+    // persist 为 true 表示用户显式选择（写入配置），false 表示系统自动回退（不覆盖用户选择）
+    void applyActiveInterface(const QString &interface, bool persist);
+    // 自动选择默认活动接口（有流量的物理网卡 > 有流量的任意接口 > 第一个），
+    // 仅做决策不产生副作用，由 readNetworkStats() 取结果后交给 applyActiveInterface()
+    QString chooseDefaultInterface() const;
     // 检测活动接口的 IPv4 与 IPv6 地址，变化时分别发射对应信号
     void detectIpAddress();
     // 低频统计检测：链路速率与 WiFi 信号（每 5 秒），变化时发射对应信号
@@ -292,6 +298,10 @@ private:
     // 速度计算
     qint64 m_lastRxBytes;
     qint64 m_lastTxBytes;
+    // m_lastRxBytes/m_lastTxBytes 所对应的接口名。
+    // 设计原因：基线必须与接口绑定——活动接口一旦变化而基线未重记，
+    // 两接口累计字节数相减会得到数量级错误的增量（见 calculateSpeed 的兜底逻辑）
+    QString m_baselineInterface;
     // 上次采样的毫秒时间戳，用于按真实间隔计算速度（避免定时器抖动失真）
     qint64 m_lastTimestampMs;
     // 当前瞬时速度（字节/秒），用 double 存储以保留按真实间隔除算的小数精度

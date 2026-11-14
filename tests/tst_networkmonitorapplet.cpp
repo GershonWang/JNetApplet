@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 // NetworkMonitorApplet 单元测试
-// 覆盖核心纯逻辑函数：isPhysicalInterface、速度计算（含真实间隔/负值钳制/总量累加）、
+// 覆盖核心纯逻辑函数：isPhysicalInterface、isWirelessInterface、速度计算
+//（含真实间隔/负值钳制/总量累加/切换接口重置基线）、接口选择决策、
 // setActiveInterface 接口校验、isLinkDown 链路通断判定
 // 用 #define private public 技巧访问私有成员（friend 声明因 DS_BEGIN_NAMESPACE
 // 命名空间与 Q_OBJECT 宏交互而无法正确解析，此为 C++ 测试常用替代方案）
@@ -18,6 +19,7 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonObject>
+#include <QList>
 #include <QTemporaryDir>
 
 // dde-shell 的 DS 命名空间（DS_BEGIN_NAMESPACE = namespace ds {）
@@ -50,6 +52,13 @@ private slots:
     void testNegativeDeltaClamped();
     // 总量累加而非取计数器值
     void testTotalAccumulation();
+    // 切换活动接口时重置速度基线（跨接口求差会产生数量级错误的假增量）
+    void testSwitchInterfaceResetsBaseline();
+    // 基线一致性兜底：绕过统一入口直接改写活动接口时也不产生假增量
+    void testBaselineGuardCatchesDirectSwitch();
+    // 自动选择默认接口的决策规则
+    void testChooseDefaultInterface_data();
+    void testChooseDefaultInterface();
     // setActiveInterface 拒绝无效接口名
     void testSetActiveInterfaceValidation();
 
@@ -249,6 +258,106 @@ void NetworkMonitorAppletTest::testTotalAccumulation()
     delete applet;
 }
 
+// 切换活动接口不得产生"跨接口求差"的假增量
+// 设计原因（真机缺陷回归）：活动网卡被热拔后，后端会自动回退到另一块网卡。
+// 若切换时只改接口名而不重置速度基线，下一轮 calculateSpeed 会拿
+// "新接口自开机累计 − 旧接口累计"当增量——两块网卡累计值可能相差数百 GB，
+// 任务栏会显示数百 GB/s，且该假增量会被永久累加进会话总量与日/月流量日志。
+// 本用例固定住"切换后首轮只记基线、不产出速度与总量"的行为
+void NetworkMonitorAppletTest::testSwitchInterfaceResetsBaseline()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    // 两块网卡：eth0 已有少量流量，wlan0 自开机累计很大（模拟已运行多日的网卡）
+    applet->m_interfaceList = QStringList() << "eth0" << "wlan0";
+    NetworkInterface eth;
+    eth.name = "eth0";
+    eth.rxBytes = 1000;
+    eth.txBytes = 500;
+    NetworkInterface wlan;
+    wlan.name = "wlan0";
+    wlan.rxBytes = 900000000;   // 约 900 MB，代表旧网卡累计
+    wlan.txBytes = 450000000;
+    applet->m_interfaces["eth0"] = eth;
+    applet->m_interfaces["wlan0"] = wlan;
+    applet->m_activeInterface = "eth0";
+    applet->m_totalDownload = 0;
+    applet->m_totalUpload = 0;
+
+    // 先在 eth0 上跑一轮，建立基线并产出一次正常增量
+    applet->m_firstUpdate = true;
+    applet->calculateSpeed();
+    eth.rxBytes = 2000;
+    eth.txBytes = 1000;
+    applet->m_interfaces["eth0"] = eth;
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+    const qint64 totalAfterEth = applet->m_totalDownload;
+    QCOMPARE(totalAfterEth, qint64(1000));
+
+    // 模拟"活动网卡消失后自动回退到 wlan0"：走统一入口，persist=false
+    applet->applyActiveInterface("wlan0", false);
+    QCOMPARE(applet->m_activeInterface, QString("wlan0"));
+    // 基线仍指向上一个接口：正是 calculateSpeed() 据以判定"需要重记基线"的依据
+    QCOMPARE(applet->m_baselineInterface, QString("eth0"));
+
+    // 切换后的第一轮采样：只能记录基线，绝不能把两接口累计值之差当增量
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+    QCOMPARE(applet->m_downloadSpeed, 0.0);
+    QCOMPARE(applet->m_uploadSpeed, 0.0);
+    QCOMPARE(applet->m_totalDownload, totalAfterEth);   // 总量不得被污染
+    QCOMPARE(applet->m_totalUpload, qint64(500));
+
+    // 第二轮才是 wlan0 的真实增量（+1000 rx / +500 tx）
+    wlan.rxBytes += 1000;
+    wlan.txBytes += 500;
+    applet->m_interfaces["wlan0"] = wlan;
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+    QVERIFY(applet->m_downloadSpeed > 900 && applet->m_downloadSpeed < 1100);
+    QCOMPARE(applet->m_totalDownload, totalAfterEth + 1000);
+
+    delete applet;
+}
+
+// 基线一致性兜底：即使有代码绕过统一入口直接改写 m_activeInterface，
+// 也不得把跨接口的累计差当成增量（宁可丢一次采样）
+void NetworkMonitorAppletTest::testBaselineGuardCatchesDirectSwitch()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    applet->m_interfaceList = QStringList() << "eth0" << "wlan0";
+    NetworkInterface eth;
+    eth.name = "eth0";
+    eth.rxBytes = 1000;
+    eth.txBytes = 0;
+    NetworkInterface wlan;
+    wlan.name = "wlan0";
+    wlan.rxBytes = 500000000;   // 与 eth0 差距巨大
+    wlan.txBytes = 0;
+    applet->m_interfaces["eth0"] = eth;
+    applet->m_interfaces["wlan0"] = wlan;
+    applet->m_activeInterface = "eth0";
+    applet->m_totalDownload = 0;
+
+    // 建立 eth0 的基线
+    applet->m_firstUpdate = true;
+    applet->calculateSpeed();
+
+    // 绕过统一入口，直接改写活动接口（模拟将来新增代码路径的疏漏）
+    applet->m_activeInterface = "wlan0";
+    applet->m_lastTimestampMs = QDateTime::currentMSecsSinceEpoch() - 1000;
+    applet->calculateSpeed();
+
+    // 兜底生效：本轮只重记基线，总量与速度都不得出现数量级错误的值
+    QCOMPARE(applet->m_totalDownload, qint64(0));
+    QCOMPARE(applet->m_downloadSpeed, 0.0);
+    QCOMPARE(applet->m_baselineInterface, QString("wlan0"));
+
+    delete applet;
+}
+
 void NetworkMonitorAppletTest::testSetActiveInterfaceValidation()
 {
     NetworkMonitorApplet *applet = createApplet();
@@ -264,6 +373,58 @@ void NetworkMonitorAppletTest::testSetActiveInterfaceValidation()
     applet->setActiveInterface("wlan0");
     QCOMPARE(applet->m_activeInterface, QString("wlan0"));
 
+    delete applet;
+}
+
+// 自动选择规则：有流量的物理网卡 > 有流量的任意接口 > 第一个
+// 设计原因：该规则此前内联在 readNetworkStats() 的嵌套循环里，无法单独测试；
+// 抽出为 chooseDefaultInterface() 后成为可断言纯决策逻辑
+void NetworkMonitorAppletTest::testChooseDefaultInterface_data()
+{
+    QTest::addColumn<QStringList>("interfaces");
+    // 与 interfaces 一一对应的 rx 值（用 -1 表示该接口不在 m_interfaces 中）
+    QTest::addColumn<QList<qint64>>("rxValues");
+    QTest::addColumn<QString>("expected");
+
+    // 无接口：返回空串
+    QTest::newRow("empty") << QStringList() << QList<qint64>() << QString();
+
+    // 物理网卡有流量，虚拟接口流量更大 → 仍选物理网卡
+    QTest::newRow("prefer-physical-with-traffic")
+        << (QStringList() << "Meta" << "enp3s0")
+        << (QList<qint64>() << 9000000 << 100)
+        << QString("enp3s0");
+
+    // 物理网卡都无流量 → 选有流量的虚拟接口
+    QTest::newRow("fallback-to-virtual-with-traffic")
+        << (QStringList() << "Meta" << "enp3s0")
+        << (QList<qint64>() << 100 << 0)
+        << QString("Meta");
+
+    // 全部无流量 → 选第一个
+    QTest::newRow("fallback-to-first")
+        << (QStringList() << "Meta" << "enp3s0")
+        << (QList<qint64>() << 0 << 0)
+        << QString("Meta");
+}
+
+void NetworkMonitorAppletTest::testChooseDefaultInterface()
+{
+    QFETCH(QStringList, interfaces);
+    QFETCH(QList<qint64>, rxValues);
+    QFETCH(QString, expected);
+
+    NetworkMonitorApplet *applet = createApplet();
+    applet->m_interfaceList = interfaces;
+    for (int i = 0; i < interfaces.size(); ++i) {
+        NetworkInterface iface;
+        iface.name = interfaces.at(i);
+        iface.rxBytes = rxValues.value(i, 0);
+        iface.txBytes = 0;
+        applet->m_interfaces[interfaces.at(i)] = iface;
+    }
+
+    QCOMPARE(applet->chooseDefaultInterface(), expected);
     delete applet;
 }
 

@@ -1,5 +1,23 @@
 # 更新日志
 
+## 未发布
+
+### 修复
+
+- **切换活动接口不再产生假增量**：活动网卡热拔（USB 网卡、VPN 隧道消失）后，
+  后端会自动回退到另一块网卡。原实现只改接口名、不重置速度基线，下一轮采样会拿
+  "新网卡自开机累计 − 旧网卡累计"当增量——两块网卡累计值可相差数百 GB，任务栏会
+  显示数百 GB/s，并且该假增量被**永久累加**进会话总量与日/月流量日志（只能等 30 天
+  裁剪才消失）。
+  - 修复方式：用户选择与自动回退统一收敛到 `applyActiveInterface()` 入口，由它重置
+    基线并清空上一接口的派生状态（IP、协商速率、WiFi 信号、断连）后立即重测；
+  - 另在 `calculateSpeed()` 增加基线一致性判断（`m_baselineInterface != m_activeInterface`
+    时只重记基线），任何将来新增的接口改写路径都自动被覆盖，宁可丢一次采样也不产出
+    错误数值；
+  - 自动回退**不写配置文件**，避免覆盖用户显式保存的接口选择——原网卡插回后仍能恢复；
+  - 新增回归用例 `testSwitchInterfaceResetsBaseline`、
+    `testBaselineGuardCatchesDirectSwitch`、`testChooseDefaultInterface`。
+
 ## v2.3.0 - 2026-09-26
 
 ### 新功能
