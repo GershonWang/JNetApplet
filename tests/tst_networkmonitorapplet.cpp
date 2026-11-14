@@ -20,6 +20,7 @@
 #include <QFile>
 #include <QJsonObject>
 #include <QList>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 
 // geteuid()：判断测试是否以 root 运行（root 可读任意文件，权限类用例需跳过）。
@@ -34,6 +35,16 @@ class NetworkMonitorAppletTest : public QObject
     Q_OBJECT
 
 private:
+    // 测试期间的隔离目录：把 HOME/XDG_CONFIG_HOME 指到临时目录，
+    // 使被测代码的配置读写（~/.config/jnetapplet/settings.ini）与流量日志
+    //（~/.config/jnetapplet/traffic_log.json）全部落在沙箱内
+    QTemporaryDir m_sandbox;
+    // 保存原始环境变量，cleanupTestCase 时还原
+    QByteArray m_origHome;
+    QByteArray m_origXdgConfig;
+    bool m_hadHome = false;
+    bool m_hadXdgConfig = false;
+
     // 创建 applet 实例的辅助方法
     // 构造时不调用 init()（会启动定时器），仅用于测试纯逻辑方法
     NetworkMonitorApplet *createApplet()
@@ -42,6 +53,41 @@ private:
     }
 
 private slots:
+    // 全局隔离：在第一个用例之前把配置目录重定向到临时目录
+    // 设计原因（真实缺陷）：测试会调用 setActiveInterface()，其内部 persistSetting()
+    // 直接写 ~/.config/jnetapplet/settings.ini；构造器也会读同一文件。此前跑一次 ctest
+    // 就会把用户真实的活动网卡改成测试里的 "wlan0"，并可能触发真实子进程。
+    // 在 initTestCase 中重定向环境变量后，所有用例的读写都发生在一次性临时目录里，
+    // 既不会污染用户配置，也不会因用户既有配置而让用例结果产生差异
+    void initTestCase()
+    {
+        QVERIFY(m_sandbox.isValid());
+        m_hadHome = qEnvironmentVariableIsSet("HOME");
+        m_origHome = qgetenv("HOME");
+        m_hadXdgConfig = qEnvironmentVariableIsSet("XDG_CONFIG_HOME");
+        m_origXdgConfig = qgetenv("XDG_CONFIG_HOME");
+
+        // QStandardPaths 在首次调用后会缓存结果，故必须在任何被测代码运行前设置
+        qputenv("HOME", m_sandbox.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", m_sandbox.filePath(QStringLiteral("config")).toUtf8());
+        // 双保险：Qt 自带的测试模式（把路径指向 ~/.qttest），与上面的重定向叠加后
+        // 即使将来有人改回读写 QStandardPaths::ConfigLocation 也不会碰到真实目录
+        QStandardPaths::setTestModeEnabled(true);
+    }
+
+    void cleanupTestCase()
+    {
+        if (m_hadHome) {
+            qputenv("HOME", m_origHome);
+        } else {
+            qunsetenv("HOME");
+        }
+        if (m_hadXdgConfig) {
+            qputenv("XDG_CONFIG_HOME", m_origXdgConfig);
+        } else {
+            qunsetenv("XDG_CONFIG_HOME");
+        }
+    }
     // isPhysicalInterface：物理网卡前缀匹配
     void testIsPhysicalInterface_data();
     void testIsPhysicalInterface();
