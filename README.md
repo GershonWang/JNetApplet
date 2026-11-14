@@ -164,7 +164,8 @@ C++ 逻辑依赖上文 `ctest`，QML 界面仍无自动化检查，需人工确�
 │       └── AboutWindow.qml                # 关于窗口
 ├── translations/                           # 中文翻译（.ts -> .qm）
 ├── tests/                                  # Qt Test 单元测试
-├── docs/                                   # 设计文档与审查清单
+├── scripts/                                # 无依赖的检查脚本（版本一致性/翻译同步）
+├── docs/                                   # 设计文档、审查清单与离线验证说明
 ├── README.md                               # 本文件
 └── AGENTS.md                               # AI 代理工作指引
 ```
