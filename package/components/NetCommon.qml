@@ -95,6 +95,19 @@ QtObject {
     readonly property int fontSizeHero: Math.round(24 * fontScale)      // 弹窗速度大字
     readonly property int fontSizeHuge: Math.round(40 * fontScale)      // 空状态图标
 
+    // ---- 间距阶梯 ----
+    // 设计原因：设置窗口此前同时用两套机制控制垂直留白——ColumnLayout 的 spacing: 12，
+    // 以及 4 处手写 `Item { Layout.preferredHeight: 4 }` 插在分区之间。
+    // 两种机制混用导致视觉节奏靠手调：新增分区时不知道该用哪种，且手写间隙元素
+    // 在 ColumnLayout 的 spacing 之上叠加，实际间距变成 12+4=16，与设计意图不符。
+    // 现收敛为语义档位，新增分区只需选档，不再引入新的手写占位元素。
+    //
+    // 不随 fontScale 缩放：间距是布局节奏，与文字可读性无关；
+    // 跟随字号放大会让本就需滚动的内容更长。
+    readonly property int spacingItem: 4        // 紧邻元素（同一行/同一组内的两项）
+    readonly property int spacingGroup: 8       // 组内元素之间
+    readonly property int spacingSection: 12    // 分区之间（原 ColumnLayout 的 spacing）
+
     // 判断接口名是否命中无线命名约定
     // 设计原因：deepin 25 上无线接口名为 wlo1，早期只匹配 wlp/wlan 导致漏判，故补齐 wlo/wlx。
     // 本函数是**排序**的唯一无线判据（排序不查后端，原因见 sortInterfaces）；

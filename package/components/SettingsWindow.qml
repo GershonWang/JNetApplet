@@ -166,7 +166,7 @@ Window {
                     // 误用会让本文件整体加载失败、插件随即从任务栏消失
                     x: 16
                     y: 16
-                    spacing: 12
+                    spacing: common.spacingSection
                     // 让内容高度自然撑开（ColumnLayout 会按子项累加 implicitHeight），
                     // 底部留白由 ScrollView 的 contentHeight 与 viewport 差值承担
 
@@ -358,6 +358,7 @@ Window {
                     // 设计原因：用户选择的颜色通过 applet.textColor 持久化到
                     // ~/.config/jnetapplet/settings.ini，重启 dde-shell 后仍生效
                     Text {
+                        Layout.topMargin: common.spacingGroup
                         text: qsTr("Font Color")
                         font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
@@ -377,6 +378,7 @@ Window {
                     // 选择结果通过 applet.refreshInterval 持久化并即时生效，
                     // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
                     Text {
+                        Layout.topMargin: common.spacingGroup
                         text: qsTr("Refresh Interval")
                         font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
@@ -412,14 +414,13 @@ Window {
                         }
                     }
 
-                    Item { Layout.preferredHeight: 4 }
-
                     // 速度单位选择区：智能自动 / KB/s / Mbps
                     // 设计原因：插件默认按二进制（KB/s→MB/s→GB/s）显示，而运营商与
                     // 测速工具用十进制 Mbps，两者相差约 8 倍（1 MB/s ≈ 8 Mbps）；
                     // 用户拿插件数值与宽带套餐（如 100 Mbps）对比时会对不上，
                     // 故提供显式选择。选择结果经 applet.speedUnit 持久化并即时生效
                     Text {
+                        Layout.topMargin: common.spacingGroup
                         text: qsTr("Speed Unit")
                         font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
@@ -460,14 +461,13 @@ Window {
                         }
                     }
 
-                    Item { Layout.preferredHeight: 4 }
-
                     // ---- 任务栏显示口径：单接口 / 所有物理网卡合计 ----
                     // 设计原因：多网卡场景（有线 + 无线同时工作、或容器宿主多网口）下，
                     // 只看单卡会低估实际吞吐；而多数用户只需看主网卡，故做成显式开关，
                     // 默认保持原来的单接口视图，不改变既有观感。
                     // 合计口径排除 tun/docker/veth 等虚拟接口，避免与物理网卡重复计数
                     Text {
+                        Layout.topMargin: common.spacingGroup
                         text: qsTr("Taskbar Display")
                         font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
@@ -515,14 +515,13 @@ Window {
                         wrapMode: Text.WordWrap
                     }
 
-                    Item { Layout.preferredHeight: 4 }
-
                     // ---- 流量提醒 ----
                     // 设计原因：用户在没有运营商用量面板时无法察觉当天/当月已用多少，
                     // 等到被限速才发现超量。提供日/月阈值，超限后发一次系统通知。
                     // 阈值单位取十进制 GB（1 GB = 1000³ 字节），与运营商套餐口径一致；
                     // 填 0 或留空表示关闭提醒
                     Text {
+                        Layout.topMargin: common.spacingGroup
                         text: qsTr("Traffic Alerts")
                         font.pixelSize: common.fontSizeSubtitle
                         font.weight: Font.Bold
@@ -642,8 +641,6 @@ Window {
                                ? String(applet.monthlyLimitGb) : ""
                         restoreMode: Binding.RestoreNone
                     }
-
-                    Item { Layout.preferredHeight: 4 }
 
                     // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担。
                     // 用 IconButton 的内容插槽承载原有 Text——它的文字需要
