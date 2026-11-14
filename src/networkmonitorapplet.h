@@ -382,6 +382,11 @@ private:
     // 降频保存计数器：每 30 秒（按刷新间隔折算）写盘一次并通知 QML，
     // 避免每秒磁盘 IO 与 QML 重绘；析构函数再兜底保存一次
     int m_trafficSaveCounter;
+    // 是否禁止写盘：加载时文件存在但不可读（权限/属主问题）会置位。
+    // 设计原因：这种情形下内存里只有空结构，而 QSaveFile 靠临时文件 + rename，
+    // 即便原文件不可读也能成功覆盖——若继续写盘，30 天历史会被静默清零。
+    // 宁可本次会话不记录新流量，也不破坏既有数据
+    bool m_trafficLogWriteBlocked = false;
     // 按日记录最多保留 30 天、按月最多保留 12 个月，超出自动裁剪最旧记录
     static constexpr int MAX_DAY_ENTRIES = 30;
     static constexpr int MAX_MONTH_ENTRIES = 12;

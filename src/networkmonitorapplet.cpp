@@ -1314,33 +1314,59 @@ bool NetworkMonitorApplet::isPhysicalInterface(const QString &name) const
 
 // ---- 流量日志（日/月持久化）----
 
+// 构造空的日志结构（byDay/byMonth 均为空对象）
+// 提取的原因：首次运行、解析失败、读取失败三处都需要同一个"空结构"，
+// 各写一遍容易出现字段名不一致（例如漏掉 byMonth 会让统计窗口的按月页签永远空白）
+static QJsonObject makeEmptyTrafficLog()
+{
+    QJsonObject log;
+    log[QStringLiteral("byDay")] = QJsonObject();
+    log[QStringLiteral("byMonth")] = QJsonObject();
+    return log;
+}
+
 // 启动时从 traffic_log.json 加载流量日志
 // 优雅降级：文件不存在、读取失败或 JSON 解析失败时均使用空结构，不崩溃不抛异常；
 // 首次运行（文件不存在）时先创建空的 byDay/byMonth 结构，由后续保存写盘创建文件
 void NetworkMonitorApplet::loadTrafficLog()
 {
     QFile file(m_trafficLogPath);
+
+    // 文件不存在属正常首次运行：允许后续写盘创建它
     if (!file.exists()) {
-        m_trafficLog = QJsonObject();
-        m_trafficLog[QStringLiteral("byDay")] = QJsonObject();
-        m_trafficLog[QStringLiteral("byMonth")] = QJsonObject();
+        m_trafficLog = makeEmptyTrafficLog();
+        m_trafficLogWriteBlocked = false;
         return;
     }
-    if (file.open(QIODevice::ReadOnly)) {
-        QJsonParseError err;
-        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
-        file.close();
-        if (err.error == QJsonParseError::NoError && doc.isObject()) {
-            m_trafficLog = doc.object();
-        } else {
-            // 解析失败（如文件被外部写坏）：降级为空结构，避免后续累加异常。
-            // 记录告警而非静默降级——历史统计会整体清零，用户需要知道原因
-            qWarning() << "traffic_log.json 解析失败，历史统计已重置:" << err.errorString();
-            m_trafficLog = QJsonObject();
-            m_trafficLog[QStringLiteral("byDay")] = QJsonObject();
-            m_trafficLog[QStringLiteral("byMonth")] = QJsonObject();
-        }
+
+    // 文件存在但打不开（权限被改、属主变 root、ACL 限制等）：
+    // 这时绝不能按"空日志"继续——QSaveFile 依靠临时文件 + rename，即便原文件不可读
+    // 也能把空对象覆盖上去，结果是 30 天历史被静默清零且用户毫无感知。
+    // 因此这里给出告警并置位写盘禁令：本次会话宁可不记录新流量，也不破坏既有历史
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "traffic_log.json 无法读取，本次会话暂停流量日志写入以免覆盖历史:"
+                   << file.errorString();
+        m_trafficLog = makeEmptyTrafficLog();
+        m_trafficLogWriteBlocked = true;
+        return;
     }
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
+    file.close();
+
+    if (err.error == QJsonParseError::NoError && doc.isObject()) {
+        m_trafficLog = doc.object();
+        m_trafficLogWriteBlocked = false;
+        return;
+    }
+
+    // 解析失败（如文件被外部写坏）：降级为空结构，避免后续累加异常。
+    // 记录告警而非静默降级——历史统计会整体清零，用户需要知道原因。
+    // 这里不禁止写盘：文件内容已经不可用，保留它没有任何收益，重建成合法空结构更好
+    qWarning() << "traffic_log.json 解析失败，历史统计已重置:" << err.errorString();
+    m_trafficLog = makeEmptyTrafficLog();
+    m_trafficLogWriteBlocked = false;
 }
 
 // 将流量日志写入 traffic_log.json
@@ -1350,6 +1376,11 @@ void NetworkMonitorApplet::saveTrafficLog()
 {
     // 测试等场景未初始化日志路径时直接跳过，避免对空路径 mkpath/写文件产生告警
     if (m_trafficLogPath.isEmpty()) {
+        return;
+    }
+    // 加载阶段未能读到既有日志（文件不可读）时禁止写盘：
+    // 否则本次会话累积的少量数据会以空结构为基础覆盖掉磁盘上的完整历史
+    if (m_trafficLogWriteBlocked) {
         return;
     }
     pruneTrafficLog();

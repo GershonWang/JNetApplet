@@ -22,6 +22,10 @@
 #include <QList>
 #include <QTemporaryDir>
 
+// geteuid()：判断测试是否以 root 运行（root 可读任意文件，权限类用例需跳过）。
+// 放在 Qt 头文件之后包含，避免与 Qt 的 Windows 兼容层头文件顺序冲突
+#include <unistd.h>
+
 // dde-shell 的 DS 命名空间（DS_BEGIN_NAMESPACE = namespace ds {）
 DS_USE_NAMESPACE
 
@@ -72,6 +76,8 @@ private slots:
     void testPruneTrafficLog();
     // 流量日志：文件损坏时降级为空结构而非崩溃
     void testLoadTrafficLogInvalid();
+    // 流量日志：文件存在但不可读时禁止写盘，避免覆盖历史
+    void testLoadTrafficLogUnreadableBlocksSave();
     // ss 输出解析：IPv4/IPv6/无进程名/空输入
     void testParseTcpConnectionList();
 
@@ -566,8 +572,57 @@ void NetworkMonitorAppletTest::testLoadTrafficLogInvalid()
     QVERIFY(applet->m_trafficLog.contains(QStringLiteral("byDay")));
     QVERIFY(applet->m_trafficLog.contains(QStringLiteral("byMonth")));
     QVERIFY(applet->m_trafficLog.value(QStringLiteral("byDay")).toObject().isEmpty());
+    // 解析失败的文件内容已无价值，应允许重建成合法空结构（不禁止写盘）
+    QVERIFY(!applet->m_trafficLogWriteBlocked);
 
     // 清空路径，避免析构函数兜底保存时写入测试目录
+    applet->m_trafficLogPath.clear();
+    delete applet;
+}
+
+// 文件存在但不可读时：禁止写盘，避免用内存里的空结构覆盖磁盘上的完整历史
+// 设计原因（缺陷回归）：QSaveFile 依靠"临时文件 + rename"，即使原文件不可读也能
+// 成功覆盖。若不作保护，权限被改（chmod 000、属主变 root、ACL）后的一次兜底保存
+// 就会把 30 天 byDay/byMonth 静默清零，用户完全无感知。
+// 注意：以 root 运行时 chmod 不生效（root 可读任意文件），此时跳过用例
+void NetworkMonitorAppletTest::testLoadTrafficLogUnreadableBlocksSave()
+{
+    if (::geteuid() == 0) {
+        QSKIP("以 root 运行，无法通过权限构造不可读文件");
+    }
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("traffic_log.json"));
+
+    // 先写入一份带历史数据的合法日志
+    const QByteArray original =
+        R"({"byDay":{"2026-01-01":{"eth0":{"rx":100,"tx":50}}},"byMonth":{}})";
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(original);
+    file.close();
+    // 只保留属主写权限：属主（非 root）随后无法再读该文件，模拟"权限被改坏"的场景。
+    // root 会绕过权限位，故本用例在文件开头已对 root 跳过
+    QVERIFY(file.setPermissions(QFileDevice::WriteOwner));
+
+    NetworkMonitorApplet *applet = createApplet();
+    applet->m_trafficLogPath = path;
+    applet->loadTrafficLog();
+
+    // 加载失败后应禁止写盘（无论内存结构如何，都不得覆盖磁盘上的历史）
+    QVERIFY(applet->m_trafficLogWriteBlocked);
+
+    // 尝试保存：文件内容必须原样保留
+    applet->saveTrafficLog();
+
+    // 校验前先恢复读权限（否则本进程自己也读不到该文件）
+    QVERIFY(file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    QFile check(path);
+    QVERIFY(check.open(QIODevice::ReadOnly));
+    QCOMPARE(check.readAll(), original);
+    check.close();
+
     applet->m_trafficLogPath.clear();
     delete applet;
 }
