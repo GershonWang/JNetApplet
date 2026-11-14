@@ -25,6 +25,11 @@
 #include <QDate>
 #include <QGuiApplication>
 #include <QScreen>
+// 系统通知：Dtk6 Core 提供的封装，内部走 org.freedesktop.Notifications。
+// 选用它而非自建 DBus 调用的原因：本项目已依赖 Dtk6::Core，无需引入新依赖；
+// 且 Dtk6::Core 已传递 Qt6::DBus（见其 INTERFACE_LINK_LIBRARIES），
+// 头文件里的 QDBusPendingCall 能正常解析，CMake 无需改动
+#include <DNotifySender>
 
 DS_BEGIN_NAMESPACE
 
@@ -97,6 +102,17 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
             m_speedUnit = unit;
         }
     }
+
+    // 流量提醒阈值（GB）：负数/NaN 一律按 0（关闭）处理，与 setter 的校验保持一致，
+    // 避免手工改坏的配置在运行期参与换算导致提醒永不触发
+    const double daily = settings.value(QStringLiteral("dailyLimitGb"), 0.0).toDouble();
+    m_dailyLimitGb = (daily > 0) ? daily : 0.0;
+    const double monthly = settings.value(QStringLiteral("monthlyLimitGb"), 0.0).toDouble();
+    m_monthlyLimitGb = (monthly > 0) ? monthly : 0.0;
+
+    // 已提醒周期键必须跨重启保留，否则重启 dde-shell 会在同一周期重复提醒
+    m_notifiedDay = settings.value(QStringLiteral("notifiedDay")).toString();
+    m_notifiedMonth = settings.value(QStringLiteral("notifiedMonth")).toString();
 }
 
 NetworkMonitorApplet::~NetworkMonitorApplet()
@@ -414,6 +430,172 @@ void NetworkMonitorApplet::setSpeedUnit(int unit)
     emit speedUnitChanged();
 }
 
+// ---- 流量提醒阈值 ----
+
+double NetworkMonitorApplet::dailyLimitGb() const
+{
+    return m_dailyLimitGb;
+}
+
+double NetworkMonitorApplet::monthlyLimitGb() const
+{
+    return m_monthlyLimitGb;
+}
+
+// 归一化阈值输入：负数、0、NaN、无穷大统一按 0（关闭）处理
+// 设计原因：QML 侧是文本输入框，用户可能键入 "-1"、空串或异常字符；
+// 若不在此收敛，脏值会被持久化并在下次启动时参与换算，导致提醒永不触发且无提示。
+// 边界：+infinity 也满足 `> 0`，若只判 `gb > 0` 会让它通过校验，
+// 而 `qint64` 转换会得到未定义结果（实测得到 inf 被写进配置），故必须显式排除。
+// 该场景由 testQuotaLimitSetting 固定住
+static double normalizeLimitGb(double gb)
+{
+    // qIsFinite 同时排除 NaN 与 ±infinity；随后再排除负数与 0
+    if (!qIsFinite(gb) || !(gb > 0)) {
+        return 0.0;
+    }
+    return gb;
+}
+
+void NetworkMonitorApplet::setDailyLimitGb(double gb)
+{
+    const double normalized = normalizeLimitGb(gb);
+    if (qFuzzyCompare(m_dailyLimitGb, normalized)) {
+        return;
+    }
+    m_dailyLimitGb = normalized;
+    persistSetting(QStringLiteral("dailyLimitGb"), m_dailyLimitGb);
+    emit quotaLimitChanged();
+}
+
+void NetworkMonitorApplet::setMonthlyLimitGb(double gb)
+{
+    const double normalized = normalizeLimitGb(gb);
+    if (qFuzzyCompare(m_monthlyLimitGb, normalized)) {
+        return;
+    }
+    m_monthlyLimitGb = normalized;
+    persistSetting(QStringLiteral("monthlyLimitGb"), m_monthlyLimitGb);
+    emit quotaLimitChanged();
+}
+
+// 当前周期已用流量（字节）：今日/本月
+// 数据取自内存中的流量日志，与「流量统计」窗口同源，避免两处数字不一致
+double NetworkMonitorApplet::todayUsedBytes() const
+{
+    return static_cast<double>(periodUsedBytes(
+        m_trafficLog, QStringLiteral("byDay"),
+        QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"))));
+}
+
+double NetworkMonitorApplet::monthUsedBytes() const
+{
+    return static_cast<double>(periodUsedBytes(
+        m_trafficLog, QStringLiteral("byMonth"),
+        QDate::currentDate().toString(QStringLiteral("yyyy-MM"))));
+}
+
+// 计算指定周期键下所有接口的 rx+tx 合计
+// 结构：{"byDay": {日期: {接口: {rx, tx}}}}，section 取 "byDay" 或 "byMonth"
+// 设计原因：口径必须与「流量统计」窗口一致（该周期下所有接口相加），
+// 否则窗口显示 1.2 GB 而提醒说用了 0.8 GB，用户会怀疑哪边错了
+qint64 NetworkMonitorApplet::periodUsedBytes(const QJsonObject &trafficLog,
+                                             const QString &section,
+                                             const QString &periodKey)
+{
+    const QJsonObject periods = trafficLog.value(section).toObject();
+    const QJsonObject interfaces = periods.value(periodKey).toObject();
+    qint64 total = 0;
+    for (auto it = interfaces.constBegin(); it != interfaces.constEnd(); ++it) {
+        const QJsonObject rec = it.value().toObject();
+        // 用 toVariant().toLongLong() 而非 toDouble()：累计字节数可能超过 2^53，
+        // 走 double 会丢精度（Qt6 的 QJsonValue 对整数按整数存储，此路径无损）
+        total += rec.value(QStringLiteral("rx")).toVariant().toLongLong();
+        total += rec.value(QStringLiteral("tx")).toVariant().toLongLong();
+    }
+    return total;
+}
+
+// 判定本次是否应当提醒（纯函数）
+// 规则：阈值已启用 且 已用量达到阈值 且 本周期尚未提醒。
+// 「本周期尚未提醒」用周期键字符串比较实现——日期键形如 "yyyy-MM-dd"，
+// 进入新的一天的瞬间键即变化，天然完成"每日重置"，无需额外维护时间差
+bool NetworkMonitorApplet::shouldNotifyQuota(qint64 usedBytes, double limitGb,
+                                             const QString &currentPeriod,
+                                             const QString &notifiedPeriod)
+{
+    // 阈值为 0、负数、NaN 或无穷大 = 关闭提醒。
+    // 无穷大若不排除，limitBytes 会溢出成未定义值，可能导致"一启动就提醒"
+    if (!qIsFinite(limitGb) || !(limitGb > 0)) {
+        return false;
+    }
+    // 十进制 GB：运营商套餐口径，1 GB = 1000³ 字节
+    const qint64 limitBytes = static_cast<qint64>(limitGb * 1000.0 * 1000.0 * 1000.0);
+    if (usedBytes < limitBytes) {
+        return false;
+    }
+    // 同一周期只提醒一次；跨周期（键不同）自然重新允许
+    return notifiedPeriod != currentPeriod;
+}
+
+// 检查日/月阈值并发送通知
+// 调用时机：挂在既有的 30 秒保存周期上（refresh() 内），不新增定时器。
+// 判定用内存中的流量日志，与写盘解耦，因此不受 m_trafficLogWriteBlocked 影响
+void NetworkMonitorApplet::checkQuotaAndNotify()
+{
+    const QDate today = QDate::currentDate();
+    const QString dayKey = today.toString(QStringLiteral("yyyy-MM-dd"));
+    const QString monthKey = today.toString(QStringLiteral("yyyy-MM"));
+
+    // 日阈值
+    if (m_dailyLimitGb > 0) {
+        const qint64 used = periodUsedBytes(m_trafficLog, QStringLiteral("byDay"), dayKey);
+        if (shouldNotifyQuota(used, m_dailyLimitGb, dayKey, m_notifiedDay)) {
+            // 已用量按 GB 显示两位小数，与阈值同一单位便于直接比较
+            const double usedGb = used / 1.0e9;
+            // 源串用英文，翻译走 .ts（与 QML 侧 qsTr 的约定一致）；
+            // 不直接写中文，否则非中文环境也会显示中文
+            sendNotification(
+                tr("Daily traffic limit exceeded"),
+                tr("Used %1 GB today (limit %2 GB)")
+                    .arg(usedGb, 0, 'f', 2)
+                    .arg(m_dailyLimitGb, 0, 'g', 6));
+            // 记录已提醒的周期并落盘：不持久化的话，重启 dde-shell 后同一天会再提醒
+            m_notifiedDay = dayKey;
+            persistSetting(QStringLiteral("notifiedDay"), m_notifiedDay);
+        }
+    }
+
+    // 月阈值
+    if (m_monthlyLimitGb > 0) {
+        const qint64 used = periodUsedBytes(m_trafficLog, QStringLiteral("byMonth"), monthKey);
+        if (shouldNotifyQuota(used, m_monthlyLimitGb, monthKey, m_notifiedMonth)) {
+            const double usedGb = used / 1.0e9;
+            sendNotification(
+                tr("Monthly traffic limit exceeded"),
+                tr("Used %1 GB this month (limit %2 GB)")
+                    .arg(usedGb, 0, 'f', 2)
+                    .arg(m_monthlyLimitGb, 0, 'g', 6));
+            m_notifiedMonth = monthKey;
+            persistSetting(QStringLiteral("notifiedMonth"), m_notifiedMonth);
+        }
+    }
+}
+
+// 发送系统通知
+// 用固定 replaceId：同一时刻只会有一条流量提醒，避免日/月两条同时超限时
+// 在通知中心堆叠成两条几乎相同的内容（后一条替换前一条）
+void NetworkMonitorApplet::sendNotification(const QString &summary, const QString &body)
+{
+    Dtk::Core::DUtil::DNotifySender sender(summary);
+    sender.appName(QStringLiteral("JNetApplet"))
+        .appIcon(QStringLiteral("network-wired"))
+        .appBody(body)
+        .timeOut(8000)
+        .replaceId(20261114)
+        .call();   // 异步调用，不阻塞主线程；无通知服务时静默失败
+}
+
 // 带单位的完整速度字符串，供弹窗、趋势图与悬停提示使用
 // 换算规则是全局唯一定义处，QML 侧不再各自实现 KB/MB/GB 阈值
 QString NetworkMonitorApplet::formatSpeed(double bytesPerSec, int unit) const
@@ -577,6 +759,9 @@ void NetworkMonitorApplet::refresh()
         m_trafficSaveCounter = 0;
         saveTrafficLog();
         emit trafficLogChanged();
+        // 流量提醒与保存同一节拍：阈值判定本身是纯内存计算（遍历当前周期的接口记录），
+        // 开销远低于写盘；放在这里可避免为它单独引入定时器
+        checkQuotaAndNotify();
     }
 }
 

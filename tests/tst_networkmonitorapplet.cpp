@@ -26,6 +26,8 @@
 // geteuid()：判断测试是否以 root 运行（root 可读任意文件，权限类用例需跳过）。
 // 放在 Qt 头文件之后包含，避免与 Qt 的 Windows 兼容层头文件顺序冲突
 #include <unistd.h>
+// std::numeric_limits：阈值设置用例需要构造 NaN 与无穷大，验证被归一为"关闭"
+#include <limits>
 
 // dde-shell 的 DS 命名空间（DS_BEGIN_NAMESPACE = namespace ds {）
 DS_USE_NAMESPACE
@@ -128,6 +130,14 @@ private slots:
 
     // 速度单位的读写、非法值忽略与持久化
     void testSpeedUnitSetting();
+
+    // 流量提醒：周期用量合计（与统计窗口同口径）
+    void testPeriodUsedBytes();
+    // 流量提醒：是否应当提醒的真值表（阈值边界、同周期去重、跨周期重置、关闭）
+    void testShouldNotifyQuota_data();
+    void testShouldNotifyQuota();
+    // 流量提醒：阈值设置的归一化（负数/NaN 按关闭处理）
+    void testQuotaLimitSetting();
 
     // 流量日志：当日/当月累加与按接口分桶
     void testAppendToTrafficLog();
@@ -851,6 +861,171 @@ void NetworkMonitorAppletTest::testLoadTrafficLogUnreadableBlocksSave()
     check.close();
 
     applet->m_trafficLogPath.clear();
+    delete applet;
+}
+
+// 周期用量合计：该周期下所有接口的 rx+tx 之和
+// 设计原因：该口径必须与「流量统计」窗口顶部数字一致，否则窗口显示 1.2 GB
+// 而提醒说用了 0.8 GB，用户会怀疑哪边错了。此处固定住"跨接口相加"的语义
+void NetworkMonitorAppletTest::testPeriodUsedBytes()
+{
+    QJsonObject log;
+    QJsonObject days;
+
+    // 同一天两块网卡：eth0 1GB + 0.5GB，wlo1 0.25GB + 0.25GB = 2GB 整
+    QJsonObject eth;
+    eth[QStringLiteral("rx")] = qint64(1000000000);
+    eth[QStringLiteral("tx")] = qint64(500000000);
+    QJsonObject wlan;
+    wlan[QStringLiteral("rx")] = qint64(250000000);
+    wlan[QStringLiteral("tx")] = qint64(250000000);
+    QJsonObject day;
+    day[QStringLiteral("eth0")] = eth;
+    day[QStringLiteral("wlo1")] = wlan;
+    days[QStringLiteral("2026-11-14")] = day;
+
+    // 另一天单独一条，用于验证只取指定键
+    QJsonObject other;
+    other[QStringLiteral("rx")] = qint64(999);
+    QJsonObject otherDay;
+    otherDay[QStringLiteral("eth0")] = other;
+    days[QStringLiteral("2026-11-13")] = otherDay;
+
+    log[QStringLiteral("byDay")] = days;
+
+    // 跨接口合计 = 2_000_000_000
+    QCOMPARE(NetworkMonitorApplet::periodUsedBytes(log, QStringLiteral("byDay"),
+                                                   QStringLiteral("2026-11-14")),
+             qint64(2000000000));
+    // 只取指定日期，不会把前一天算进来
+    QCOMPARE(NetworkMonitorApplet::periodUsedBytes(log, QStringLiteral("byDay"),
+                                                   QStringLiteral("2026-11-13")),
+             qint64(999));
+    // 不存在的键返回 0（新的一天尚未产生记录）
+    QCOMPARE(NetworkMonitorApplet::periodUsedBytes(log, QStringLiteral("byDay"),
+                                                   QStringLiteral("2026-11-15")),
+             qint64(0));
+    // section 不存在时同样返回 0，不崩溃
+    QCOMPARE(NetworkMonitorApplet::periodUsedBytes(log, QStringLiteral("byMonth"),
+                                                   QStringLiteral("2026-11")),
+             qint64(0));
+
+    // 大数精度：超过 2^53 的累计值必须走整数路径，不能被 double 截断
+    QJsonObject huge;
+    huge[QStringLiteral("rx")] = qint64(9007199254740993LL);   // 2^53 + 1
+    QJsonObject hugeDay;
+    hugeDay[QStringLiteral("eth0")] = huge;
+    QJsonObject hugeLog;
+    QJsonObject hugeDays;
+    hugeDays[QStringLiteral("2026-11-14")] = hugeDay;
+    hugeLog[QStringLiteral("byDay")] = hugeDays;
+    QCOMPARE(NetworkMonitorApplet::periodUsedBytes(hugeLog, QStringLiteral("byDay"),
+                                                   QStringLiteral("2026-11-14")),
+             qint64(9007199254740993LL));
+}
+
+// 是否提醒的真值表
+// 覆盖：阈值关闭、未达阈值、恰好达到、同周期去重、跨周期重置
+void NetworkMonitorAppletTest::testShouldNotifyQuota_data()
+{
+    QTest::addColumn<qint64>("usedBytes");
+    QTest::addColumn<double>("limitGb");
+    QTest::addColumn<QString>("currentPeriod");
+    QTest::addColumn<QString>("notifiedPeriod");
+    QTest::addColumn<bool>("expected");
+
+    // 阈值为 0 = 关闭提醒，无论用了多少
+    QTest::newRow("disabled-zero") << qint64(9999999999LL) << 0.0
+                                   << QStringLiteral("2026-11-14") << QString() << false;
+    // 负数阈值同样视为关闭（配置被改坏时的兜底）
+    QTest::newRow("disabled-negative") << qint64(9999999999LL) << -1.0
+                                       << QStringLiteral("2026-11-14") << QString() << false;
+    // 无穷大阈值：+infinity 满足 `> 0`，若不显式排除会被当成"永不超限"，
+    // 更糟的是 limitBytes 转换溢出后行为未定义。必须按关闭处理
+    QTest::newRow("disabled-infinity")
+        << qint64(9999999999LL) << std::numeric_limits<double>::infinity()
+        << QStringLiteral("2026-11-14") << QString() << false;
+    // NaN 阈值：与任何数比较都为 false，同样按关闭处理
+    QTest::newRow("disabled-nan")
+        << qint64(9999999999LL) << std::numeric_limits<double>::quiet_NaN()
+        << QStringLiteral("2026-11-14") << QString() << false;
+
+    // 1 GB 阈值 = 1_000_000_000 字节（十进制，不是 1<<30）
+    QTest::newRow("below-limit") << qint64(999999999LL) << 1.0
+                                 << QStringLiteral("2026-11-14") << QString() << false;
+    // 恰好等于阈值即触发（>= 而非 >）
+    QTest::newRow("exactly-limit") << qint64(1000000000LL) << 1.0
+                                   << QStringLiteral("2026-11-14") << QString() << true;
+    QTest::newRow("above-limit") << qint64(1500000000LL) << 1.0
+                                 << QStringLiteral("2026-11-14") << QString() << true;
+
+    // 同周期已提醒过：不再重复
+    QTest::newRow("same-period-already-notified") << qint64(5000000000LL) << 1.0
+                                                  << QStringLiteral("2026-11-14")
+                                                  << QStringLiteral("2026-11-14") << false;
+
+    // 跨周期：昨天提醒过，今天应重新提醒
+    QTest::newRow("new-period-after-notified") << qint64(5000000000LL) << 1.0
+                                               << QStringLiteral("2026-11-15")
+                                               << QStringLiteral("2026-11-14") << true;
+
+    // 月周期键（yyyy-MM）：同月去重、跨月重置
+    QTest::newRow("month-same") << qint64(50000000000LL) << 20.0
+                                << QStringLiteral("2026-11") << QStringLiteral("2026-11") << false;
+    QTest::newRow("month-next") << qint64(50000000000LL) << 20.0
+                                << QStringLiteral("2026-12") << QStringLiteral("2026-11") << true;
+
+    // 小数阈值：1.5 GB = 1_500_000_000 字节
+    QTest::newRow("fractional-limit-hit") << qint64(1500000000LL) << 1.5
+                                          << QStringLiteral("2026-11-14") << QString() << true;
+    QTest::newRow("fractional-limit-miss") << qint64(1499999999LL) << 1.5
+                                           << QStringLiteral("2026-11-14") << QString() << false;
+}
+
+void NetworkMonitorAppletTest::testShouldNotifyQuota()
+{
+    QFETCH(qint64, usedBytes);
+    QFETCH(double, limitGb);
+    QFETCH(QString, currentPeriod);
+    QFETCH(QString, notifiedPeriod);
+    QFETCH(bool, expected);
+
+    QCOMPARE(NetworkMonitorApplet::shouldNotifyQuota(usedBytes, limitGb,
+                                                     currentPeriod, notifiedPeriod),
+             expected);
+}
+
+// 阈值设置：非法输入的归一化
+// 设计原因：QML 是文本输入框，用户可能键入负数或非法字符；若不收敛，
+// 脏值会被持久化，导致阈值永远大于已用量、提醒永不触发且无任何提示
+void NetworkMonitorAppletTest::testQuotaLimitSetting()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    // 默认关闭
+    QCOMPARE(applet->dailyLimitGb(), 0.0);
+    QCOMPARE(applet->monthlyLimitGb(), 0.0);
+
+    // 合法值
+    applet->setDailyLimitGb(1.5);
+    QCOMPARE(applet->dailyLimitGb(), 1.5);
+    applet->setMonthlyLimitGb(20.0);
+    QCOMPARE(applet->monthlyLimitGb(), 20.0);
+
+    // 负数与 0 一律归一为 0（关闭）
+    applet->setDailyLimitGb(-3.0);
+    QCOMPARE(applet->dailyLimitGb(), 0.0);
+    applet->setDailyLimitGb(5.0);
+    QCOMPARE(applet->dailyLimitGb(), 5.0);
+    applet->setDailyLimitGb(0.0);
+    QCOMPARE(applet->dailyLimitGb(), 0.0);
+
+    // NaN 与无穷大：按关闭处理，不能写进配置
+    applet->setMonthlyLimitGb(std::numeric_limits<double>::quiet_NaN());
+    QCOMPARE(applet->monthlyLimitGb(), 0.0);
+    applet->setMonthlyLimitGb(std::numeric_limits<double>::infinity());
+    QCOMPARE(applet->monthlyLimitGb(), 0.0);
+
     delete applet;
 }
 

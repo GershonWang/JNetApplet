@@ -105,6 +105,17 @@ class NetworkMonitorApplet : public DApplet
     // 用布尔属性把"当前是不是这个口径"的语义固定在后端一处
     Q_PROPERTY(bool speedUnitIsMbps READ speedUnitIsMbps NOTIFY speedUnitChanged)
     Q_PROPERTY(bool speedUnitIsKBps READ speedUnitIsKBps NOTIFY speedUnitChanged)
+    // 日流量提醒阈值（GB，十进制 1 GB = 1000³ 字节）；0 表示不提醒。
+    // 写值经 setDailyLimitGb() 校验：负数/NaN/无限大一律按 0 处理，不写脏值。
+    // 设计原因：运营商套餐以十进制 GB 计（1 GB 流量包 = 1000 MB），
+    // 若用二进制 GiB 会与套餐数字对不上，用户无法据此判断是否快超量
+    Q_PROPERTY(double dailyLimitGb READ dailyLimitGb WRITE setDailyLimitGb NOTIFY quotaLimitChanged)
+    // 月流量提醒阈值（GB），语义同 dailyLimitGb
+    Q_PROPERTY(double monthlyLimitGb READ monthlyLimitGb WRITE setMonthlyLimitGb NOTIFY quotaLimitChanged)
+    // 当前周期已用流量（字节），供设置窗口回显"今日已用/本月已用"，便于用户判断阈值该填多少。
+    // 与「流量统计」窗口顶部数字同口径（该周期下所有接口 rx+tx 之和）
+    Q_PROPERTY(double todayUsedBytes READ todayUsedBytes NOTIFY trafficLogChanged)
+    Q_PROPERTY(double monthUsedBytes READ monthUsedBytes NOTIFY trafficLogChanged)
     // 插件版本号，从 dde-shell 元数据读取，版本唯一源为 CMakeLists.txt project(VERSION)
     Q_PROPERTY(QString version READ version CONSTANT)
     // 任务栏网速数值字体颜色，空串表示跟随系统主题（由 QML 回退到 primaryText），
@@ -183,6 +194,19 @@ public:
     // 设置速度单位，仅接受 0/1/2；非法值忽略，变化后持久化并发射 speedUnitChanged
     void setSpeedUnit(int unit);
 
+    // ---- 流量提醒阈值 ----
+    // 返回日/月流量提醒阈值（GB），0 表示不提醒
+    double dailyLimitGb() const;
+    double monthlyLimitGb() const;
+    // 设置日/月流量阈值（GB）：负数、NaN、无穷大统一按 0（关闭）处理。
+    // 设计原因：QML 侧是文本输入框，用户可能输入 "-1"、空串或异常字符，
+    // 若不在此收敛，脏值会被持久化并在下次启动时参与换算，导致提醒永不触发
+    void setDailyLimitGb(double gb);
+    void setMonthlyLimitGb(double gb);
+    // 返回当前周期已用流量（字节），供设置窗口回显，便于用户判断阈值填多少合适
+    double todayUsedBytes() const;
+    double monthUsedBytes() const;
+
     // ---- 速度格式化（唯一定义处，QML 只消费不再各自实现换算）----
     // 返回带单位的完整速度字符串，如 "4.11 MB/s"、"33.70 Mbps"
     // 设计原因：单位换算若只写在 QML，将无法被单元测试覆盖；放到 C++ 后
@@ -247,6 +271,8 @@ signals:
     void activeSsidChanged();
     // 速度显示单位变化时通知 QML 更新
     void speedUnitChanged();
+    // 流量提醒阈值变化时通知 QML 回显
+    void quotaLimitChanged();
     void speedHistoryChanged();
     // 任务栏网速字体颜色变化时通知 QML 更新
     void textColorChanged();
@@ -339,6 +365,24 @@ private:
     void appendToTrafficLog(qint64 rxDelta, qint64 txDelta);
     // 裁剪超期记录：按日最多 30 天、按月最多 12 个月，超出删除最旧记录
     void pruneTrafficLog();
+
+    // ---- 流量超限提醒 ----
+    // 判定本次是否应当提醒（静态纯函数，便于单测覆盖边界与周期重置）。
+    // usedBytes：当前周期已用字节；limitGb：阈值（GB，<=0 表示关闭）；
+    // currentPeriod：当前周期键（"yyyy-MM-dd" 或 "yyyy-MM"）；
+    // notifiedPeriod：上一次已提醒的周期键（空串表示从未提醒）
+    static bool shouldNotifyQuota(qint64 usedBytes, double limitGb,
+                                  const QString &currentPeriod,
+                                  const QString &notifiedPeriod);
+    // 计算指定周期键下所有接口的 rx+tx 合计（纯函数，输入为流量日志 JSON）。
+    // 抽出来的原因：与「流量统计」窗口的周期合计口径必须一致（该周期下所有接口相加），
+    // 直接单测即可保证两处不会各算一套
+    static qint64 periodUsedBytes(const QJsonObject &trafficLog,
+                                  const QString &section, const QString &periodKey);
+    // 检查日/月阈值并在超限且本周期未提醒时发送系统通知（挂在 30 秒保存周期上）
+    void checkQuotaAndNotify();
+    // 发送系统通知：summary 为标题，body 为正文
+    void sendNotification(const QString &summary, const QString &body);
 
     QTimer *m_refreshTimer;
     QMap<QString, NetworkInterface> m_interfaces;
@@ -445,6 +489,15 @@ private:
     bool m_trafficLogWriteBlocked = false;
     // 按日记录最多保留 30 天、按月最多保留 12 个月，超出自动裁剪最旧记录
     static constexpr int MAX_DAY_ENTRIES = 30;
+
+    // ---- 流量超限提醒成员 ----
+    // 日/月提醒阈值（GB），0 表示不提醒
+    double m_dailyLimitGb = 0;
+    double m_monthlyLimitGb = 0;
+    // 已提醒过的周期键（"yyyy-MM-dd" / "yyyy-MM"），空串表示本周期尚未提醒。
+    // 必须持久化：否则重启 dde-shell 后同一周期会再提醒一次
+    QString m_notifiedDay;
+    QString m_notifiedMonth;
     static constexpr int MAX_MONTH_ENTRIES = 12;
 
     // ---- TCP 连接清单成员 ----
