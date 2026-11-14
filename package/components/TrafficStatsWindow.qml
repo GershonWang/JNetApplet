@@ -21,6 +21,7 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
+import QtQuick.Dialogs 1.3
 import "."
 
 WindowShell {
@@ -124,6 +125,69 @@ WindowShell {
         }
         root.periodHasData = periodCount > 0
         root.periodTotals = { rx: pRx, tx: pTx, total: pRx + pTx }
+    }
+
+    // ---- 导出 ----
+    // 导出结果提示：成功显示实际路径，失败显示原因；空串表示无提示
+    // 设计原因：文件对话框在部分环境（无 xdg-desktop-portal）弹不出来，
+    // 此时自动降级到下载目录，必须让用户知道文件到底写哪了
+    property string exportStatus: ""
+    // 提示自动消失计时器（毫秒）
+    property int exportStatusTimeout: 6000
+
+    // 当前页签对应的后端 section 键
+    readonly property string exportSection: root.currentTab === 0 ? "byDay" : "byMonth"
+    // 扩展名（对话框筛选依据）
+    readonly property string exportExtension: "csv"
+
+    // 执行导出到指定路径：把"取数据 + 写盘 + 显示结果"收敛到一处
+    // 设计原因：正常路径与降级路径都要走同一套提示逻辑，各写一遍必然漂移
+    function exportTo(path) {
+        if (!root.applet) {
+            root.exportStatus = qsTr("Export failed: plugin backend unavailable")
+            return
+        }
+        // 按扩展名决定 serialize 格式：CSV 用后端序列化，JSON 直接取结构化数据
+        var content = path.toLowerCase().endsWith(".json")
+                ? root.applet.exportTrafficAsJson(root.exportSection)
+                : root.applet.exportTrafficAsCsv(root.exportSection)
+        var result = root.applet.saveExportFile(path, content)
+        if (result && result.ok) {
+            root.exportStatus = qsTr("Exported to %1").arg(result.path)
+        } else {
+            root.exportStatus = qsTr("Export failed: %1")
+                    .arg(result && result.error ? result.error : qsTr("unknown error"))
+        }
+        exportStatusTimer.restart()
+    }
+
+    // 导出入口：由按钮调用。
+    // 设计原因：FileDialog 在没有 xdg-desktop-portal 的环境下打开后既不回调 accepted
+    // 也不回调 rejected（Qt 只打印一条告警），界面表现为"点击没反应"。
+    // 因此这里不假设对话框一定可用：若后端未就绪或本次导出无数据，直接给出明确提示；
+    // 否则弹出对话框。用户仍可右键按钮触发 exportToDefaultLocation() 走降级路径
+    function requestExport() {
+        if (!root.applet) {
+            root.exportStatus = qsTr("Export failed: plugin backend unavailable")
+            exportStatusTimer.restart()
+            return
+        }
+        // 无记录时没必要弹框：导出出去只有表头，用户会以为导出坏了
+        if (root.statsModel.length === 0) {
+            root.exportStatus = qsTr("Nothing to export for the current view")
+            exportStatusTimer.restart()
+            return
+        }
+        exportDialog.open()
+    }
+
+    // 兜底导出：对话框不可用时直接写到下载目录
+    function exportToDefaultLocation() {
+        if (!root.applet) {
+            root.exportStatus = qsTr("Export failed: plugin backend unavailable")
+            return
+        }
+        root.exportTo(root.applet.defaultExportPath(root.exportSection, root.exportExtension))
     }
 
     width: 620
@@ -236,6 +300,51 @@ WindowShell {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                // 导出按钮：把当前页签数据导出为 CSV/JSON。
+                // 放在周期说明左侧，与右侧文字同属"辅助操作"区，不抢表格焦点
+                Rectangle {
+                    id: exportButton
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Export")
+                    width: 64
+                    height: 24
+                    radius: 5
+                    color: exportMouse.pressed
+                           ? Qt.rgba(common.accentBlue.r, common.accentBlue.g, common.accentBlue.b, 0.22)
+                           : (exportMouse.containsMouse
+                              ? Qt.rgba(common.accentBlue.r, common.accentBlue.g, common.accentBlue.b, 0.12)
+                              : "transparent")
+                    border.width: 1
+                    border.color: exportMouse.containsMouse ? common.accentBlue : root.theme.lineColor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("Export")
+                        font.pixelSize: 11
+                        color: exportMouse.containsMouse ? common.accentBlue : root.theme.textSecondary
+                    }
+
+                    MouseArea {
+                        id: exportMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        // 无障碍：该按钮有降级路径，读屏用户也需要能触发
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("Export")
+                        onClicked: root.requestExport()
+                        // 右键 = 直接导出到下载目录。
+                        // 设计原因：无 xdg-desktop-portal 的环境里 FileDialog 打开后
+                        // 既不 accepted 也不 rejected，用户会以为"点了没反应"；
+                        // 留一条不依赖门户服务的固定路径，并立刻提示实际文件位置
+                        onPressed: {
+                            if (mouse.button === Qt.RightButton) {
+                                root.exportToDefaultLocation()
+                            }
+                        }
+                    }
+                }
 
                 // 右侧周期说明：只报当前周期（今日/本月）合计，与表格的"全部记录"口径区分
                 // 无记录时显示 "—"；文案与数值同源，不再出现"文案说今日、数字是全部"的误导
@@ -452,6 +561,92 @@ WindowShell {
                 }
                 Item { Layout.fillWidth: true }
             }
+
+
+    // 导出结果提示条：浮在内容区底部，仅在有结果时显示。
+    // 设计原因：用窗口级浮层而非插入 ColumnLayout——
+    // 插入布局会改变表格与汇总行的间距，而提示是临时状态，不该占位。
+    // 对话框可能降级到下载目录，用户必须能看到文件到底写到了哪里
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 12
+        visible: root.exportStatus.length > 0
+        height: exportStatusText.implicitHeight + 16
+        radius: 6
+        color: root.isDarkMode ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)
+        border.width: 1
+        border.color: root.theme.lineColor
+
+        Text {
+            id: exportStatusText
+            anchors.fill: parent
+            anchors.margins: 8
+            text: root.exportStatus
+            font.pixelSize: 11
+            color: root.theme.textSecondary
+            wrapMode: Text.Wrap
+            elide: Text.ElideMiddle
+            verticalAlignment: Text.AlignVCenter
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            // 点一下即可收起提示，无需等自动消失
+            onClicked: root.exportStatus = ""
+        }
+    }
+
+    // 导出文件对话框：用户自选保存路径。
+    // 设计原因：用 QtQuick.Dialogs 的 FileDialog 而非自建路径输入框——
+    // 它能调用系统原生对话框，用户可浏览目录、看到已有文件，这是桌面应用的既有习惯。
+    // 该模块依赖 xdg-desktop-portal：精简环境下可能弹不出来，故 onRejected 与
+    // 打开失败都会走 exportToDefaultLocation() 兜底
+    FileDialog {
+        id: exportDialog
+        title: root.currentTab === 0 ? qsTr("Export daily traffic") : qsTr("Export monthly traffic")
+        // 属性与信号按 Qt 官方元对象 plugins.qmltypes 核实（qmllint 无法解析该模块，
+        // 其"属性不存在"告警不可信，故以元对象为准）：
+        //   QQuickFileDialog 提供 currentFolder / selectedFile / fileMode /
+        //   defaultSuffix / nameFilters，**没有** folder 与 fileUrl；
+        //   accepted 信号不带参数，选定路径从 selectedFile（QUrl）读
+        // 初始目录：用后端算好的降级路径所在目录（下载目录），
+        // 不引 Qt.labs.platform 的 shortcuts 单例——本文件只导入 QtQuick.Dialogs，
+        // 跨模块用 shortcuts 会在运行时找不到符号
+        currentFolder: {
+            if (!root.applet) return "file:///"
+            var p = root.applet.defaultExportPath(root.exportSection, root.exportExtension)
+            var dir = p.substring(0, p.lastIndexOf('/'))
+            return "file://" + encodeURIComponent(dir).replace(/%2F/g, "/")
+        }
+        fileMode: FileDialog.SaveFile
+        // 默认文件名带范围与周期，避免重复导出时互相覆盖
+        defaultSuffix: root.exportExtension
+        nameFilters: [qsTr("CSV file (*.csv)"), qsTr("JSON file (*.json)"), qsTr("All files (*)")]
+        // accepted 信号不带参数：选定路径要从 selectedFile 读（它是 file:// URL）
+        onAccepted: {
+            // accepted 不带参数：选定路径从 selectedFile（QUrl）读
+            var path = selectedFile ? selectedFile.toString() : ""
+            // URL → 本地路径。decodeURIComponent 必须做：中文目录名（如「下载」）
+            // 在 URL 里是百分号编码的，不解码会写出名为 "%E4%B8%8B%E8%BD%BD" 的目录
+            if (path.indexOf("file://") === 0) {
+                path = decodeURIComponent(path.substring(7))
+            }
+            root.exportTo(path)
+        }
+        // 用户取消：清掉旧提示，不写文件
+        onRejected: root.exportStatus = ""
+    }
+
+
+
+    // 导出结果提示自动消失
+    Timer {
+        id: exportStatusTimer
+        interval: root.exportStatusTimeout
+        onTriggered: root.exportStatus = ""
+    }
 
     // 数据刷新：C++ 每 30 秒保存并发射 trafficLogChanged，据此重建表格；
     // 接口切换不影响日志（日志按活动接口累计，切接口后数据仍完整）
