@@ -14,8 +14,20 @@
 // requestPaint。箭头颜色要跟随主题与用户自定义配色变化，若用 Canvas 需逐处维护
 // 重绘时机；Shape 的 fillColor 是普通属性，颜色变化自动重绘。
 //
-// 使用方式：
-//     ArrowIcon { width: 10; height: 10; downward: true; color: popup.accentBlue }
+// 尺寸契约（重要，曾因此回归过一次）：
+//   调用方传的 width/height 应等于**原字符的 font.pixelSize**，视觉尺寸由本组件负责换算。
+//   字符的字形并不占满 em 框——符号类字形高约占字号 70%、宽约占 45%。
+//   因此本组件的路径只占画框中间约 70%×46%，四周留白，使矢量图标与原字符同尺寸。
+//   第一版把路径画满整个画框（高 92%、宽 67%），结果任务栏箭头比数字还高、
+//   杆子显得粗重，是调用方无法靠调 width 修正的组件契约缺陷。
+//
+// 使用方式（width/height 直接填字号档位即可）：
+//     ArrowIcon {
+//         width: common.fontSizeBody
+//         height: common.fontSizeBody
+//         downward: true
+//         color: popup.accentBlue
+//     }
 import QtQuick 2.15
 import QtQuick.Shapes 1.15
 
@@ -27,34 +39,36 @@ Item {
     // 填充色：跟随调用方的主题/配色，由调用方传入
     property color color: "#000000"
 
-    // 固定 12:12 的正方形绘制区，窄长比例由 width/height 决定；
-    // Shape 会把路径坐标等比缩放到本项尺寸，故只写逻辑坐标即可
+    // 逻辑画框：路径按 24×24 编写，Shape 会等比缩放到本项实际尺寸
     implicitWidth: 24
     implicitHeight: 24
 
     Shape {
         anchors.fill: parent
-        // 作为纯色填充图形，不需要抗锯齿之外的任何特效；
-        // 关闭 clip 以避免极窄尺寸下的边缘裁切
-        layer.enabled: false
 
         ShapePath {
             strokeWidth: 0
             fillColor: control.color
-            // 起点与后续点由箭头方向决定，坐标在 24×24 逻辑坐标系内。
-            // 形状构成：三角头 + 短竖杆。头部占 11/24 高度、杆占 11/24，
-            // 宽度上头部 8~20（12 宽）、杆 9~15（6 宽）。
-            // 这类比例是视觉调参结果：头部过大会显得笨重，过小则在高 DPI 下辨认不清
-            startX: control.downward ? 12 : 12
-            startY: control.downward ? 24 : 0
 
-            PathLine { x: 4;  y: control.downward ? 13 : 11 }
-            PathLine { x: 9;  y: control.downward ? 13 : 11 }
-            PathLine { x: 9;  y: control.downward ? 2 : 22 }
-            PathLine { x: 15; y: control.downward ? 2 : 22 }
-            PathLine { x: 15; y: control.downward ? 13 : 11 }
-            PathLine { x: 20; y: control.downward ? 13 : 11 }
-            PathLine { x: 12; y: control.downward ? 24 : 0 }
+            // 以下坐标在 24×24 逻辑画框内，且**不占满画框**（见文件头"尺寸契约"）。
+            // 实测占比：高 17/24 = 0.708、宽 11/24 = 0.458，
+            // 与符号字形 0.70/0.45 的经验比例对齐。
+            // 形状构成：三角头（占一半高度）+ 短竖杆（占另一半）。
+            startX: 12
+            startY: control.downward ? 20.5 : 3.5
+
+            // 头部左/右翼：y=12 为头与杆的分界（画框垂直中心）
+            PathLine { x: 6.5; y: 12 }
+            // 杆左侧上行到另一端
+            PathLine { x: 10.25; y: control.downward ? 3.5 : 20.5 }
+            // 杆右端
+            PathLine { x: 13.75; y: control.downward ? 3.5 : 20.5 }
+            // 杆右侧回到分界
+            PathLine { x: 13.75; y: 12 }
+            // 头部右翼
+            PathLine { x: 17.5; y: 12 }
+            // 闭合回尖端
+            PathLine { x: 12; y: control.downward ? 20.5 : 3.5 }
         }
     }
 }
