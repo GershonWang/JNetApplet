@@ -50,6 +50,8 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
     , m_refreshInterval(1000)
     , m_tcpConnections(0)
     , m_wifiSignal(0)
+    , m_activeSsid()
+    , m_speedUnit(SpeedUnitAuto)
     , m_linkDown(false)
     , m_lowFreqCounter(4)
     , m_ipDetectCounter(4)
@@ -84,6 +86,15 @@ NetworkMonitorApplet::NetworkMonitorApplet(QObject *parent)
         const int iv = settings.value(QStringLiteral("refreshInterval")).toInt();
         if (iv == 1000 || iv == 2000 || iv == 5000) {
             m_refreshInterval = iv;
+        }
+    }
+
+    // 从配置文件读取持久化的速度显示单位，仅接受三档合法值；
+    // 配置被手工改坏时保持默认的"智能自动"，不写入脏值
+    if (settings.contains(QStringLiteral("speedUnit"))) {
+        const int unit = settings.value(QStringLiteral("speedUnit")).toInt();
+        if (unit == SpeedUnitAuto || unit == SpeedUnitKBps || unit == SpeedUnitMbps) {
+            m_speedUnit = unit;
         }
     }
 }
@@ -363,6 +374,117 @@ QString NetworkMonitorApplet::textColor() const
     return m_textColor;
 }
 
+// 返回活动接口的 WiFi 名称（SSID），非无线或未连接时为空串
+QString NetworkMonitorApplet::activeSsid() const
+{
+    return m_activeSsid;
+}
+
+// 返回当前速度单位（0=智能自动，1=固定 KB/s，2=固定 Mbps）
+int NetworkMonitorApplet::speedUnit() const
+{
+    return m_speedUnit;
+}
+
+// 语义化判据：当前是否固定 Mbps。供 QML 使用，避免界面代码里写 `=== 2` 这类魔法数字
+bool NetworkMonitorApplet::speedUnitIsMbps() const
+{
+    return m_speedUnit == SpeedUnitMbps;
+}
+
+// 语义化判据：当前是否固定 KB/s
+bool NetworkMonitorApplet::speedUnitIsKBps() const
+{
+    return m_speedUnit == SpeedUnitKBps;
+}
+
+// 设置速度单位：仅接受 0/1/2
+// 设计原因：与 setRefreshInterval() 同一套校验-持久化-通知流程，
+// 非法值静默忽略（例如配置文件被手工改坏），避免把脏值写回配置
+void NetworkMonitorApplet::setSpeedUnit(int unit)
+{
+    if (unit != SpeedUnitAuto && unit != SpeedUnitKBps && unit != SpeedUnitMbps) {
+        return;
+    }
+    if (m_speedUnit == unit) {
+        return;
+    }
+    m_speedUnit = unit;
+    persistSetting(QStringLiteral("speedUnit"), m_speedUnit);
+    emit speedUnitChanged();
+}
+
+// 带单位的完整速度字符串，供弹窗、趋势图与悬停提示使用
+// 换算规则是全局唯一定义处，QML 侧不再各自实现 KB/MB/GB 阈值
+QString NetworkMonitorApplet::formatSpeed(double bytesPerSec, int unit) const
+{
+    // 负值/NaN 一律按 0 显示：上游已做负值钳制，这里是防御性兜底，
+    // 避免异常值在界面上显示成 "-1.00 KB/s"
+    if (!(bytesPerSec > 0)) {
+        bytesPerSec = 0;
+    }
+
+    if (unit == SpeedUnitMbps) {
+        // 字节/秒 → 兆比特/秒：×8 得比特，再除以 1e6（十进制，与运营商口径一致）
+        const double mbps = bytesPerSec * 8.0 / 1000000.0;
+        return QStringLiteral("%1 Mbps").arg(mbps, 0, 'f', 2);
+    }
+    if (unit == SpeedUnitKBps) {
+        // 固定千字节每秒：不做自适应换挡，数值可能很大（如 12345.67 KB/s），
+        // 但这是用户显式选择的口径，不应擅自改成 MB/s
+        return QStringLiteral("%1 KB/s").arg(bytesPerSec / 1024.0, 0, 'f', 2);
+    }
+
+    // 智能自动：沿用既有的二进制阶梯与两位小数，保持与历史版本一致的观感
+    if (bytesPerSec < 1024.0 * 1024.0) {
+        return QStringLiteral("%1 KB/s").arg(bytesPerSec / 1024.0, 0, 'f', 2);
+    }
+    if (bytesPerSec < 1024.0 * 1024.0 * 1024.0) {
+        return QStringLiteral("%1 MB/s").arg(bytesPerSec / (1024.0 * 1024.0), 0, 'f', 2);
+    }
+    return QStringLiteral("%1 GB/s").arg(bytesPerSec / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
+}
+
+// 任务栏用的紧凑写法（无空格）
+// 设计原因：任务栏宽度只有约 48px，带空格的 "4.11 MB/s" 放不下；
+// 同时任务栏采用"整数部分右对齐 + 小数部分左对齐"的两段式渲染实现小数点对齐，
+// 故 intPart 为 true 时只返回数值部分，由 QML 分别渲染两段
+QString NetworkMonitorApplet::formatSpeedCompact(double bytesPerSec, int unit, bool intPart) const
+{
+    if (!(bytesPerSec > 0)) {
+        bytesPerSec = 0;
+    }
+
+    QString value;
+    QString suffix;
+
+    if (unit == SpeedUnitMbps) {
+        // 固定 Mbps 采用两位小数（用户选定口径），如 "0.85Mbps"、"100.00Mbps"
+        value = QString::number(bytesPerSec * 8.0 / 1000000.0, 'f', 2);
+        suffix = QStringLiteral("Mbps");
+    } else if (unit == SpeedUnitKBps) {
+        value = QString::number(bytesPerSec / 1024.0, 'f', 2);
+        suffix = QStringLiteral("K");
+    } else {
+        // 智能自动：与完整显示保持一致的三级换挡，但单位缩写为单个字母
+        if (bytesPerSec < 1024.0 * 1024.0) {
+            value = QString::number(bytesPerSec / 1024.0, 'f', 2);
+            suffix = QStringLiteral("K");
+        } else if (bytesPerSec < 1024.0 * 1024.0 * 1024.0) {
+            value = QString::number(bytesPerSec / (1024.0 * 1024.0), 'f', 2);
+            suffix = QStringLiteral("M");
+        } else {
+            value = QString::number(bytesPerSec / (1024.0 * 1024.0 * 1024.0), 'f', 2);
+            suffix = QStringLiteral("G");
+        }
+    }
+
+    if (intPart) {
+        return value;
+    }
+    return value + suffix;
+}
+
 // 设置任务栏网速字体颜色，空串表示跟随系统主题
 // 设计原因：
 //   - 空串语义：空串作为"跟随系统"的语义值，QML 层用 textColor ? textColor : primaryText 做回退，
@@ -512,6 +634,9 @@ void NetworkMonitorApplet::applyActiveInterface(const QString &interface, bool p
         m_wifiSignal = 0;
         emit wifiSignalChanged();
     }
+    // WiFi 名称属于上一接口的观测结果，切换后立即清空再重测，
+    // 避免"新接口名 + 旧 WiFi 名"的错配
+    setActiveSsid(QString());
 
     // 仅在用户显式选择时持久化；自动回退（网卡拔出）不覆盖用户保存的选择，
     // 否则原网卡插回后无法自动恢复
@@ -901,18 +1026,23 @@ void NetworkMonitorApplet::updateLinkSpeed()
 {
     if (m_activeInterface.isEmpty()) {
         setLinkSpeed(0);
+        setActiveSsid(QString());
         return;
     }
 
     const int sysSpeed = readSysfsLinkSpeed(m_activeInterface);
     if (sysSpeed >= 0) {
         setLinkSpeed(sysSpeed);
+        // 有线接口能直接从 sysfs 读到速率，不会走 iw 分支；
+        // 此处必须清掉 SSID，否则从无线切到有线后会继续显示上一个 WiFi 名称
+        setActiveSsid(QString());
         return;
     }
 
     // 非无线接口直接判为不可用（判定统一走 isWirelessInterface，不再就地硬编码前缀）
     if (!isWirelessInterface(m_activeInterface)) {
         setLinkSpeed(0);
+        setActiveSsid(QString());
         return;
     }
 
@@ -937,9 +1067,11 @@ void NetworkMonitorApplet::updateLinkSpeed()
             return;
         }
         m_iwPending = false;
-        // 与同步实现保持一致：iw 不可用时速率视为不可用（0）
+        // 与同步实现保持一致：iw 不可用时速率视为不可用（0）；
+        // SSID 同样无从得知，一并清空，避免 QML 继续显示上一次的 WiFi 名称
         if (m_activeInterface == iface) {
             setLinkSpeed(0);
+            setActiveSsid(QString());
         }
         proc->deleteLater();
     });
@@ -947,8 +1079,12 @@ void NetworkMonitorApplet::updateLinkSpeed()
         m_iwPending = false;
         // 期间用户可能已切换接口，此时结果对当前接口已无意义，直接丢弃
         if (m_activeInterface == iface) {
-            const int br = parseIwBitrate(QString::fromUtf8(proc->readAllStandardOutput()));
+            // 同一份输出同时产出 bitrate 与 SSID：两者都只在这里解析，
+            // 避免为拿 SSID 再启动一次 iw 子进程
+            const QString output = QString::fromUtf8(proc->readAllStandardOutput());
+            const int br = parseIwBitrate(output);
             setLinkSpeed(br > 0 ? br : 0);
+            setActiveSsid(parseIwSsid(output));
         }
         proc->deleteLater();
     });
@@ -1064,6 +1200,42 @@ void NetworkMonitorApplet::setLinkDown(bool down)
     }
     m_linkDown = down;
     emit linkDownChanged();
+}
+
+// 解析 `iw dev <iface> link` 输出中的 SSID
+// 该输出与 bitrate 来自同一次子进程调用，因此获取 SSID 不增加任何额外开销。
+// 真实输出中 SSID 行为 "\tSSID: Home"；接口未连接时整段输出只有
+// "Not connected."（有时附带 "Not connected (Reason: ...)"），此时返回空串，
+// 由 QML 回退显示接口名。
+// 边界处理依据：
+//   1. SSID 允许包含空格（如 "My Home WiFi"），故只剥离行首的 "SSID:" 前缀与
+//      两侧空白，不对内容再做切分；SSID 也可能是中文，按原样返回。
+//   2. 必须**逐行**匹配，不能用多行正则：`SSID:` 后为空时（"SSID: \n\tfreq: 5180"）
+//      多行的 \s* 会吃掉换行符，把下一行的 "freq: 5180" 当成 SSID 返回。
+//      该场景已被单元测试 testParseIwSsid(ssid-empty-value) 固定住
+QString NetworkMonitorApplet::parseIwSsid(const QString &output)
+{
+    static const QRegularExpression re(QStringLiteral("^\\s*SSID:\\s*(.*)$"));
+    const QStringList lines = output.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        const QRegularExpressionMatch m = re.match(line.trimmed());
+        if (m.hasMatch()) {
+            // SSID 为空视为未连接（返回空串），与"无 SSID 行"同样交由调用方回退
+            const QString ssid = m.captured(1).trimmed();
+            return ssid.isEmpty() ? QString() : ssid;
+        }
+    }
+    return QString();
+}
+
+// 更新 WiFi 名称缓存，仅在值变化时发射 activeSsidChanged，避免 QML 无效重绘
+void NetworkMonitorApplet::setActiveSsid(const QString &ssid)
+{
+    if (m_activeSsid == ssid) {
+        return;
+    }
+    m_activeSsid = ssid;
+    emit activeSsidChanged();
 }
 
 // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0

@@ -116,6 +116,19 @@ private slots:
     void testParseIwBitrate_data();
     void testParseIwBitrate();
 
+    // iw SSID 解析：正常 SSID、含空格与中文、未连接、无 SSID 行
+    void testParseIwSsid_data();
+    void testParseIwSsid();
+
+    // 速度格式化：三档单位 × 多量级，以及任务栏紧凑写法
+    void testFormatSpeed_data();
+    void testFormatSpeed();
+    void testFormatSpeedCompact_data();
+    void testFormatSpeedCompact();
+
+    // 速度单位的读写、非法值忽略与持久化
+    void testSpeedUnitSetting();
+
     // 流量日志：当日/当月累加与按接口分桶
     void testAppendToTrafficLog();
     // 流量日志：超期裁剪（按日 30 条、按月 12 条）
@@ -522,6 +535,174 @@ void NetworkMonitorAppletTest::testParseIwBitrate()
     QFETCH(QString, output);
     QFETCH(int, expected);
     QCOMPARE(applet->parseIwBitrate(output), expected);
+    delete applet;
+}
+
+// iw SSID 解析真值表
+// 设计原因：SSID 直接展示给用户，解析错会显示成 "SSID: Home" 这类带前缀的脏值；
+// 而未连接时若误判为空以外的内容，会让 QML 的"回退接口名"逻辑失效
+void NetworkMonitorAppletTest::testParseIwSsid_data()
+{
+    QTest::addColumn<QString>("output");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("empty") << QString() << QString();
+    // 未连接：iw 只输出 "Not connected."
+    QTest::newRow("not-connected")
+        << QStringLiteral("Not connected.") << QString();
+    QTest::newRow("not-connected-with-reason")
+        << QStringLiteral("Not connected (Reason: 3)") << QString();
+
+    // 真机实测输出：SSID 行带制表符缩进
+    QTest::newRow("real-iw-output")
+        << QStringLiteral("Connected to 8c:de:f9:xx:xx:xx (on wlo1)\n"
+                          "\tSSID: Home\n"
+                          "\tfreq: 5180\n"
+                          "\tsignal: -52 dBm\n"
+                          "\ttx bitrate: 866.7 MBit/s VHT-MCS 9 80MHz short GI VHT-NSS 2")
+        << QStringLiteral("Home");
+
+    // SSID 含空格：不能只取第一个词
+    QTest::newRow("ssid-with-spaces")
+        << QStringLiteral("\tSSID: My Home WiFi 5G\n\tfreq: 5180") << QStringLiteral("My Home WiFi 5G");
+    // 中文 SSID
+    QTest::newRow("ssid-chinese")
+        << QStringLiteral("\tSSID: 我家网络\n\tfreq: 2412") << QStringLiteral("我家网络");
+    // 无缩进
+    QTest::newRow("no-indent")
+        << QStringLiteral("SSID: Office") << QStringLiteral("Office");
+    // 只有 "SSID:" 没有内容：视为未连接，不能返回 "SSID:"
+    QTest::newRow("ssid-empty-value")
+        << QStringLiteral("\tSSID: \n\tfreq: 5180") << QString();
+}
+
+void NetworkMonitorAppletTest::testParseIwSsid()
+{
+    QFETCH(QString, output);
+    QFETCH(QString, expected);
+    QCOMPARE(NetworkMonitorApplet::parseIwSsid(output), expected);
+}
+
+// 速度格式化真值表：三档单位 × 多量级
+// 设计原因：单位换算从 QML 移到 C++ 的唯一目的就是能被测试覆盖。
+// 这里固定住"智能自动的三级换挡边界""KB/s 不做换挡""Mbps 按十进制 ×8/1e6"
+// 三条规则，避免日后改动把 1 MB/s 算成 8.39 Mbps 之类的偏差带进界面
+void NetworkMonitorAppletTest::testFormatSpeed_data()
+{
+    QTest::addColumn<double>("bytes");
+    QTest::addColumn<int>("unit");
+    QTest::addColumn<QString>("expected");
+
+    // ---- 智能自动（默认）----
+    // 0 与负值都显示 0 KB/s，不能出现负号
+    QTest::newRow("auto-zero") << 0.0 << 0 << QStringLiteral("0.00 KB/s");
+    QTest::newRow("auto-negative") << -1024.0 << 0 << QStringLiteral("0.00 KB/s");
+    QTest::newRow("auto-512B") << 512.0 << 0 << QStringLiteral("0.50 KB/s");
+    QTest::newRow("auto-1K") << 1024.0 << 0 << QStringLiteral("1.00 KB/s");
+    // 边界：刚好 1 MB 应换到 MB/s
+    QTest::newRow("auto-1M") << 1048576.0 << 0 << QStringLiteral("1.00 MB/s");
+    QTest::newRow("auto-4M11") << 4308992.0 << 0 << QStringLiteral("4.11 MB/s");
+    // 边界：刚好 1 GB 应换到 GB/s
+    QTest::newRow("auto-1G") << 1073741824.0 << 0 << QStringLiteral("1.00 GB/s");
+
+    // ---- 固定 KB/s：不做任何换挡 ----
+    QTest::newRow("kbps-1K") << 1024.0 << 1 << QStringLiteral("1.00 KB/s");
+    // 10 MB 仍是 10240.00 KB/s，而不是 10.00 MB/s
+    QTest::newRow("kbps-10M") << 10485760.0 << 1 << QStringLiteral("10240.00 KB/s");
+
+    // ---- 固定 Mbps：十进制，bytes×8/1e6 ----
+    // 125000 B/s = 1 Mbps
+    QTest::newRow("mbps-1") << 125000.0 << 2 << QStringLiteral("1.00 Mbps");
+    // 1 MB/s（1048576 B/s）≈ 8.39 Mbps（1024 与 1000 的差异，属预期口径）
+    QTest::newRow("mbps-1MBps") << 1048576.0 << 2 << QStringLiteral("8.39 Mbps");
+    // 100 Mbps 宽带满速 = 12.5 MB/s
+    QTest::newRow("mbps-100") << 12500000.0 << 2 << QStringLiteral("100.00 Mbps");
+    QTest::newRow("mbps-zero") << 0.0 << 2 << QStringLiteral("0.00 Mbps");
+}
+
+void NetworkMonitorAppletTest::testFormatSpeed()
+{
+    NetworkMonitorApplet *applet = createApplet();
+    QFETCH(double, bytes);
+    QFETCH(int, unit);
+    QFETCH(QString, expected);
+    QCOMPARE(applet->formatSpeed(bytes, unit), expected);
+    delete applet;
+}
+
+// 任务栏紧凑写法真值表
+// 设计原因：任务栏宽度有限，且采用"整数部分 + 小数部分"两段式渲染做小数点对齐，
+// 因此 intPart 两种取值的输出都必须逐字固定，否则切换单位时对齐会错位
+void NetworkMonitorAppletTest::testFormatSpeedCompact_data()
+{
+    QTest::addColumn<double>("bytes");
+    QTest::addColumn<int>("unit");
+    QTest::addColumn<bool>("intPart");
+    QTest::addColumn<QString>("expected");
+
+    // 智能自动：三位换挡，单位缩写为单字母
+    QTest::newRow("auto-K-int") << 198727.0 << 0 << true << QStringLiteral("194.07");
+    QTest::newRow("auto-K-full") << 198727.0 << 0 << false << QStringLiteral("194.07K");
+    QTest::newRow("auto-M-full") << 4308992.0 << 0 << false << QStringLiteral("4.11M");
+    QTest::newRow("auto-G-full") << 1073741824.0 << 0 << false << QStringLiteral("1.00G");
+    QTest::newRow("auto-zero") << 0.0 << 0 << false << QStringLiteral("0.00K");
+
+    // 固定 KB/s：任务栏用 K 后缀（与智能自动保持同一视觉密度）
+    QTest::newRow("kbps-full") << 198727.0 << 1 << false << QStringLiteral("194.07K");
+    QTest::newRow("kbps-10M") << 10485760.0 << 1 << false << QStringLiteral("10240.00K");
+
+    // 固定 Mbps：用户选定保留两位小数
+    QTest::newRow("mbps-full") << 125000.0 << 2 << false << QStringLiteral("1.00Mbps");
+    QTest::newRow("mbps-100") << 12500000.0 << 2 << false << QStringLiteral("100.00Mbps");
+    QTest::newRow("mbps-int-part") << 100000.0 << 2 << true << QStringLiteral("0.80");
+    QTest::newRow("mbps-zero") << 0.0 << 2 << false << QStringLiteral("0.00Mbps");
+}
+
+void NetworkMonitorAppletTest::testFormatSpeedCompact()
+{
+    NetworkMonitorApplet *applet = createApplet();
+    QFETCH(double, bytes);
+    QFETCH(int, unit);
+    QFETCH(bool, intPart);
+    QFETCH(QString, expected);
+    QCOMPARE(applet->formatSpeedCompact(bytes, unit, intPart), expected);
+    delete applet;
+}
+
+// 速度单位的读写、非法值忽略与持久化
+void NetworkMonitorAppletTest::testSpeedUnitSetting()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    // 默认智能自动
+    QCOMPARE(applet->speedUnit(), NetworkMonitorApplet::SpeedUnitAuto);
+
+    // 合法值生效
+    applet->setSpeedUnit(NetworkMonitorApplet::SpeedUnitMbps);
+    QCOMPARE(applet->speedUnit(), NetworkMonitorApplet::SpeedUnitMbps);
+    applet->setSpeedUnit(NetworkMonitorApplet::SpeedUnitKBps);
+    QCOMPARE(applet->speedUnit(), NetworkMonitorApplet::SpeedUnitKBps);
+
+    // 非法值被忽略，且不会把当前值改坏
+    applet->setSpeedUnit(99);
+    QCOMPARE(applet->speedUnit(), NetworkMonitorApplet::SpeedUnitKBps);
+    applet->setSpeedUnit(-1);
+    QCOMPARE(applet->speedUnit(), NetworkMonitorApplet::SpeedUnitKBps);
+
+    // 语义化判据必须与枚举值保持一致：QML 用它们替代 `=== 1` / `=== 2` 的魔法数字，
+    // 一旦两者脱节，界面会显示与设置不符的单位且不报错
+    applet->setSpeedUnit(NetworkMonitorApplet::SpeedUnitMbps);
+    QVERIFY(applet->speedUnitIsMbps());
+    QVERIFY(!applet->speedUnitIsKBps());
+
+    applet->setSpeedUnit(NetworkMonitorApplet::SpeedUnitKBps);
+    QVERIFY(!applet->speedUnitIsMbps());
+    QVERIFY(applet->speedUnitIsKBps());
+
+    applet->setSpeedUnit(NetworkMonitorApplet::SpeedUnitAuto);
+    QVERIFY(!applet->speedUnitIsMbps());
+    QVERIFY(!applet->speedUnitIsKBps());
+
     delete applet;
 }
 

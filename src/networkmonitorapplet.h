@@ -88,6 +88,23 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(int tcpConnections READ tcpConnections NOTIFY tcpConnectionsChanged)
     // 活动接口的 WiFi 信号强度（dBm，负值如 -65），非无线接口或不可用时为 0
     Q_PROPERTY(int wifiSignal READ wifiSignal NOTIFY wifiSignalChanged)
+    // 活动接口连接到的 WiFi 名称（SSID），非无线或未连接时为空串。
+    // 设计原因：任务栏提示与弹窗原显示接口名 wlo1/eno1，这类名字由内核按 PCI 位置生成，
+    // 用户无法据此判断"连的是哪个 WiFi"。SSID 与链路速率来自同一次 `iw dev link` 调用，
+    // 不新增子进程与定时器。QML 侧经 NetCommon.displayName() 做"有 SSID 用 SSID、
+    // 否则回退接口名"的统一处理，避免各处各写一套回退逻辑
+    Q_PROPERTY(QString activeSsid READ activeSsid NOTIFY activeSsidChanged)
+    // 速度显示单位：0=智能自动（B/s→KB/s→MB/s→GB/s），1=固定 KB/s，2=固定 Mbps
+    // 写值经 setSpeedUnit() 校验，非法值忽略；变化后持久化到 settings.ini 并即时生效。
+    // 设计原因：二进制单位（KB/s）与运营商/测速工具的十进制 Mbps 相差约 8 倍，
+    // 用户拿插件数值与宽带套餐比对时会对不上，故提供可选项
+    Q_PROPERTY(int speedUnit READ speedUnit WRITE setSpeedUnit NOTIFY speedUnitChanged)
+    // 语义化的单位判据，供 QML 直接使用，避免在界面代码里写 `=== 1` / `=== 2` 这类魔法数字。
+    // 设计原因：QML 里若按整数比较，日后再加一档单位或调整取值顺序时，
+    // 散落各处的数字比较会静默失配（表现为"设置不生效"且不报错）；
+    // 用布尔属性把"当前是不是这个口径"的语义固定在后端一处
+    Q_PROPERTY(bool speedUnitIsMbps READ speedUnitIsMbps NOTIFY speedUnitChanged)
+    Q_PROPERTY(bool speedUnitIsKBps READ speedUnitIsKBps NOTIFY speedUnitChanged)
     // 插件版本号，从 dde-shell 元数据读取，版本唯一源为 CMakeLists.txt project(VERSION)
     Q_PROPERTY(QString version READ version CONSTANT)
     // 任务栏网速数值字体颜色，空串表示跟随系统主题（由 QML 回退到 primaryText），
@@ -113,6 +130,13 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(QVariantList tcpConnectionList READ tcpConnectionList NOTIFY tcpConnectionListChanged)
 
 public:
+    // 速度显示单位取值（与 Q_PROPERTY speedUnit 对应）
+    // 用常量而非 enum class 的原因：QML 侧直接传 int，且需与配置文件中的整数互转，
+    // 保留为 int 可省去元类型注册；命名常量保证 C++ 侧不出现魔法数字
+    static constexpr int SpeedUnitAuto = 0;   // 智能自动：B/s → KB/s → MB/s → GB/s
+    static constexpr int SpeedUnitKBps = 1;   // 固定千字节每秒（二进制）
+    static constexpr int SpeedUnitMbps = 2;   // 固定兆比特每秒（十进制，运营商口径）
+
     explicit NetworkMonitorApplet(QObject *parent = nullptr);
     ~NetworkMonitorApplet();
 
@@ -149,6 +173,24 @@ public:
     int tcpConnections() const;
     // 返回活动接口的 WiFi 信号强度（dBm），0 表示不可用
     int wifiSignal() const;
+    // 返回活动接口的 WiFi 名称（SSID），非无线或未连接时为空串
+    QString activeSsid() const;
+    // 返回当前速度单位（0=智能自动，1=固定 KB/s，2=固定 Mbps）
+    int speedUnit() const;
+    // 当前是否固定 Mbps / 固定 KB/s（QML 语义化判据，避免魔法数字）
+    bool speedUnitIsMbps() const;
+    bool speedUnitIsKBps() const;
+    // 设置速度单位，仅接受 0/1/2；非法值忽略，变化后持久化并发射 speedUnitChanged
+    void setSpeedUnit(int unit);
+
+    // ---- 速度格式化（唯一定义处，QML 只消费不再各自实现换算）----
+    // 返回带单位的完整速度字符串，如 "4.11 MB/s"、"33.70 Mbps"
+    // 设计原因：单位换算若只写在 QML，将无法被单元测试覆盖；放到 C++ 后
+    // 换算规则只有一份，且能被 tests/ 下的用例真实执行验证
+    Q_INVOKABLE QString formatSpeed(double bytesPerSec, int unit) const;
+    // 返回任务栏用的紧凑写法（无空格），如 "194.07K"、"0.85Mbps"
+    // intPart 为 true 时只返回数值部分（不含单位），用于小数点对齐的两段式渲染
+    Q_INVOKABLE QString formatSpeedCompact(double bytesPerSec, int unit, bool intPart) const;
     // 返回当前活动接口的下行速度历史（QPointF 列表），供 QML 趋势图绘制
     QVariantList speedHistoryDownload() const;
     // 返回当前活动接口的上行速度历史（QPointF 列表），供 QML 趋势图绘制
@@ -201,6 +243,10 @@ signals:
     void tcpConnectionsChanged();
     // WiFi 信号强度变化时通知 QML 更新
     void wifiSignalChanged();
+    // 活动接口的 WiFi 名称变化时通知 QML 更新
+    void activeSsidChanged();
+    // 速度显示单位变化时通知 QML 更新
+    void speedUnitChanged();
     void speedHistoryChanged();
     // 任务栏网速字体颜色变化时通知 QML 更新
     void textColorChanged();
@@ -256,6 +302,12 @@ private:
     void setLinkDown(bool down);
     // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
     int parseIwBitrate(const QString &output) const;
+    // 解析 `iw dev <iface> link` 输出中的 SSID，未连接或输出无 SSID 行时返回空串。
+    // 抽为静态纯函数的原因：与 bitrate 解析一样，输出样本固定、可直接单测，
+    // 无需真的启动 iw 子进程
+    static QString parseIwSsid(const QString &output);
+    // 更新 WiFi 名称缓存，仅在值变化时发射 activeSsidChanged，避免 QML 无效重绘
+    void setActiveSsid(const QString &ssid);
     // 统计 /proc/net/tcp 与 tcp6 中 ESTABLISHED（状态 01）的连接数
     int countTcpConnections() const;
     // 异步请求 TCP 连接详情列表（ss 子进程，含进程名反查），仅 ESTABLISHED
@@ -337,6 +389,10 @@ private:
     int m_tcpConnections;
     // 活动接口的 WiFi 信号强度（dBm），0 表示不可用
     int m_wifiSignal;
+    // 活动接口连接到的 WiFi 名称（SSID），非无线或未连接时为空串
+    QString m_activeSsid;
+    // 速度显示单位：0=智能自动，1=固定 KB/s，2=固定 Mbps（见 SpeedUnit 枚举注释）
+    int m_speedUnit;
     // 活动接口链路层是否断开（carrier 为 0 或 operstate 非 up）
     // 与 m_linkSpeed/m_wifiSignal 同属低频探测结果，故放在一起
     bool m_linkDown;
