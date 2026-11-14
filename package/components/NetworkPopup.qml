@@ -662,8 +662,13 @@ Control {
         // 点击只发信号，打开动作由 networkview.qml 统一完成
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 18
-            spacing: 14
+            // 行高 24：达到无障碍建议的最小触控尺寸（原 18px 时按钮热区仅 16px，
+            // 实测确认：入口文字 11px、按钮高 16px，几乎贴着行的上下边缘）
+            Layout.preferredHeight: 24
+            // 与上方分隔线拉开，让入口区成为独立的底部操作块而非"贴在分隔线下的一行小字"
+            Layout.topMargin: common.spacingGroup
+            // 横向 16：原 14 时三个入口视觉上几乎连成一片
+            spacing: 16
             visible: popup.ready
 
             Item { Layout.fillWidth: true }
@@ -671,11 +676,12 @@ Control {
             // 详情入口是纯文字按钮：用 IconButton 的内容插槽承载原有 Text，
             // 以获得 Tab 聚焦与 Enter/Space 触发（此前只能朗读、键盘不可用）
             IconButton {
-                implicitWidth: entryLabel_chart.implicitWidth
-                implicitHeight: entryLabel_chart.implicitHeight
+                // 热区：高度撑满入口行(24)，宽度在文字两侧各留 6px。
+                // 原为 implicitHeight: entryLabel_chart.implicitHeight（仅 16px），
+                // 低于无障碍建议的最小触控尺寸，且文字边缘紧贴可点区域
+                implicitWidth: entryLabel_chart.implicitWidth + 12
+                implicitHeight: 24
                 accessibleName: qsTr("Traffic Chart")
-                // 向外扩 4px 点击热区：文字本身较窄，扩大后更容易点中
-                // （组件内 MouseArea 已填满，故用负 margin 的容器实现）
                 hoverColor: "transparent"
                 pressedColor: "transparent"
                 onClicked: popup.detailsRequested("chart")
@@ -694,8 +700,11 @@ Control {
 
             // 纯文字按钮：用 IconButton 内容插槽承载，获得 Tab 聚焦与 Enter/Space 触发
             IconButton {
-                implicitWidth: entryLabel_stats.implicitWidth
-                implicitHeight: entryLabel_stats.implicitHeight
+                // 热区：高度撑满入口行(24)，宽度在文字两侧各留 6px。
+                // 原为 implicitHeight: entryLabel_stats.implicitHeight（仅 16px），
+                // 低于无障碍建议的最小触控尺寸，且文字边缘紧贴可点区域
+                implicitWidth: entryLabel_stats.implicitWidth + 12
+                implicitHeight: 24
                 accessibleName: qsTr("Traffic Statistics")
                 hoverColor: "transparent"
                 pressedColor: "transparent"
@@ -717,8 +726,11 @@ Control {
 
             // 纯文字按钮：用 IconButton 内容插槽承载，获得 Tab 聚焦与 Enter/Space 触发
             IconButton {
-                implicitWidth: entryLabel_tcp.implicitWidth
-                implicitHeight: entryLabel_tcp.implicitHeight
+                // 热区：高度撑满入口行(24)，宽度在文字两侧各留 6px。
+                // 原为 implicitHeight: entryLabel_tcp.implicitHeight（仅 16px），
+                // 低于无障碍建议的最小触控尺寸，且文字边缘紧贴可点区域
+                implicitWidth: entryLabel_tcp.implicitWidth + 12
+                implicitHeight: 24
                 accessibleName: qsTr("TCP Connections")
                 hoverColor: "transparent"
                 pressedColor: "transparent"
