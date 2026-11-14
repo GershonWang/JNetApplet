@@ -463,6 +463,61 @@
         <source>No traffic records yet</source>
         <translation>暂无流量记录</translation>
     </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Export</source>
+        <translation>导出</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Export daily traffic</source>
+        <translation>导出每日流量</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Export monthly traffic</source>
+        <translation>导出每月流量</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Exported to %1</source>
+        <translation>已导出到 %1</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Export failed: %1</source>
+        <translation>导出失败：%1</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Export failed: plugin backend unavailable</source>
+        <translation>导出失败：插件后端不可用</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>Nothing to export for the current view</source>
+        <translation>当前视图没有可导出的数据</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>unknown error</source>
+        <translation>未知错误</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>CSV file (*.csv)</source>
+        <translation>CSV 文件 (*.csv)</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>JSON file (*.json)</source>
+        <translation>JSON 文件 (*.json)</translation>
+    </message>
+    <message>
+        <location filename="../package/components/TrafficStatsWindow.qml" line="0"/>
+        <source>All files (*)</source>
+        <translation>所有文件 (*)</translation>
+    </message>
 </context>
 <context>
     <name>TcpConnectionsWindow</name>
@@ -588,5 +643,25 @@
         <source>Used %1 GB this month (limit %2 GB)</source>
         <translation>本月已用 %1 GB（阈值 %2 GB）</translation>
     </message>
-    </context>
+        <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>No file path selected</source>
+        <translation>未选择文件路径</translation>
+    </message>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Cannot create directory: %1</source>
+        <translation>无法创建目录：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Cannot write file: %1</source>
+        <translation>无法写入文件：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Incomplete write, file may be corrupted</source>
+        <translation>写入不完整，文件可能已损坏</translation>
+    </message>
+</context>
 </TS>
