@@ -10,7 +10,6 @@
 
 | # | 需求 | 说明 | 价值 |
 |---|------|------|------|
-| 10 | **全键盘与读屏可操作** | 现有 20 余处只有 `Accessible.role/name`，缺 `activeFocusOnTab`、按键与 `onPressAction` | 无障碍合规 |
 
 ## 可选增强
 
@@ -25,9 +24,9 @@
 
 ## 优先级建议
 
-**第一优先级**：全键盘与读屏可操作（#10）
+**第一优先级**：HiDPI 与系统字号跟随（#5）——全工程 121 处 `font.pixelSize` 硬编码
 
-**第二优先级**：HiDPI 与系统字号跟随（#5）、纯逻辑核心库 + 可离线跑的测试（#12）
+**第二优先级**：纯逻辑核心库 + 可离线跑的测试（#12）
 
 **第三优先级**：其余可选增强按需开发；#12 建议作为独立一轮工程改造，不与新功能混做
 
@@ -48,6 +47,7 @@
 | 3 | 流量超限通知 | 日/月各一个 GB 阈值，超限发系统通知；每周期只提醒一次（周期键持久化）；判定为纯函数 `shouldNotifyQuota()` |
 | 4 | 多接口聚合 + 口径修正 | 任务栏可选「全部物理网卡合计」（设置窗口开关）；流量日志与会话总量改为按物理接口分别累加；`isPhysicalInterface` 改排除法（修 eno1/ens33 漏判） |
 | 7 | 导出流量数据 | 统计窗口「导出」按钮，CSV/JSON 按扩展名区分；序列化/转义/落盘在 C++（可单测）；对话框不可用时右键导出到下载目录 |
+| 10 | 全键盘与读屏可操作 | 新增 `IconButton`/`ChoiceButton`，22 处手写按钮统一接入：Tab 聚焦 + Enter/Space 触发 + `onPressAction`；修掉导出按钮的重复标注 |
 
 ## 后续维护提示
 
@@ -59,6 +59,10 @@
 - 改写活动接口**必须**走 `applyActiveInterface()`：它负责重置速度基线并清空上一接口的
   派生状态；`calculateSpeed()` 另有基线一致性兜底，直接改写 `m_activeInterface`
   会被识别为"需要重记基线"而丢弃该轮增量；
+- **新增可点击元素一律用 `IconButton`/`ChoiceButton`**，不要再手写
+  `Rectangle` + `MouseArea` + 三态颜色：无障碍契约（role/name/onPressAction）、
+  Tab 聚焦、Enter/Space 触发都已在组件内实现，手写会漏掉其中一项；
+  按钮内的子元素要跟随状态变色时读 `parent.parent.currentColor`，不要猜内部结构；
 - **导出逻辑在 C++**（`exportTrafficAsCsv/Json`、`saveExportFile`）：
   转义、大数精度、行序都已被单元测试覆盖，不要挪回 QML；
   `QtQuick.Dialogs` 的 FileDialog 属性以 `plugins.qmltypes` 为准
