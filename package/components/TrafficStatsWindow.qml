@@ -21,7 +21,9 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
-import QtQuick.Dialogs 1.3
+// Qt6 的 QtQuick.Dialogs 只导出 6.2+（见该模块 plugins.qmltypes 的 exports），
+// 写成 Qt5 时代的 1.3 会让本文件整体加载失败——表现为整个插件从任务栏消失
+import QtQuick.Dialogs 6.2
 import "."
 
 WindowShell {
