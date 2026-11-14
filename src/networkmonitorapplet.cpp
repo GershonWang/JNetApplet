@@ -686,6 +686,11 @@ void NetworkMonitorApplet::calculateSpeed()
         m_baselineInterface = m_activeInterface;
         m_lastRxBytes = getActiveRxBytes();
         m_lastTxBytes = getActiveTxBytes();
+        // 速度必须一并清零：否则切换后这一轮会继续显示上一块网卡的旧速度
+        //（直到下一轮才被真实值覆盖），用户看到的是"另一接口 + 旧速度"的错配。
+        // 末尾的 dirty 比较会把清零本身作为变化发射 speedChanged，QML 立即刷新
+        m_downloadSpeed = 0;
+        m_uploadSpeed = 0;
     } else if (elapsedSec > 0 && !m_activeInterface.isEmpty()) {
         // 按真实流逝时间计算速度（字节/秒），避免定时器抖动失真
         const qint64 currentRxBytes = getActiveRxBytes();
