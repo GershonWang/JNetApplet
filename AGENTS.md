@@ -97,8 +97,19 @@ deepin stack, because a GitHub-hosted runner cannot install DDEShell/DTK6:
 - `bash -n` + `shellcheck -S error` on `install.sh`/`build-deb.sh`
 - `python3 scripts/check-version.py` — CMake version vs CHANGELOG vs latest git tag
 - `python3 scripts/check-translations.py` — every `qsTr()` source string present in the `.ts`
-- `qmllint` syntax-level errors only (imports of `org.deepin.dtk`/`org.deepin.ds` cannot
-  resolve on the runner, so import warnings are deliberately filtered out)
+- `qmllint` on the 13 component files: syntax **and property existence**
+  (`Property "x" does not exist` / `Cannot assign to non-existent` are failures —
+  a single wrong property once made an entire window type unavailable and the
+  plugin vanished from the taskbar). `package/networkview.qml` is checked for
+  syntax only: its root is `AppletItem`, a C++-registered type that cannot resolve
+  on the runner, so its property warnings are parse-failure noise (v2.3.0, which
+  loads fine, produces the same two warnings)
+- `python3 scripts/check-qml-runtime.py` — two checks qmllint cannot do:
+  import version existence (compares against the module's actual exports, e.g.
+  `QtQuick.Dialogs 1.3` fails because that module only exports 6.x) and a
+  whitelist of QML-visible properties on dde-shell registered types
+  (`AppletItem.activeFocusOnTab` fails; it was a real cause of the plugin
+  disappearing at load time)
 
 Verification (run these locally; CI cannot):
 
@@ -122,6 +133,20 @@ Verification (run these locally; CI cannot):
 - **Manual**: install, then restart `dde-shell` (it discovers applets by scanning
   the install dir for `metadata.json`). QML rendering/interaction still has no
   automated check in this repo.
+
+### When the plugin does not appear at all
+
+This has happened three times; all three were one-line QML mistakes that only
+fail at load time, and all three showed as "icon gone from the taskbar" (not
+"window won't open"). Read the real error first:
+
+```sh
+journalctl --user -u dde-shell@DDE --since "5 min ago" | grep -A2 "Loading url failed"
+```
+
+Typical output names the exact file and line, e.g.
+`networkview.qml:28 "AppletItem.activeFocusOnTab" is not available in org.deepin.ds 1.0`
+followed by `Create root failed`. Then check the corresponding rule above.
 
 ## Project structure
 

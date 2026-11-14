@@ -39,3 +39,6 @@ docs/superpowers/
 
 # 核心库独立验证目录
 .verify-core/
+
+# Python 缓存
+__pycache__/

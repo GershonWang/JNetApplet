@@ -128,8 +128,22 @@
   不存在"开机不启动"的场景；额外装 systemd unit 反而会与 shell 生命周期冲突、
   造成重复加载。经确认改为扩展核心库覆盖（formatSpeed/csvEscape 等 4 处
   分支密集的纯函数纳入测试）。
+- **QML 运行时契约检查**（`scripts/check-qml-runtime.py` + CI 两个 job）：
+  - `qmllint` 对 13 个组件文件同时校验**属性存在性**（`Property "x" does not
+    exist` / `Cannot assign to non-existent` 视为失败），不再只过滤语法级；
+  - 脚本校验 import 版本号是否真实存在（比对模块实际 exports，例如
+    `QtQuick.Dialogs 1.3` 失败——该模块只导出 6.x）；
+  - 脚本校验 dde-shell 注册类型的属性白名单（`AppletItem` 等无 qmltypes 可推导）。
+  - 已用三个真实历史错误做反向验证：逐一注入均被拦截，还原后通过。
 
 ### 修复
+- **修复插件从任务栏消失（三次，均为一行 QML 错误）**：
+  `QtQuick.Dialogs 1.3`（Qt6 该模块只导出 6.x）、`ColumnLayout.topPadding`
+  （布局容器没有 padding 属性）、`AppletItem.activeFocusOnTab`（C++ 注册类型
+  未暴露该属性）。三者都只在运行时失败，`qmllint` 的语法级过滤全部漏过，
+  现象都是"整个插件消失"而非"窗口打不开"。
+  排查方式：`journalctl --user -u dde-shell@DDE | grep -A2 "Loading url failed"`
+  会直接给出文件名与行号。
 
 - **切换活动接口不再产生假增量**：活动网卡热拔（USB 网卡、VPN 隧道消失）后，
   后端会自动回退到另一块网卡。原实现只改接口名、不重置速度基线，下一轮采样会拿

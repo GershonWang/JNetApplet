@@ -102,21 +102,75 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qt6-declarative-dev-tools
 
-      # 只把"语法级"错误视为失败：org.deepin.dtk / org.deepin.ds 在 runner 上
-      # 必然缺失，若把 import 告警也算失败，这个 job 会永远为红、失去信号价值。
-      # 因此这里显式过滤，仅当出现语法类错误时才退出非零。
-      - name: qmllint（仅语法级错误）
+      # 分两档检查强度，依据：networkview.qml 的根元素是 AppletItem，
+      # 它是 dde-shell 的 C++ 注册类型，runner 上无该模块时 qmllint 解析不了，
+      # 会把其子项属性全报成"不存在"（v2.3.0 这一可正常加载的版本同样报 2 条，
+      # 证明是解析失败导致的误报，不是真实缺陷）。
+      #
+      #   一档（13 个文件）：语法 + **属性存在性**都必须干净。
+      #     属性存在性必须卡：真实事故是给 ColumnLayout 写了 topPadding，
+      #     一行错误让整个 SettingsWindow 类型不可用，入口 QML 加载失败，
+      #     插件直接从任务栏消失。它只表现为 missing-property 告警。
+      #   二档（networkview.qml）：只查语法。它的 AppletItem 属性契约由
+      #     scripts/check-qml-runtime.py 的白名单负责。
+      - name: qmllint（13 个文件：语法 + 属性存在性；入口文件：语法）
         run: |
           set -o pipefail
           fail=0
-          for f in package/*.qml package/components/*.qml; do
-            # 收集输出后过滤掉 import 相关噪声
+          NOISE="org\.deepin|dtk6declarative|Ambiguous type|Warnings occurred while importing|Failed to import|qmldir but does not exist|^import |^\s*\^|^---|^$"
+          for f in $(ls package/*.qml package/components/*.qml | grep -v '^package/networkview\.qml$'); do
             out=$(qmllint "$f" 2>&1 || true)
-            syntax=$(printf '%s\n' "$out" | grep -E "Syntax error|Expected token|Unable to assign|is not a type" || true)
-            if [ -n "$syntax" ]; then
-              echo "::error file=$f::$syntax"
+            fatal=$(printf '%s\n' "$out" | grep -vE "$NOISE" \
+              | grep -E "Syntax error|Expected token|Unable to assign|is not a type|does not exist\.|Cannot assign to non-existent" || true)
+            if [ -n "$fatal" ]; then
+              echo "::error file=$f::$(echo "$fatal" | head -1)"
+              printf '%s\n' "$fatal"
               fail=1
             fi
           done
-          [ "$fail" -eq 0 ] && echo "QML 语法检查通过"
+          if [ "$fail" -eq 0 ]; then
+            echo "✓ 13 个组件：语法与属性存在性均干净"
+          fi
+
+          # 入口文件：只卡语法级错误
+          out=$(qmllint package/networkview.qml 2>&1 || true)
+          syntax=$(printf '%s\n' "$out" | grep -vE "$NOISE" \
+            | grep -E "Syntax error|Expected token|Unable to assign to a property of required type|is not a type" || true)
+          if [ -n "$syntax" ]; then
+            echo "::error file=package/networkview.qml::$(echo "$syntax" | head -1)"
+            printf '%s\n' "$syntax"
+            fail=1
+          else
+            echo "✓ 入口文件：语法干净"
+          fi
           exit "$fail"
+
+  # dde-shell 注册类型的属性契约 + import 版本号校验。
+  # 这两类错误 qmllint 拦不住：前者是 C++ 注册类型（无 qmltypes 可推导），
+  # 后者需要比对模块实际导出的版本。二者都曾让插件从任务栏彻底消失。
+  qml-runtime-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Qt6 QML 模块（用于读取模块导出信息）
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-declarative-dev qml6-module-qtquick-dialogs
+
+      - name: 校验 import 版本与 dde-shell 类型属性
+        run: |
+          # 优先问 qmake6 要真实路径；它不存在时按 Ubuntu 标准路径回退。
+          # 脚本对"显式指定但不存在"的路径会报错（防止装包失败时静默通过），
+          # 因此这里额外列出候选路径供排查
+          QMLDIR=$(qmake6 -query QT_INSTALL_QML 2>/dev/null || true)
+          if [ -z "$QMLDIR" ] || [ ! -d "$QMLDIR" ]; then
+            QMLDIR=/usr/lib/x86_64-linux-gnu/qt6/qml
+          fi
+          echo "QML 模块根目录：$QMLDIR"
+          if [ ! -d "$QMLDIR" ]; then
+            echo "::error::找不到 Qt QML 模块目录，无法校验 import 版本"
+            ls -d /usr/lib/*/qt6/qml /usr/lib/qt6/qml 2>/dev/null || true
+            exit 1
+          fi
+          python3 scripts/check-qml-runtime.py --qml-dir "$QMLDIR"
