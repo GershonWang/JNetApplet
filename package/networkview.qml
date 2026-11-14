@@ -17,18 +17,19 @@ AppletItem {
     objectName: "network monitor applet"
 
     // 无障碍：整个任务栏图标是一个"左键打开网络监控详情弹窗"的按钮。
-    // 这一处用 TapHandler 而非 MouseArea，无法直接复用 IconButton 组件，
-    // 但键盘契约仍须与其它按钮一致：Tab 可聚焦 + Enter/Space 打开弹窗 +
-    // 读屏的 onPressAction 可激活。此前只有 role/name，键盘用户完全无法操作任务栏图标。
-    // 注意：任务栏图标通常不在窗口焦点链上，activeFocusOnTab 主要覆盖
-    // "任务栏获得焦点"的场景（如无障碍键盘导航模式），不影响鼠标使用
+    // 这一处用 TapHandler 而非 MouseArea，无法复用 IconButton 组件。
+    //
+    // 重要限制（真机实测）：AppletItem 是 dde-shell 的 C++ 注册类型（DAppletItem，
+    // 基类 QQuickItem），QML 侧**没有**暴露 activeFocusOnTab（也没有 Keys 附加属性
+    // 可挂载）。写 `activeFocusOnTab: true` 会让整个入口 QML 加载失败，
+    // 报错："AppletItem.activeFocusOnTab" is not available in org.deepin.ds 1.0，
+    // 表现就是任务栏上的插件图标直接消失。
+    // 因此这里只保留 AppletItem 支持的 Accessible.* —— 读屏可朗读并可通过
+    // onPressAction 激活；键盘 Tab 聚焦在任务栏场景下由 dde-shell 自身处理，
+    // 插件层无法干预。
     Accessible.role: Accessible.Button
     Accessible.name: qsTr("Network Speed Monitor")
     Accessible.onPressAction: root.togglePopupFromKeyboard()
-    activeFocusOnTab: true
-    Keys.onReturnPressed: root.togglePopupFromKeyboard()
-    Keys.onEnterPressed: root.togglePopupFromKeyboard()
-    Keys.onSpacePressed: root.togglePopupFromKeyboard()
     property int dockOrder: 21
     property int dockSize: Panel.rootObject.dockItemMaxSize || 48
     // 任务栏方向：0=Top, 1=Right, 2=Bottom, 3=Left；% 2 为 0 表示水平，1 表示竖向
