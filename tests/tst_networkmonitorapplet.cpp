@@ -451,30 +451,36 @@ void NetworkMonitorAppletTest::testParseTcpConnectionList()
 }
 
 // 链路断开判定真值表
-// carrier 三态（-1 读不到 / 0 无载波 / 1 有载波）与 operstate 的组合，
-// 覆盖设计文档中的全部规则分支，规则顺序即短路顺序
+// carrier 三态（-1 读不到 / 0 无载波 / 1 有载波）与 operstate 的组合。
+// 优先级：operstate 明确表态（up / down / dormant 等）时以其为准，
+// 只有它含糊（unknown / 空）时才回退看 carrier
 void NetworkMonitorAppletTest::testIsLinkDown_data()
 {
     QTest::addColumn<int>("carrier");
     QTest::addColumn<QString>("operState");
     QTest::addColumn<bool>("expected");
 
-    // 规则 1：carrier 读不到 → 未知，判为未断开（宁可漏报不误报）
-    QTest::newRow("carrier-unreadable-up") << -1 << QStringLiteral("up") << false;
-    QTest::newRow("carrier-unreadable-down") << -1 << QStringLiteral("down") << false;
-    // 规则 2：operstate 为 up → 未断开（即使 carrier 读数为 0，以 operstate 为准）
+    // ★ 真机实测回归：`ip link set wlo1 down` 后 carrier 读取返回 EINVAL（读不到，
+    // 即 -1），operstate 明确为 "down"。原实现把 carrier<0 放最前一律返回未断开，
+    // 导致断连态永不显示；此用例固定住修正后的行为
+    QTest::newRow("wifi-down-carrier-unreadable") << -1 << QStringLiteral("down") << true;
+    // operstate 明确表态时的其余组合
     QTest::newRow("up-with-carrier") << 1 << QStringLiteral("up") << false;
     QTest::newRow("up-without-carrier") << 0 << QStringLiteral("up") << false;
-    // 规则 3：无载波 → 断开
+    QTest::newRow("up-carrier-unreadable") << -1 << QStringLiteral("up") << false;
     QTest::newRow("down-without-carrier") << 0 << QStringLiteral("down") << true;
-    // 规则 4：虚拟接口的 unknown / 读不到的状态 → 只信 carrier
+    QTest::newRow("down-with-carrier") << 1 << QStringLiteral("down") << true;
+    QTest::newRow("dormant") << 1 << QStringLiteral("dormant") << true;
+    QTest::newRow("dormant-carrier-unreadable") << -1 << QStringLiteral("dormant") << true;
+    QTest::newRow("lowerlayerdown") << 1 << QStringLiteral("lowerlayerdown") << true;
+
+    // operstate 含糊（unknown / 读不到）时回退看 carrier，避免虚拟接口误报
     QTest::newRow("unknown-with-carrier") << 1 << QStringLiteral("unknown") << false;
     QTest::newRow("unknown-without-carrier") << 0 << QStringLiteral("unknown") << true;
+    QTest::newRow("unknown-carrier-unreadable") << -1 << QStringLiteral("unknown") << false;
     QTest::newRow("empty-state-with-carrier") << 1 << QString() << false;
     QTest::newRow("empty-state-without-carrier") << 0 << QString() << true;
-    // 规则 5：其余状态 → 断开
-    QTest::newRow("dormant") << 1 << QStringLiteral("dormant") << true;
-    QTest::newRow("lowerlayerdown") << 1 << QStringLiteral("lowerlayerdown") << true;
+    QTest::newRow("empty-state-carrier-unreadable") << -1 << QString() << false;
 }
 
 void NetworkMonitorAppletTest::testIsLinkDown()

@@ -1015,17 +1015,49 @@ void NetworkMonitorApplet::setLinkDown(bool down)
 }
 
 // 解析 `iw dev <iface> link` 输出中的 bitrate（Mbps），失败返回 0
-// 输出形如 "    bitrate: 866.7 MBit/s"，也兼容 "Gbit/s"（换算为 Mbps）
+// 真实输出（真机实测）形如：
+//     Connected to aa:bb:cc:dd:ee:ff (on wlo1)
+//             rx bitrate: 390.0 MBit/s VHT-MCS 8 80MHz short GI VHT-NSS 1
+//             tx bitrate: 866.7 MBit/s VHT-MCS 9 80MHz short GI VHT-NSS 2
+// 设计原因（真机测试暴露的既有缺陷，三处独立问题）：
+//   1. 行前缀：真实输出的 bitrate 行带 "rx "/"tx " 前缀，并非以 "bitrate:" 开头。
+//      只锚定行首 "bitrate:" 会让所有真实输出都解析失败，故前缀设为可选并捕获方向。
+//   2. 单位大小写：真实单位是 "MBit/s"（大写 B），而原模式写死小写 "bit/s"，
+//      于是最常见的 MBit/s 全部解析失败（"Gbit/s" 恰好小写 b 才侥幸匹配）。
+//      故用 CaseInsensitiveOption 接受 Bit/s / bit/s。
+//   3. 前导缩进：原实现用 `re.match(output)` 只从整段文本位置 0 尝试一次，
+//      而真实输出以制表符缩进开头，"bitrate:" 不在位置 0；故改为逐行 trim 后匹配。
+// 取值：优先 tx（发送）——发送方向通常代表链路协商上限，也与有线接口
+// /sys/class/net/<iface>/speed 的量级一致；无 tx 行时回退到 rx 行。
 int NetworkMonitorApplet::parseIwBitrate(const QString &output) const
 {
-    static const QRegularExpression re("bitrate:\\s*([\\d.]+)\\s*(M|G)bit/s");
-    QRegularExpressionMatch m = re.match(output);
-    if (!m.hasMatch()) {
-        return 0;
+    static const QRegularExpression re(
+        "^\\s*(?:(rx|tx)\\s+)?bitrate:\\s*([\\d.]+)\\s*(M|G)bit/s",
+        QRegularExpression::CaseInsensitiveOption);
+    const QStringList lines = output.split(QLatin1Char('\n'));
+
+    // 一次扫描：记录 tx 与"无方向/rx"各自的候选值，扫描结束后按 tx 优先取值。
+    // 不用两轮扫描，是因为"先找 tx 再找 rx"需要重复遍历并在第二轮排除 tx，
+    // 逻辑绕；这里各留一个候选，O(n) 一遍即可，也更易读。
+    int txCandidate = 0;
+    int rxOrPlainCandidate = 0;
+    for (const QString &rawLine : lines) {
+        const QRegularExpressionMatch m = re.match(rawLine.trimmed());
+        if (!m.hasMatch()) {
+            continue;
+        }
+        const double val = m.captured(2).toDouble();
+        // 大小写不敏感后 captured(3) 可能是 "m"/"g"，比较亦需不敏感
+        const bool isGigabit =
+            m.captured(3).compare(QLatin1String("G"), Qt::CaseInsensitive) == 0;
+        const int mbps = isGigabit ? qRound(val * 1000.0) : qRound(val);
+        if (m.captured(1).compare(QLatin1String("tx"), Qt::CaseInsensitive) == 0) {
+            txCandidate = mbps;
+        } else if (rxOrPlainCandidate == 0) {
+            rxOrPlainCandidate = mbps;
+        }
     }
-    const double val = m.captured(1).toDouble();
-    const bool isGigabit = m.captured(2) == QLatin1String("G");
-    return isGigabit ? qRound(val * 1000.0) : qRound(val);
+    return txCandidate > 0 ? txCandidate : rxOrPlainCandidate;
 }
 
 // 统计 /proc/net/tcp 与 /proc/net/tcp6 中 ESTABLISHED（状态 01）的连接数
