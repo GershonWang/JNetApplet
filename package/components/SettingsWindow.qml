@@ -39,6 +39,10 @@ Window {
     // 网络接口名称列表，由父组件从 C++ 后端 applet.networkInterfaces 传入
     property var networkInterfaces: []
 
+    // 无线接口名列表，由父组件从 C++ 后端 applet.wirelessInterfaces 传入；
+    // 行内图标与类型描述据此判定（不调用 C++ 方法，属性读取在绑定中稳定）
+    property var wirelessInterfaces: []
+
     // 当前活动接口名称，由父组件从 C++ 后端 applet.activeInterface 传入
     property string activeInterface: ""
 
@@ -204,6 +208,9 @@ Window {
                                         radius: 8
                                         // 当前行是否为活动接口（选中态）
                                         readonly property bool isActive: modelData === activeInterface
+                                        // 该行接口是否为无线：查后端的无线接口名列表。
+                                        // 行内图标与类型描述共用同一判定，避免重复求值
+                                        readonly property bool isWireless: wirelessInterfaces.indexOf(modelData) !== -1
                                         // 无障碍：整行是"切换活动接口"的单选项
                                         Accessible.role: Accessible.RadioButton
                                         Accessible.name: modelData
@@ -244,7 +251,7 @@ Window {
                                                 Layout.alignment: Qt.AlignVCenter
                                                 Layout.preferredWidth: 20
                                                 horizontalAlignment: Text.AlignHCenter
-                                                text: common.interfaceIcon(modelData)
+                                                text: common.interfaceIcon(modelData, ifaceRow.isWireless)
                                                 font.pixelSize: 14
                                                 color: ifaceRow.isActive ? ifaceRow.activeColor : theme.iconGray
                                             }
@@ -286,7 +293,7 @@ Window {
                                             // 接口类型描述：右对齐显示，与接口名分居两侧
                                             Text {
                                                 Layout.alignment: Qt.AlignVCenter
-                                                text: common.interfaceDescription(modelData)
+                                                text: common.interfaceDescription(modelData, ifaceRow.isWireless)
                                                 font.pixelSize: 12
                                                 color: theme.textTertiary
                                             }

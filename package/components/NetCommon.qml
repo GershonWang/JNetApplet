@@ -67,16 +67,31 @@ QtObject {
     // 上传值颜色：固定绿色，不做高速警示
     readonly property color uploadValueColor: accentGreen
 
-    // 判断是否为物理网卡（QML 侧排序用，与 C++ isPhysicalInterface 逻辑一致）
-    function isPhysicalIf(name) {
+    // 判断接口名是否命中无线命名约定
+    // 设计原因：deepin 25 上无线接口名为 wlo1，早期只匹配 wlp/wlan 导致漏判，故补齐 wlo/wlx。
+    // 本函数是**排序**的唯一无线判据（排序不查后端，原因见 sortInterfaces）；
+    // 图标与类型文案则以调用方传入的无线接口名列表为准，命中本函数仅作兜底
+    function isWirelessName(name) {
         return name.startsWith("wlp") || name.startsWith("wlan")
+            || name.startsWith("wlo") || name.startsWith("wlx")
+    }
+
+    // 判断是否为物理网卡（QML 侧排序用，与 C++ isPhysicalInterface 逻辑一致）
+    // 无线判定走 isWirelessName（命名集合已含 wlo/wlx），有线匹配 enp/eth；
+    // 排序不查询后端：该函数被 Repeater.model 绑定，绑定中触达后端数据易导致求值异常
+    function isPhysicalIf(name) {
+        return isWirelessName(name)
             || name.startsWith("enp") || name.startsWith("eth")
     }
 
     // 接口列表排序：物理网卡在前、虚拟接口在后，各自按名称升序
     // 设计原因：弹窗接口 chip 与设置窗口列表必须顺序一致（否则同一台机器出现两套排序）。
     // 原实现由 NetworkPopup 与 networkview 各持一份，networkview 那份还无人引用，
-    // 设置窗口则直接用未排序列表；统一收敛到此处后三处共用同一规则
+    // 设置窗口则直接用未排序列表；统一收敛到此处后三处共用同一规则。
+    //
+    // 刻意只依赖接口名、不接收后端判定结果：该函数被 Repeater.model 直接绑定求值，
+    // 参数一旦取自后端数据（曾试过后端判定回调），绑定在求值时触达后端会使列表整体消失。
+    // 无线命名集合已补齐 wlo/wlx，排序归类与后端 isPhysicalInterface 结果一致
     function sortInterfaces(list) {
         if (!list || list.length === 0) return []
         var physical = []
@@ -116,28 +131,37 @@ QtObject {
     }
 
     // 根据接口名返回类型图标（Unicode 符号），用于网络接口列表和弹窗接口信息区
-    // 设计原因：项目未引入图标库，用 Text 渲染 Unicode 符号（与 ↓↑ 一致）；
-    // 所选符号均为 DejaVu/Noto 等常见字体覆盖的单色字形，避免彩色 emoji 破坏浅色主题观感
-    function interfaceIcon(name) {
-        if (name === "lo") return "↻"               // 本地回环：循环箭头
-        if (name === "Meta") return "▢"             // 虚拟接口：空心方块
-        if (/^enp|^eth/.test(name)) return "⇄"      // 有线网络：双向链路
-        if (/^wlp|^wlan/.test(name)) return "∿"     // 无线网络：信号波形
-        if (/^docker|^veth/.test(name)) return "▣"  // 容器网络：盒中盒
-        if (/^br/.test(name)) return "⋈"            // 桥接：连接
-        if (/^tun|^tap/.test(name)) return "⚿"      // VPN：钥匙
-        if (/^virbr/.test(name)) return "⋈"         // 虚拟桥接：同桥接
-        return "◉"                                  // 其他：通用网络节点
+    // 设计原因：项目未引入图标库，用 Text 渲染 Unicode 符号（与 ↓↑ 一致）。
+    //
+    // 符号选型约束（真机实测教训）：当前字体未指定 font.family，Qt 依靠系统字体回退渲染，
+    // 而回退链并不覆盖冷僻区块的字形——原选用的 ∿(U+223F，仅 13 个字体覆盖)、
+    // ⚿(U+26BF，3 个)、⋈(U+22C8，19 个)、↻(U+21BB，27 个) 在真机上全部渲染为空白，
+    // 接口类型图标整列消失。故改用系统字体覆盖率高的等义符号（括号内覆盖数取自
+    // `fc-list ':charset=<码点>'` 统计），最低覆盖由 3 提升到 129，
+    // 且全部为单色字形，不含彩色 emoji，不破坏浅色主题观感。
+    // 新增符号前务必先用同样的命令确认覆盖率足够
+    // 参数 wireless：该接口是否无线（调用方查后端 wirelessInterfaces 列表得出），语义同 isPhysicalIf
+    function interfaceIcon(name, wireless) {
+        if (name === "lo") return "⇋"               // 本地回环：双向（U+21C4 类，覆盖 131）
+        if (name === "Meta") return "▢"             // 虚拟接口：空心方块（覆盖 129）
+        if (wireless === true || (wireless === undefined && isWirelessName(name))) return "≈" // 无线网络：波形（覆盖 359）
+        if (/^enp|^eth/.test(name)) return "⇄"      // 有线网络：双向链路（覆盖 231）
+        if (/^docker|^veth/.test(name)) return "▣"  // 容器网络：盒中盒（覆盖 134）
+        if (/^br/.test(name)) return "⊕"            // 桥接：交汇（覆盖 264）
+        if (/^tun|^tap/.test(name)) return "⇅"      // VPN：上下行隧道（覆盖 132）
+        if (/^virbr/.test(name)) return "⊕"         // 虚拟桥接：同桥接
+        return "◉"                                  // 其他：通用网络节点（覆盖 133）
     }
 
     // 根据接口名返回类型描述，用于设置窗口网络接口列表和弹窗 tooltip
     // 设计原因：用户面对多个网口时难以仅凭 enp3s0/wlp3s0 等命名判断用途，
-    // 加一行类型说明（有线/无线/VPN 等）降低认知负担
-    function interfaceDescription(name) {
+    // 加一行类型说明（有线/无线/VPN 等）降低认知负担。
+    // 参数 wireless：该接口是否无线（调用方查后端 wirelessInterfaces 列表得出），语义同 isPhysicalIf
+    function interfaceDescription(name, wireless) {
         if (name === "lo") return qsTr("Loopback")
         if (name === "Meta") return qsTr("Virtual Interface")
+        if (wireless === true || (wireless === undefined && isWirelessName(name))) return qsTr("Wireless Network")
         if (/^enp|^eth/.test(name)) return qsTr("Wired Network")
-        if (/^wlp|^wlan/.test(name)) return qsTr("Wireless Network")
         if (/^docker|^veth/.test(name)) return qsTr("Container Network")
         if (/^br/.test(name)) return qsTr("Bridge")
         if (/^tun|^tap/.test(name)) return qsTr("VPN")

@@ -158,6 +158,21 @@ QStringList NetworkMonitorApplet::networkInterfaces() const
     return m_interfaceList;
 }
 
+// 无线接口名列表：从当前接口列表中筛出无线接口，供 QML 显示类型图标与文案
+// 设计原因：每次调用都重新判定（不缓存成员），因为接口热插拔会改变列表内容，
+// 而缓存需要额外的失效逻辑且易与 networkInterfaces 不一致；
+// 接口数量通常个位数，判定成本可接受（仅在 QML 需要时求值）
+QStringList NetworkMonitorApplet::wirelessInterfaces() const
+{
+    QStringList wireless;
+    for (const QString &iface : m_interfaceList) {
+        if (isWirelessInterface(iface)) {
+            wireless.append(iface);
+        }
+    }
+    return wireless;
+}
+
 bool NetworkMonitorApplet::ready() const
 {
     return m_ready;
@@ -843,7 +858,8 @@ void NetworkMonitorApplet::updateLinkSpeed()
         return;
     }
 
-    if (!m_activeInterface.startsWith("wlp") && !m_activeInterface.startsWith("wlan")) {
+    // 非无线接口直接判为不可用（判定统一走 isWirelessInterface，不再就地硬编码前缀）
+    if (!isWirelessInterface(m_activeInterface)) {
         setLinkSpeed(0);
         return;
     }
@@ -1134,12 +1150,38 @@ QVariantList NetworkMonitorApplet::parseTcpConnectionList(const QString &output)
     return list;
 }
 
+// 判断接口是否为无线网卡（判定统一入口，链路上所有"是否无线"的决策都走这里）
+// 设计原因（真机实测暴露的缺陷）：原先在 4 处各自硬编码 `startsWith("wlp") ||
+// startsWith("wlan")`，而 deepin 25 上的无线接口命名为 "wlo1"，两个前缀都不匹配，
+// 于是：协商速率不走 iw 降级（恒为 0）、WiFi 信号强度恒为 0、接口类型/图标被当成有线、
+// 自动选择接口时被排除。前缀白名单本质上是不可靠的启发式，故改为优先探测内核能力：
+//   /sys/class/net/<iface>/wireless/ 目录存在即无线（与命名约定无关）
+// 探测失败（目录不存在、权限不足、虚拟接口）时回退到前缀匹配兜底，避免漏判主流命名。
+// 前缀集合含 wlo（deepin/部分发行版）与 wlx（USB 无线网卡常见命名）。
+bool NetworkMonitorApplet::isWirelessInterface(const QString &iface)
+{
+    if (iface.isEmpty()) {
+        return false;
+    }
+    // 优先：内核是否在该接口下暴露 wireless 目录（最可靠的判据）
+    const QFileInfo wirelessDir(
+        QStringLiteral("/sys/class/net/%1/wireless").arg(iface));
+    if (wirelessDir.isDir()) {
+        return true;
+    }
+    // 回退：按命名约定匹配（wlp/wlan/wlo/wlx）
+    return iface.startsWith(QLatin1String("wlp"))
+        || iface.startsWith(QLatin1String("wlan"))
+        || iface.startsWith(QLatin1String("wlo"))
+        || iface.startsWith(QLatin1String("wlx"));
+}
+
 // 读取指定接口的 WiFi 信号强度（dBm）
-// 仅无线接口（wlp/wlan）有效；/proc/net/wireless 桌面环境可能不存在（返回 0）
+// 仅无线接口有效（判定走 isWirelessInterface）；/proc/net/wireless 桌面环境可能不存在（返回 0）
 // 该文件每行形如 "wlp3s0: 60.  -65.  -256  0 ..."，level（dBm）为第 3 个数值字段
 int NetworkMonitorApplet::detectWifiSignal(const QString &iface)
 {
-    if (!iface.startsWith("wlp") && !iface.startsWith("wlan")) {
+    if (!isWirelessInterface(iface)) {
         return 0;
     }
     QFile f(QStringLiteral("/proc/net/wireless"));
@@ -1173,13 +1215,15 @@ int NetworkMonitorApplet::detectWifiSignal(const QString &iface)
 }
 
 // 判断是否为物理网卡
-// 物理网卡前缀：无线 wlp/wlan/wifi，有线 enp/eth
+// 有线前缀：enp/eth；无线判定不再就地硬编码前缀，统一委托 isWirelessInterface
+// （该方法优先探测 /sys/class/net/<iface>/wireless，能覆盖 wlo1 等非 wlp/wlan 命名）
 // 虚拟接口（Meta/tun/tap/docker/veth/br-）返回 false，
 // 用于自动选择时优先真实网卡而非代理 TUN 接口
 bool NetworkMonitorApplet::isPhysicalInterface(const QString &name) const
 {
-    return name.startsWith("wlp") || name.startsWith("wlan")
-        || name.startsWith("enp") || name.startsWith("eth");
+    return isWirelessInterface(name)
+        || name.startsWith(QLatin1String("enp"))
+        || name.startsWith(QLatin1String("eth"));
 }
 
 // ---- 流量日志（日/月持久化）----

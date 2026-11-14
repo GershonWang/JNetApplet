@@ -40,6 +40,10 @@ private slots:
     void testIsPhysicalInterface_data();
     void testIsPhysicalInterface();
 
+    // isWirelessInterface/isWireless：无线判定唯一入口（含 wlo1 回归）
+    void testIsWirelessInterface_data();
+    void testIsWirelessInterface();
+
     // 速度计算：按真实时间间隔计算
     void testCalculateSpeed();
     // 计数器回绕时负值钳制为 0
@@ -78,6 +82,11 @@ void NetworkMonitorAppletTest::testIsPhysicalInterface_data()
     QTest::newRow("enp3s0") << "enp3s0" << true;
     QTest::newRow("eth0") << "eth0" << true;
 
+    // 回归：deepin 25 的无线接口名为 wlo1，曾是漏判现场（协商速率/信号强度恒 0）
+    QTest::newRow("wlo1") << "wlo1" << true;
+    // USB 无线网卡常见命名 wlx<MAC>
+    QTest::newRow("wlx00c0ca") << "wlx00c0ca" << true;
+
     // 非物理接口
     QTest::newRow("lo") << "lo" << false;
     QTest::newRow("docker0") << "docker0" << false;
@@ -86,6 +95,45 @@ void NetworkMonitorAppletTest::testIsPhysicalInterface_data()
     QTest::newRow("tun0") << "tun0" << false;
     QTest::newRow("Meta") << "Meta" << false;
     QTest::newRow("empty") << "" << false;
+}
+
+// 无线判定的唯一入口测试：命名集合（wlp/wlan/wlo/wlx）与有线前缀的区分。
+// 注意：真实机器上优先走 /sys/class/net/<iface>/wireless 探测，测试环境无该目录，
+// 因此这里实际覆盖的是前缀兜底分支；能力探测分支由真机验证覆盖
+void NetworkMonitorAppletTest::testIsWirelessInterface_data()
+{
+    QTest::addColumn<QString>("name");
+    QTest::addColumn<bool>("expected");
+
+    QTest::newRow("wlp3s0") << "wlp3s0" << true;
+    QTest::newRow("wlan0") << "wlan0" << true;
+    QTest::newRow("wlo1") << "wlo1" << true;      // deepin 25 真机接口名
+    QTest::newRow("wlx00c0ca") << "wlx00c0ca" << true;
+
+    QTest::newRow("enp3s0") << "enp3s0" << false;
+    QTest::newRow("eth0") << "eth0" << false;
+    QTest::newRow("lo") << "lo" << false;
+    QTest::newRow("docker0") << "docker0" << false;
+    QTest::newRow("empty") << "" << false;
+}
+
+void NetworkMonitorAppletTest::testIsWirelessInterface()
+{
+    QFETCH(QString, name);
+    QFETCH(bool, expected);
+    // 判定入口是静态纯函数 isWirelessInterface，QML 经 wirelessInterfaces 属性间接使用它，
+    // 故这里同时断言"单接口判定"与"列表属性筛选"两条路径，防止只改一处造成漂移
+    QCOMPARE(NetworkMonitorApplet::isWirelessInterface(name), expected);
+
+    NetworkMonitorApplet *applet = createApplet();
+    applet->m_interfaceList = QStringList() << name;
+    const QStringList wireless = applet->wirelessInterfaces();
+    if (expected) {
+        QCOMPARE(wireless, QStringList() << name);
+    } else {
+        QVERIFY(wireless.isEmpty());
+    }
+    delete applet;
 }
 
 void NetworkMonitorAppletTest::testIsPhysicalInterface()

@@ -52,6 +52,13 @@ class NetworkMonitorApplet : public DApplet
     Q_PROPERTY(double totalDownload READ totalDownload NOTIFY totalChanged)
     Q_PROPERTY(double totalUpload READ totalUpload NOTIFY totalChanged)
     Q_PROPERTY(QStringList networkInterfaces READ networkInterfaces NOTIFY interfacesChanged)
+    // 无线接口名列表（networkInterfaces 的子集），供 QML 判定接口类型。
+    // 设计原因：QML 读不了 /sys/class/net/<iface>/wireless，故由后端判定后暴露；
+    // 采用 Q_PROPERTY 而非 Q_INVOKABLE 方法：真机实测 Q_INVOKABLE 方法
+    // （bool f(const QString&) const）在 QML 侧报 "Property ... is not a function"，
+    // 而属性读取路径（networkInterfaces 等）稳定可用，故与既有属性保持同一机制。
+    // 与 networkInterfaces 共用 interfacesChanged 通知：两者同时更新，无需独立信号
+    Q_PROPERTY(QStringList wirelessInterfaces READ wirelessInterfaces NOTIFY interfacesChanged)
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
     // 当前活动接口，用户在弹窗或设置窗口选择后持久化到 ~/.config/jnetapplet/settings.ini，
     // 下次启动自动恢复；若保存的接口已不存在则回退到自动选择
@@ -117,6 +124,8 @@ public:
     double totalDownload() const;
     double totalUpload() const;
     QStringList networkInterfaces() const;
+    // 返回无线接口名列表（m_interfaceList 过滤 isWirelessInterface）
+    QStringList wirelessInterfaces() const;
     bool ready() const;
     QString activeInterface() const;
     QString ipAddress() const;
@@ -250,9 +259,16 @@ private:
     QVariantList parseTcpConnectionList(const QString &output) const;
     // 读取指定接口的 WiFi 信号强度（dBm），非无线接口或不可用时返回 0
     int detectWifiSignal(const QString &iface);
-    // 判断是否为物理网卡（无线 wlp/wlan，有线 enp/eth），
+    // 判断是否为物理网卡（无线走 isWirelessInterface，有线匹配 enp/eth），
     // 用于自动选择时优先真实网卡而非虚拟代理接口（如 Meta/tun0）
     bool isPhysicalInterface(const QString &name) const;
+    // 判断接口是否为无线网卡（链路上"是否无线"的唯一判定入口）：
+    // 优先探测 /sys/class/net/<iface>/wireless 目录是否存在（不依赖命名约定），
+    // 探测不到时回退前缀匹配 wlp/wlan/wlo/wlx。
+    // 设计原因：原先多处硬编码 wlp/wlan 前缀，deepin 25 上的 wlo1 全部漏判
+    // （协商速率恒 0、WiFi 信号恒 0、被当成有线、自动选择时被排除），
+    // 收敛为单一入口后新增命名只需改这一处
+    static bool isWirelessInterface(const QString &iface);
     qint64 getActiveRxBytes() const;
     qint64 getActiveTxBytes() const;
 

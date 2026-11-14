@@ -54,6 +54,8 @@ Control {
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
+    // 无线接口名列表（后端 Q_PROPERTY），用于判定接口类型图标与文案
+    readonly property var wirelessInterfaces: applet ? (applet.wirelessInterfaces || []) : []
     // 活动接口链路层是否断开，由后端低频检测；与 networkview.qml 的同名属性同源
     readonly property bool linkDown: applet ? (applet.linkDown === true) : false
     // 是否呈现断连态：无接口时不成立（该场景由上方占位态呈现，两者语义不能混）
@@ -105,8 +107,17 @@ Control {
     // 排序后的接口列表：物理网卡在前，虚拟网卡在后，各自按名称排序
     // 设计原因：保持稳定排序，活动接口不再移到最前，避免切换网卡时 chip 顺序跳动；
     // 活动 chip 若被截断，由 chipFlickable 自动滚动露出完整样式；
-    // 排序规则统一由 common.sortInterfaces 提供（与设置窗口共用，确保两处顺序一致）
+    // 排序规则统一由 common.sortInterfaces 提供（与设置窗口共用，确保两处顺序一致）；
+    // 排序内部只用命名匹配（wlo/wlx 已补齐），不调用后端方法：该属性会被 Repeater.model
+    // 绑定，绑定中调用 C++ 方法会因依赖重求值中断，导致 chip 列表整体消失
     readonly property var sortedInterfaces: popup.ready ? common.sortInterfaces(popup.networkInterfaces) : []
+
+    // 活动接口是否为无线：从后端的无线接口名列表中查找。
+    // 设计原因：不用 Q_INVOKABLE 方法（真机实测 QML 报 "Property ... is not a function"），
+    // 改走 Q_PROPERTY 属性读取——与 networkInterfaces 同一机制，已验证稳定；
+    // 且属性读取不会在绑定求值时触发 C++ 调用，绑定依赖清晰
+    readonly property bool activeIsWireless: popup.activeInterface !== ""
+        && popup.wirelessInterfaces.indexOf(popup.activeInterface) !== -1
 
     // 供外部调用：popup 打开时滚动到活动 chip
     function scrollToActiveChip(animated) {
@@ -173,7 +184,7 @@ Control {
 
                     // 网卡类型图标：与设置窗口列表图标一致，次要色不抢速度区焦点
                     Text {
-                        text: common.interfaceIcon(popup.activeInterface)
+                        text: common.interfaceIcon(popup.activeInterface, popup.activeIsWireless)
                         font.pixelSize: 12
                         color: popup.tertiaryText
                     }

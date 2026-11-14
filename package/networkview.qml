@@ -44,6 +44,8 @@ AppletItem {
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipv6Address: applet ? (applet.ipv6Address || "") : ""
     readonly property var networkInterfaces: applet ? (applet.networkInterfaces || []) : []
+    // 无线接口名列表（后端 Q_PROPERTY），供设置窗口判定接口类型图标与文案
+    readonly property var wirelessInterfaces: applet ? (applet.wirelessInterfaces || []) : []
     // 活动接口链路层是否断开（后端读 carrier/operstate 判定），供任务栏与提示展示断连态
     readonly property bool linkDown: applet ? (applet.linkDown === true) : false
     // 是否呈现断连态：必须在有接口的前提下才成立
@@ -535,6 +537,7 @@ AppletItem {
         id: settingsWindow
         applet: root.applet
         networkInterfaces: root.networkInterfaces
+        wirelessInterfaces: root.wirelessInterfaces
         activeInterface: root.activeInterface
         accentColor: root.accentRed
         isDarkMode: root.isDarkMode
