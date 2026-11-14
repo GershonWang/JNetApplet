@@ -25,6 +25,9 @@
 #include <QDate>
 #include <QGuiApplication>
 #include <QScreen>
+// std::reverse：导出时把周期键降序排列（最新在前），与统计窗口行序一致。
+// 显式包含而非依赖其它头文件间接引入，避免将来调整 include 顺序后编译失败
+#include <algorithm>
 // 系统通知：Dtk6 Core 提供的封装，内部走 org.freedesktop.Notifications。
 // 选用它而非自建 DBus 调用的原因：本项目已依赖 Dtk6::Core，无需引入新依赖；
 // 且 Dtk6::Core 已传递 Qt6::DBus（见其 INTERFACE_LINK_LIBRARIES），
@@ -626,6 +629,173 @@ void NetworkMonitorApplet::sendNotification(const QString &summary, const QStrin
         .timeOut(8000)
         .replaceId(20261114)
         .call();   // 异步调用，不阻塞主线程；无通知服务时静默失败
+}
+
+// ---- 流量数据导出 ----
+
+// 把流量日志展平为有序行，供 CSV/JSON 两种导出共用
+// 排序口径必须与统计窗口一致（日期降序、同日期内接口名升序），否则导出文件的
+// 行序与用户在界面上看到的不同，用户会怀疑导出的不是同一份数据。
+// 抽为独立函数的另一原因：CSV 与 JSON 若各排一次序，两处规则迟早漂移
+static QVariantList flattenTrafficRows(const QJsonObject &trafficLog, const QString &section)
+{
+    const QJsonObject periods = trafficLog.value(section).toObject();
+
+    // 先取所有周期键并降序排列（"yyyy-MM-dd"/"yyyy-MM" 字典序即时间序）
+    QStringList dates = periods.keys();
+    dates.sort();
+    std::reverse(dates.begin(), dates.end());
+
+    QVariantList rows;
+    for (const QString &date : dates) {
+        const QJsonObject interfaces = periods.value(date).toObject();
+        // 同一周期内按接口名升序
+        QStringList names = interfaces.keys();
+        names.sort();
+        for (const QString &iface : names) {
+            const QJsonObject rec = interfaces.value(iface).toObject();
+            // 走 qint64 而非 double：累计字节数可能超过 2^53，double 会丢精度
+            const qint64 rx = rec.value(QStringLiteral("rx")).toVariant().toLongLong();
+            const qint64 tx = rec.value(QStringLiteral("tx")).toVariant().toLongLong();
+
+            QVariantMap row;
+            row[QStringLiteral("date")] = date;
+            row[QStringLiteral("iface")] = iface;
+            row[QStringLiteral("rx")] = rx;
+            row[QStringLiteral("tx")] = tx;
+            row[QStringLiteral("total")] = rx + tx;
+            rows.append(row);
+        }
+    }
+    return rows;
+}
+
+// CSV 字段转义（RFC 4180）
+// 设计原因：字段含逗号、双引号或换行时必须用双引号包裹，内部双引号成对转义；
+// 当前接口名（eno1/wlo1）和日期不会触发，但这是 CSV 正确性问题——
+// 用户可能改过配置、将来也可能支持自定义别名，届时坏掉极难排查
+static QString csvEscape(const QString &field)
+{
+    if (!field.contains(QLatin1Char(',')) && !field.contains(QLatin1Char('"'))
+        && !field.contains(QLatin1Char('\n')) && !field.contains(QLatin1Char('\r'))) {
+        return field;
+    }
+    QString escaped = field;
+    escaped.replace(QLatin1String("\""), QLatin1String("\"\""));
+    return QLatin1Char('"') + escaped + QLatin1Char('"');
+}
+
+// 把指定 section 的数据导出为 CSV 文本
+// 表头与数据都用纯字节数，便于在表格软件里直接求和；行序与界面一致
+QString NetworkMonitorApplet::exportTrafficAsCsv(const QString &section) const
+{
+    const QVariantList rows = flattenTrafficRows(m_trafficLog, section);
+
+    QString csv;
+    csv += QStringLiteral("date,interface,download_bytes,upload_bytes,total_bytes\n");
+    for (const QVariant &item : rows) {
+        const QVariantMap row = item.toMap();
+        csv += csvEscape(row.value(QStringLiteral("date")).toString());
+        csv += QLatin1Char(',');
+        csv += csvEscape(row.value(QStringLiteral("iface")).toString());
+        csv += QLatin1Char(',');
+        csv += QString::number(row.value(QStringLiteral("rx")).toLongLong());
+        csv += QLatin1Char(',');
+        csv += QString::number(row.value(QStringLiteral("tx")).toLongLong());
+        csv += QLatin1Char(',');
+        csv += QString::number(row.value(QStringLiteral("total")).toLongLong());
+        csv += QLatin1Char('\n');
+    }
+    return csv;
+}
+
+// 把指定 section 的数据导出为 JSON 文本
+// 保留原有嵌套结构并附带 section/exportedAt，便于脚本区分日/月与判断导出时间
+QString NetworkMonitorApplet::exportTrafficAsJson(const QString &section) const
+{
+    QJsonObject root;
+    root[QStringLiteral("section")] = section;
+    root[QStringLiteral("exportedAt")] =
+        QDateTime::currentDateTime().toString(Qt::ISODate);
+    root[QStringLiteral("data")] = m_trafficLog.value(section).toObject();
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
+}
+
+// 把导出内容写到用户选定的路径
+// 返回 {ok, path, error}：失败时带原因而非抛异常，QML 侧据此显示提示
+QVariantMap NetworkMonitorApplet::saveExportFile(const QString &path, const QString &content)
+{
+    QVariantMap result;
+    result[QStringLiteral("ok")] = false;
+    result[QStringLiteral("path")] = path;
+    result[QStringLiteral("error")] = QString();
+
+    if (path.isEmpty()) {
+        result[QStringLiteral("error")] = tr("No file path selected");
+        return result;
+    }
+
+    // 确保目标目录存在：用户在对话框里新建子目录、或降级到下载目录都可能不存在
+    const QFileInfo info(path);
+    QDir dir;
+    if (!dir.mkpath(info.absolutePath())) {
+        result[QStringLiteral("error")] = tr("Cannot create directory: %1").arg(info.absolutePath());
+        return result;
+    }
+
+    // WriteOnly|Truncate = 覆盖写入：覆盖确认由文件对话框负责（用户在对话框里
+    // 明确选定了文件名），此处不再二次询问，否则会出现"对话框问一次、插件再问一次"。
+    // 降级路径（右键导出到下载目录）的文件名带日期，同一天重复导出会覆盖上一次，
+    // 这是刻意的——避免下载目录堆满 jnetapplet-daily-2026-11-14(1).csv 这类副本
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        // 权限不足、路径是目录、磁盘满等都会走到这里
+        result[QStringLiteral("error")] =
+            tr("Cannot write file: %1").arg(file.errorString());
+        return result;
+    }
+
+    const QByteArray payload = content.toUtf8();
+    const qint64 written = file.write(payload);
+    file.close();
+    if (written != payload.size()) {
+        result[QStringLiteral("error")] = tr("Incomplete write, file may be corrupted");
+        return result;
+    }
+
+    result[QStringLiteral("ok")] = true;
+    return result;
+}
+
+// 降级导出路径：下载目录下、带周期与扩展名的文件名
+// 用途：无文件门户服务的环境（FileDialog 弹不出来）直接落盘；
+// 也作为文件对话框的默认文件名，避免用户重复导出时互相覆盖
+QString NetworkMonitorApplet::defaultExportPath(const QString &section,
+                                               const QString &extension) const
+{
+    QString dirPath = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    if (dirPath.isEmpty()) {
+        // 精简环境可能没有配置下载目录，回退到家目录，避免写到根下
+        dirPath = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
+    }
+
+    // 文件名带上范围与当前周期：按日导出 "jnetapplet-daily-2026-11-14.csv"
+    const bool daily = (section == QLatin1String("byDay"));
+    const QString scope = daily ? QStringLiteral("daily") : QStringLiteral("monthly");
+    const QString periodKey = daily ? QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"))
+                                    : QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
+
+    // 扩展名容错：调用方可能传 "csv"、"CSV" 或 ".csv"
+    QString ext = extension;
+    if (ext.startsWith(QLatin1Char('.'))) {
+        ext.remove(0, 1);
+    }
+    if (ext.isEmpty()) {
+        ext = QStringLiteral("csv");
+    }
+
+    return QDir(dirPath).filePath(
+        QStringLiteral("jnetapplet-%1-%2.%3").arg(scope, periodKey, ext));
 }
 
 // 带单位的完整速度字符串，供弹窗、趋势图与悬停提示使用

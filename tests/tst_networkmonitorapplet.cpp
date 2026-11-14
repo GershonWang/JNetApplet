@@ -154,6 +154,16 @@ private slots:
     void testLoadTrafficLogInvalid();
     // 流量日志：文件存在但不可读时禁止写盘，避免覆盖历史
     void testLoadTrafficLogUnreadableBlocksSave();
+
+    // 导出：CSV 序列化（含转义、大数精度、行序）
+    void testExportTrafficAsCsv();
+    // 导出：JSON 序列化（结构、section、字段完整）
+    void testExportTrafficAsJson();
+    // 导出：落盘成功/失败路径
+    void testSaveExportFile();
+    // 导出：降级路径的文件名与扩展名
+    void testDefaultExportPath();
+
     // ss 输出解析：IPv4/IPv6/无进程名/空输入
     void testParseTcpConnectionList();
 
@@ -1167,6 +1177,180 @@ void NetworkMonitorAppletTest::testAggregateSpeedSetting()
 
     applet->setAggregateSpeed(false);
     QVERIFY(!applet->aggregateSpeed());
+
+    delete applet;
+}
+
+// 构造一份用于导出测试的流量日志
+// 覆盖多日期、多接口、含特殊字符的接口名与大数值
+static QJsonObject makeExportFixture()
+{
+    auto rec = [](qint64 rx, qint64 tx) {
+        QJsonObject o;
+        o[QStringLiteral("rx")] = rx;
+        o[QStringLiteral("tx")] = tx;
+        return o;
+    };
+
+    // 2026-11-14：两个接口
+    QJsonObject day1;
+    day1[QStringLiteral("eno1")] = rec(1000, 500);
+    // 含逗号与双引号的接口名：CSV 必须正确转义，否则导出的列数会错
+    day1[QStringLiteral("wlan, \"guest\"")] = rec(2000, 800);
+
+    // 2026-11-13：一个接口，数值超过 2^53（double 会丢精度）
+    QJsonObject day2;
+    day2[QStringLiteral("eth0")] = rec(qint64(9007199254740993LL), 1);
+
+    QJsonObject byDay;
+    byDay[QStringLiteral("2026-11-14")] = day1;
+    byDay[QStringLiteral("2026-11-13")] = day2;
+
+    QJsonObject byMonth;
+    byMonth[QStringLiteral("2026-11")] = day1;
+
+    QJsonObject log;
+    log[QStringLiteral("byDay")] = byDay;
+    log[QStringLiteral("byMonth")] = byMonth;
+    return log;
+}
+
+// CSV 导出：表头、行序、转义与大数精度
+void NetworkMonitorAppletTest::testExportTrafficAsCsv()
+{
+    NetworkMonitorApplet *applet = createApplet();
+    applet->m_trafficLog = makeExportFixture();
+
+    const QString csv = applet->exportTrafficAsCsv(QStringLiteral("byDay"));
+    const QStringList lines = csv.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+
+    // 表头 + 3 行数据（2026-11-14 两个接口，2026-11-13 一个接口）
+    QCOMPARE(lines.size(), 4);
+    QCOMPARE(lines.at(0), QStringLiteral("date,interface,download_bytes,upload_bytes,total_bytes"));
+
+    // 行序：日期降序（最新在前），同日期内接口名升序
+    QVERIFY(lines.at(1).startsWith(QStringLiteral("2026-11-14,")));
+    QVERIFY(lines.at(2).startsWith(QStringLiteral("2026-11-14,")));
+    QVERIFY(lines.at(3).startsWith(QStringLiteral("2026-11-13,")));
+
+    // 同一日期内按接口名升序："eno1" < "wlan, \"guest\""
+    QVERIFY(lines.at(1).contains(QStringLiteral("eno1")));
+    QVERIFY(lines.at(2).contains(QStringLiteral("wlan")));
+
+    // 普通字段不加引号
+    QCOMPARE(lines.at(1), QStringLiteral("2026-11-14,eno1,1000,500,1500"));
+
+    // 含逗号与双引号的接口名：必须整体加引号、内部双引号成对转义。
+    // 原始名称为  wlan, "guest"  →  CSV 中应为  "wlan, ""guest"""
+    QVERIFY(lines.at(2).contains(QStringLiteral("\"wlan, \"\"guest\"\"\"")));
+
+    // 大数精度：超过 2^53 的值不得被 double 截断（9007199254740993 而非 ...992）
+    QVERIFY(lines.at(3).contains(QStringLiteral("9007199254740993")));
+
+    // 按月导出：只有一组数据，同样带表头
+    const QString monthCsv = applet->exportTrafficAsCsv(QStringLiteral("byMonth"));
+    QCOMPARE(monthCsv.split(QLatin1Char('\n'), Qt::SkipEmptyParts).size(), 3);
+
+    // 空 section：只返回表头，不崩溃
+    const QString emptyCsv = applet->exportTrafficAsCsv(QStringLiteral("nope"));
+    QCOMPARE(emptyCsv, QStringLiteral("date,interface,download_bytes,upload_bytes,total_bytes\n"));
+
+    delete applet;
+}
+
+// JSON 导出：结构、section 与字段完整性、大数精度
+void NetworkMonitorAppletTest::testExportTrafficAsJson()
+{
+    NetworkMonitorApplet *applet = createApplet();
+    applet->m_trafficLog = makeExportFixture();
+
+    const QString json = applet->exportTrafficAsJson(QStringLiteral("byDay"));
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    QCOMPARE(err.error, QJsonParseError::NoError);
+    QVERIFY(doc.isObject());
+
+    const QJsonObject root = doc.object();
+    QCOMPARE(root.value(QStringLiteral("section")).toString(), QStringLiteral("byDay"));
+    // exportedAt 必须存在且可解析，便于用户判断导出时间
+    QVERIFY(!root.value(QStringLiteral("exportedAt")).toString().isEmpty());
+
+    const QJsonObject data = root.value(QStringLiteral("data")).toObject();
+    QCOMPARE(data.keys(), (QStringList() << QStringLiteral("2026-11-13")
+                                        << QStringLiteral("2026-11-14")));
+
+    // 大数精度：JSON 里的 2^53+1 必须原样保留
+    const QJsonObject day2 = data.value(QStringLiteral("2026-11-13")).toObject();
+    QCOMPARE(day2.value(QStringLiteral("eth0")).toObject()
+                 .value(QStringLiteral("rx")).toVariant().toLongLong(),
+             qint64(9007199254740993LL));
+
+    // 按月导出只含对应 section，不串数据
+    const QJsonObject monthRoot = QJsonDocument::fromJson(
+        applet->exportTrafficAsJson(QStringLiteral("byMonth")).toUtf8()).object();
+    QCOMPARE(monthRoot.value(QStringLiteral("section")).toString(), QStringLiteral("byMonth"));
+    QVERIFY(monthRoot.value(QStringLiteral("data")).toObject()
+                .contains(QStringLiteral("2026-11")));
+
+    delete applet;
+}
+
+// 落盘：成功、目录自动创建、失败不崩溃
+void NetworkMonitorAppletTest::testSaveExportFile()
+{
+    NetworkMonitorApplet *applet = createApplet();
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // 1. 目标目录尚不存在：应自动创建并写入成功
+    const QString nested = dir.filePath(QStringLiteral("a/b/c/export.csv"));
+    QVariantMap result = applet->saveExportFile(nested, QStringLiteral("hello,世界\n"));
+    QVERIFY2(result.value(QStringLiteral("ok")).toBool(),
+             qPrintable(result.value(QStringLiteral("error")).toString()));
+    QCOMPARE(result.value(QStringLiteral("path")).toString(), nested);
+
+    QFile check(nested);
+    QVERIFY(check.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromUtf8(check.readAll()), QStringLiteral("hello,世界\n"));
+    check.close();
+
+    // 2. 空路径：返回失败并给出原因，不崩溃
+    result = applet->saveExportFile(QString(), QStringLiteral("x"));
+    QVERIFY(!result.value(QStringLiteral("ok")).toBool());
+    QVERIFY(!result.value(QStringLiteral("error")).toString().isEmpty());
+
+    // 3. 路径指向一个目录：写入应失败而非异常
+    result = applet->saveExportFile(dir.path(), QStringLiteral("x"));
+    QVERIFY(!result.value(QStringLiteral("ok")).toBool());
+    QVERIFY(!result.value(QStringLiteral("error")).toString().isEmpty());
+
+    delete applet;
+}
+
+// 降级路径：文件名含范围与周期，扩展名容错
+void NetworkMonitorAppletTest::testDefaultExportPath()
+{
+    NetworkMonitorApplet *applet = createApplet();
+    const QString today = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
+    const QString thisMonth = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
+
+    // 按日：daily + 当天日期
+    const QString daily = applet->defaultExportPath(QStringLiteral("byDay"), QStringLiteral("csv"));
+    QVERIFY(daily.endsWith(QStringLiteral("jnetapplet-daily-%1.csv").arg(today)));
+
+    // 按月：monthly + 当月
+    const QString monthly = applet->defaultExportPath(QStringLiteral("byMonth"), QStringLiteral("json"));
+    QVERIFY(monthly.endsWith(QStringLiteral("jnetapplet-monthly-%1.json").arg(thisMonth)));
+
+    // 扩展名容错：带点、大写、空值
+    QVERIFY(applet->defaultExportPath(QStringLiteral("byDay"), QStringLiteral(".CSV"))
+                .endsWith(QStringLiteral(".CSV")));
+    QVERIFY(applet->defaultExportPath(QStringLiteral("byDay"), QString())
+                .endsWith(QStringLiteral(".csv")));
+
+    // 必须是绝对路径（否则 QML 侧无法判断写到了哪里）
+    QVERIFY(QFileInfo(daily).isAbsolute());
 
     delete applet;
 }

@@ -264,6 +264,21 @@ public:
     // 保存窗口的"置顶"状态（键名不在白名单内时静默忽略）
     Q_INVOKABLE void setWindowPinned(const QString &key, bool pinned);
 
+    // ---- 流量数据导出 ----
+    // 把指定 section（"byDay"/"byMonth"）的数据序列化为 CSV 文本。
+    // 设计原因：序列化逻辑放在 C++ 而非 QML，唯一目的是**可被单元测试覆盖**——
+    // 转义、大数精度、排序这些正确性问题在 QML 里写就只能靠肉眼验证。
+    // 数值用纯字节数而非 "1.23 GB"：导出用于二次分析，格式化会丢精度且无法求和
+    Q_INVOKABLE QString exportTrafficAsCsv(const QString &section) const;
+    // 把指定 section 的数据序列化为带缩进的 JSON 文本（附 section 与导出时间）
+    Q_INVOKABLE QString exportTrafficAsJson(const QString &section) const;
+    // 把 content 写到 path，返回 {ok, path, error}。
+    // 负责创建目标目录；写失败时返回 ok=false 并带错误信息，不抛异常也不崩溃
+    Q_INVOKABLE QVariantMap saveExportFile(const QString &path, const QString &content);
+    // 返回降级导出路径（下载目录下、带周期与扩展名）。
+    // 用途有二：作为文件对话框的默认文件名；供无文件门户服务的环境直接落盘
+    Q_INVOKABLE QString defaultExportPath(const QString &section, const QString &extension) const;
+
 signals:
     void speedChanged();
     void totalChanged();
