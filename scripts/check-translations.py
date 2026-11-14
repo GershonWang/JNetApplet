@@ -22,8 +22,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 TS_FILE = ROOT / "translations" / "jnetapplet_zh_CN.ts"
 
-# 匹配 qsTr("...")，允许字符串内含转义引号；不处理跨多行的罕见写法
-QSTR_RE = re.compile(r'qsTr\(\s*"((?:[^"\\]|\\.)*)"')
+# 匹配 qsTr("...") 与 QObject::tr("...")，允许字符串内含转义引号；
+# 不处理跨多行的罕见写法。
+# 同时匹配 tr() 的原因：C++ 侧的系统通知文案也用 tr() 走同一套翻译，
+# 只查 qsTr 会让"代码里有 tr、.ts 里没有"的漏译悄悄溜过去
+QSTR_RE = re.compile(r'(?:qsTr|(?<![\w.])tr)\(\s*"((?:[^"\\]|\\.)*)"')
 
 
 def collect_sources() -> dict[str, list[str]]:

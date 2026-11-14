@@ -239,6 +239,31 @@
         <source>Uninstall command copied to clipboard. Please paste and run it in terminal.</source>
         <translation>卸载命令已复制到剪贴板，请在终端中粘贴执行</translation>
     </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Traffic Alerts</source>
+        <translation>流量提醒</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Today used: %1 GB · This month: %2 GB</source>
+        <translation>今日已用 %1 GB · 本月已用 %2 GB</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Daily limit</source>
+        <translation>每日上限</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Monthly limit</source>
+        <translation>每月上限</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>0 = off</source>
+        <translation>0 = 关闭</translation>
+    </message>
 </context>
 <context>
     <name>TrafficChartWindow</name>
@@ -516,4 +541,27 @@
         <translation>取消置顶</translation>
     </message>
 </context>
+        <context>
+        <name>NetworkMonitorApplet</name>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Daily traffic limit exceeded</source>
+        <translation>每日流量已超出设定额度</translation>
+    </message>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Used %1 GB today (limit %2 GB)</source>
+        <translation>今日已用 %1 GB（阈值 %2 GB）</translation>
+    </message>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Monthly traffic limit exceeded</source>
+        <translation>本月流量已超出设定额度</translation>
+    </message>
+    <message>
+        <location filename="../src/networkmonitorapplet.cpp" line="0"/>
+        <source>Used %1 GB this month (limit %2 GB)</source>
+        <translation>本月已用 %1 GB（阈值 %2 GB）</translation>
+    </message>
+    </context>
 </TS>
