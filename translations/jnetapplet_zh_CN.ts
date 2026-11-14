@@ -599,6 +599,11 @@
         <source>Follow System</source>
         <translation>跟随系统</translation>
     </message>
+    <message>
+        <location filename="../package/components/TextColorPicker.qml" line="0"/>
+        <source>Color %1</source>
+        <translation>颜色 %1</translation>
+    </message>
 </context>
 <context>
     <name>TitleBar</name>
