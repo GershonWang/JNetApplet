@@ -45,7 +45,12 @@ Window {
     // 2 秒后由 copyResetTimer 复位
     property bool copied: false
 
-    width: 320
+    // 宽度 400 而非 320：仓库地址行要一行显示。
+    // 核算过：320 宽扣掉卡片边框 2、内容左右边距 32、标签固定 56、复制按钮 24 后
+    // 只剩约 200px，而 "github.com/GershonWang/JNetApplet" 在 12px 下需 218~257px，
+    // 算数上就放不下（原先靠 wrapMode: Text.WrapAnywhere 折成两行）。
+    // 400 宽时可用约 286px，留有余量；关于窗口内容本就少，不算大
+    width: 400
     height: 260
     visible: false
     flags: Qt.FramelessWindowHint | Qt.Window
@@ -202,7 +207,10 @@ Window {
                     }
                 }
 
-                // 仓库行：URL 无空格，需 WrapAnywhere 才能在窄宽度下正确折行
+                // 仓库行：要求地址一行显示（窗口已加宽到 400 保障这一点）。
+                // 不用 WrapAnywhere：折行正是本次要去掉的行为。
+                // 仍保留 Elide 作为兜底——若用户把系统字号调到极大，地址可能仍超出，
+                // 此时用省略号而非折行，保持"一行"的视觉契约不被破坏
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
@@ -220,7 +228,10 @@ Window {
                         font.pixelSize: common.fontSizeBody
                         color: theme.textTertiary
                         Layout.fillWidth: true
-                        wrapMode: Text.WrapAnywhere
+                        // 单行显示：不折行，超宽时右侧省略号。
+                        // 点击可复制完整地址（含 https:// 前缀），信息不丢失
+                        elide: Text.ElideRight
+                        wrapMode: Text.NoWrap
                     }
 
                     // 复制按钮：点击复制仓库地址到剪贴板，成功后图标变绿并显示"已复制"提示 2 秒
