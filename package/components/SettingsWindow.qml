@@ -515,177 +515,187 @@ Window {
                         wrapMode: Text.WordWrap
                     }
 
-                    // ---- 流量提醒 ----
-                    // 设计原因：用户在没有运营商用量面板时无法察觉当天/当月已用多少，
-                    // 等到被限速才发现超量。提供日/月阈值，超限后发一次系统通知。
-                    // 阈值单位取十进制 GB（1 GB = 1000³ 字节），与运营商套餐口径一致；
-                    // 填 0 或留空表示关闭提醒
-                    Text {
-                        Layout.topMargin: common.spacingGroup
-                        text: qsTr("Traffic Alerts")
-                        font.pixelSize: common.fontSizeSubtitle
-                        font.weight: Font.Bold
-                        color: theme.textSecondary
-                    }
-
-                    // 今日已用回显：让用户有依据地决定阈值填多少，而不是凭感觉
-                    // 数值取自后端 todayUsedBytes（与「流量统计」窗口同口径）
-                    Text {
-                        text: qsTr("Today used: %1 GB · This month: %2 GB")
-                              .arg(((applet ? applet.todayUsedBytes : 0) / 1e9).toFixed(2))
-                              .arg(((applet ? applet.monthUsedBytes : 0) / 1e9).toFixed(2))
-                        font.pixelSize: common.fontSizeSmall
-                        color: theme.textTertiary
+                    // ---- 流量提醒（默认折叠：低频配置项）----
+                    // 折叠理由：分区增至 7 个后内容约 900px 超过窗口 640px，
+                    // 首屏看不到底部功能。阈值属设置一次就不再动的低频项，故默认收起；
+                    // 折叠状态不持久化，用户在设置窗口内展开即可看到
+                    CollapsibleSection {
                         Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                    }
+                        title: qsTr("Traffic Alerts")
+                        titleFontSize: common.fontSizeSubtitle
+                        titleColor: theme.textSecondary
+                        indicatorColor: theme.textTertiary
+                        expanded: false
 
-                    // 日/月阈值输入行：标签 + 输入框 + 单位，两行结构对称
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
+                        // 今日已用回显：让用户有依据地决定阈值填多少，而不是凭感觉
+                        // 数值取自后端 todayUsedBytes（与「流量统计」窗口同口径）
                         Text {
-                            text: qsTr("Daily limit")
-                            font.pixelSize: common.fontSizeBody
-                            color: theme.textPrimary
-                            Layout.preferredWidth: 90
-                        }
-
-                        // 文本输入而非 SpinBox：用户可能想填 1.5 GB 这类小数，
-                        // SpinBox 的整数步进无法表达
-                        TextField {
-                            id: dailyLimitField
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 30
-                            placeholderText: qsTr("0 = off")
-                            font.pixelSize: common.fontSizeBody
-                            color: theme.textPrimary
-                            selectByMouse: true
-                            // 校验器限制为最多两位小数的非负数：从源头挡掉字母与负号，
-                            // 但仍需后端归一化兜底（如粘贴绕过校验、或清空后为空串）
-                            validator: DoubleValidator {
-                                bottom: 0
-                                decimals: 2
-                                notation: DoubleValidator.StandardNotation
-                            }
-                            onEditingFinished: {
-                                if (!applet) return
-                                // 空串按 0（关闭）处理；toDouble() 对非法输入返回 0
-                                applet.dailyLimitGb = text.length === 0 ? 0 : parseFloat(text)
-                                // 回写标准化后的值，让用户看到后端实际采纳的阈值
-                                text = applet.dailyLimitGb > 0 ? applet.dailyLimitGb : ""
-                            }
-                        }
-
-                        Text {
-                            text: "GB"
-                            font.pixelSize: common.fontSizeBody
+                            text: qsTr("Today used: %1 GB · This month: %2 GB")
+                                  .arg(((applet ? applet.todayUsedBytes : 0) / 1e9).toFixed(2))
+                                  .arg(((applet ? applet.monthUsedBytes : 0) / 1e9).toFixed(2))
+                            font.pixelSize: common.fontSizeSmall
                             color: theme.textTertiary
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Text {
-                            text: qsTr("Monthly limit")
-                            font.pixelSize: common.fontSizeBody
-                            color: theme.textPrimary
-                            Layout.preferredWidth: 90
-                        }
-
-                        TextField {
-                            id: monthlyLimitField
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 30
-                            placeholderText: qsTr("0 = off")
-                            font.pixelSize: common.fontSizeBody
-                            color: theme.textPrimary
-                            selectByMouse: true
-                            validator: DoubleValidator {
-                                bottom: 0
-                                decimals: 2
-                                notation: DoubleValidator.StandardNotation
+                            wrapMode: Text.WordWrap
+                        }
+
+                        // 日/月阈值输入行：标签 + 输入框 + 单位，两行结构对称
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Text {
+                                text: qsTr("Daily limit")
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textPrimary
+                                Layout.preferredWidth: 90
                             }
-                            onEditingFinished: {
-                                if (!applet) return
-                                applet.monthlyLimitGb = text.length === 0 ? 0 : parseFloat(text)
-                                text = applet.monthlyLimitGb > 0 ? applet.monthlyLimitGb : ""
+
+                            // 文本输入而非 SpinBox：用户可能想填 1.5 GB 这类小数，
+                            // SpinBox 的整数步进无法表达
+                            TextField {
+                                id: dailyLimitField
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 30
+                                placeholderText: qsTr("0 = off")
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textPrimary
+                                selectByMouse: true
+                                // 校验器限制为最多两位小数的非负数：从源头挡掉字母与负号，
+                                // 但仍需后端归一化兜底（如粘贴绕过校验、或清空后为空串）
+                                validator: DoubleValidator {
+                                    bottom: 0
+                                    decimals: 2
+                                    notation: DoubleValidator.StandardNotation
+                                }
+                                onEditingFinished: {
+                                    if (!applet) return
+                                    // 空串按 0（关闭）处理；toDouble() 对非法输入返回 0
+                                    applet.dailyLimitGb = text.length === 0 ? 0 : parseFloat(text)
+                                    // 回写标准化后的值，让用户看到后端实际采纳的阈值
+                                    text = applet.dailyLimitGb > 0 ? applet.dailyLimitGb : ""
+                                }
+                            }
+
+                            Text {
+                                text: "GB"
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textTertiary
                             }
                         }
 
-                        Text {
-                            text: "GB"
-                            font.pixelSize: common.fontSizeBody
-                            color: theme.textTertiary
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Text {
+                                text: qsTr("Monthly limit")
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textPrimary
+                                Layout.preferredWidth: 90
+                            }
+
+                            TextField {
+                                id: monthlyLimitField
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 30
+                                placeholderText: qsTr("0 = off")
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textPrimary
+                                selectByMouse: true
+                                validator: DoubleValidator {
+                                    bottom: 0
+                                    decimals: 2
+                                    notation: DoubleValidator.StandardNotation
+                                }
+                                onEditingFinished: {
+                                    if (!applet) return
+                                    applet.monthlyLimitGb = text.length === 0 ? 0 : parseFloat(text)
+                                    text = applet.monthlyLimitGb > 0 ? applet.monthlyLimitGb : ""
+                                }
+                            }
+
+                            Text {
+                                text: "GB"
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textTertiary
+                            }
+                        }
+
+                        // 输入框初值与外部变化同步：用 Binding 而非 text: 直接绑定。
+                        // 设计原因：直接绑定会在用户首次输入时被 TextField 的内部赋值销毁，
+                        // 之后再改配置也不会反映到输入框（与 TcpConnectionsWindow 的搜索框同一坑）。
+                        // 阈值 <= 0 时显示空串，与占位提示 "0 = off" 配合表达"已关闭"
+                        Binding {
+                            target: dailyLimitField
+                            property: "text"
+                            value: (applet && applet.dailyLimitGb > 0)
+                                   ? String(applet.dailyLimitGb) : ""
+                            restoreMode: Binding.RestoreNone
+                        }
+                        Binding {
+                            target: monthlyLimitField
+                            property: "text"
+                            value: (applet && applet.monthlyLimitGb > 0)
+                                   ? String(applet.monthlyLimitGb) : ""
+                            restoreMode: Binding.RestoreNone
                         }
                     }
 
-                    // 输入框初值与外部变化同步：用 Binding 而非 text: 直接绑定。
-                    // 设计原因：直接绑定会在用户首次输入时被 TextField 的内部赋值销毁，
-                    // 之后再改配置也不会反映到输入框（与 TcpConnectionsWindow 的搜索框同一坑）。
-                    // 阈值 <= 0 时显示空串，与占位提示 "0 = off" 配合表达"已关闭"
-                    Binding {
-                        target: dailyLimitField
-                        property: "text"
-                        value: (applet && applet.dailyLimitGb > 0)
-                               ? String(applet.dailyLimitGb) : ""
-                        restoreMode: Binding.RestoreNone
-                    }
-                    Binding {
-                        target: monthlyLimitField
-                        property: "text"
-                        value: (applet && applet.monthlyLimitGb > 0)
-                               ? String(applet.monthlyLimitGb) : ""
-                        restoreMode: Binding.RestoreNone
-                    }
-
-                    // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担。
-                    // 用 IconButton 的内容插槽承载原有 Text——它的文字需要
-                    // elide/居中/Medium 字重，塞进 symbol 会丢失这些样式
-                    IconButton {
-                        id: uninstallButton
-                        accessibleName: qsTr("Uninstall Plugin")
+                    // ---- 卸载插件（默认折叠：极少使用且具破坏性）----
+                    CollapsibleSection {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 40
-                        radius: 10
-                        borderWidth: 1
-                        borderColor: accentColor
-                        // 三态：按下 > hover > 常态，底色透明度逐级加深
-                        baseColor: common.accentRedLight
-                        hoverColor: common.accentRedHover
-                        pressedColor: Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
-                        onClicked: uninstallConfirmDialog.open()
+                        title: qsTr("Uninstall Plugin")
+                        titleFontSize: common.fontSizeSubtitle
+                        titleColor: accentColor
+                        indicatorColor: theme.textTertiary
+                        expanded: false
 
+                        // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担。
+                        // 用 IconButton 的内容插槽承载原有 Text——它的文字需要
+                        // elide/居中/Medium 字重，塞进 symbol 会丢失这些样式
+                        IconButton {
+                            id: uninstallButton
+                            accessibleName: qsTr("Uninstall Plugin")
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            radius: 10
+                            borderWidth: 1
+                            borderColor: accentColor
+                            // 三态：按下 > hover > 常态，底色透明度逐级加深
+                            baseColor: common.accentRedLight
+                            hoverColor: common.accentRedHover
+                            pressedColor: Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
+                            onClicked: uninstallConfirmDialog.open()
+
+                            Text {
+                                // 只声明垂直居中：水平方向由 left/right + margins 决定宽度，
+                                // 与 centerIn 同时声明属于冲突锚点（运行时会告警且以最后赋值者为准）
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.margins: 8
+                                text: qsTr("Uninstall Plugin")
+                                font.pixelSize: common.fontSizeSubtitle
+                                font.weight: Font.Medium
+                                color: accentColor
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        // 复制成功提示行：独立于按钮，长文案可换行且不受按钮高度限制
+                        // 5 秒后由 statusHideTimer 清除（uninstallCopied 置回 false）
                         Text {
-                            // 只声明垂直居中：水平方向由 left/right + margins 决定宽度，
-                            // 与 centerIn 同时声明属于冲突锚点（运行时会告警且以最后赋值者为准）
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.margins: 8
-                            text: qsTr("Uninstall Plugin")
-                            font.pixelSize: common.fontSizeSubtitle
-                            font.weight: Font.Medium
-                            color: accentColor
+                            Layout.fillWidth: true
+                            Layout.topMargin: -4
+                            visible: root.uninstallCopied
+                            text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
+                            font.pixelSize: common.fontSizeSmall
+                            color: common.accentGreen
                             horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                        }
+                            wrapMode: Text.WordWrap
                     }
-
-                    // 复制成功提示行：独立于按钮，长文案可换行且不受按钮高度限制
-                    // 5 秒后由 statusHideTimer 清除（uninstallCopied 置回 false）
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.topMargin: -4
-                        visible: root.uninstallCopied
-                        text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
-                        font.pixelSize: common.fontSizeSmall
-                        color: common.accentGreen
-                        horizontalAlignment: Text.AlignHCenter
-                        wrapMode: Text.WordWrap
                     }
 
 
