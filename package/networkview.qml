@@ -25,11 +25,29 @@ AppletItem {
     // 设计原因：dde-shell 规范用法，org.deepin.ds.dock 已在 line 11 导入
     property bool isVerticalDock: Panel.position % 2 === 1
 
-    // 水平任务栏：宽度稍宽容纳双行数值，高度匹配 dock 尺寸
-    // 竖向任务栏：宽度匹配 dock 尺寸（~40px），高度加大容纳竖排字符
-    // 2.4 倍：dockSize=40 时约 96px，可容纳最多 8 字符的速度字符串（如 "1023.99K"）
-    // 增大字号后需更高以容纳竖排字符
-    implicitWidth: isVerticalDock ? dockSize : Math.round(dockSize * 1.35)
+    // 水平任务栏宽度需要容纳"↓ 194.07K"这类双行数值；竖向任务栏宽度匹配 dock 尺寸
+    // 2.4 倍高度：dockSize=40 时约 96px，可容纳竖排的速度字符串
+    //
+    // 宽度按当前**单位模式**下最长数值实测，而不是沿用固定的 dockSize*1.35。
+    // 设计原因：固定 Mbps 模式会出现 "100.00Mbps"（10 字符），原 1.35 倍（48→65px）
+    // 会把它裁掉；而智能自动模式最长只有 "1023.99K"，若一律按 Mbps 宽度加宽，
+    // 默认模式下图标会无谓变宽。故用 TextMetrics 按实际字号/字重测量"最长候选字符串"，
+    // 与下方整数位宽（intPartMetrics）同一套实测思路，不依赖字符数估算
+    TextMetrics {
+        id: maxSpeedMetrics
+        font.pixelSize: root.dockSize * 0.25
+        font.weight: Font.Medium
+        // Mbps 档最长 10 字符（100.00Mbps）；自动/KB 档最长 8 字符（1023.99K）
+        text: root.applet && root.applet.speedUnitIsMbps ? "100.00Mbps" : "1023.99K"
+    }
+    // 行内还有 "↓" 箭头（约字号的 0.2 倍）与 4px 间距、左右各 4px 边距
+    // 乘 1.15 作为余量，覆盖箭头与间距；下限保持原宽度，避免默认档变窄
+    readonly property real speedRowWidth: maxSpeedMetrics.advanceWidth * 1.15
+                                           + root.dockSize * 0.20 + 12
+
+    implicitWidth: isVerticalDock
+                   ? dockSize
+                   : Math.max(Math.round(dockSize * 1.35), Math.round(speedRowWidth))
     implicitHeight: isVerticalDock ? Math.round(dockSize * 2.4) : dockSize
 
     readonly property var applet: Applet
@@ -39,6 +57,12 @@ AppletItem {
     readonly property real totalDownload: applet ? applet.totalDownload : 0
     readonly property real totalUpload: applet ? applet.totalUpload : 0
     readonly property string activeInterface: applet ? (applet.activeInterface || "") : ""
+    // 活动接口连接到的 WiFi 名称（后端 Q_PROPERTY），非无线或未连接时为空串
+    readonly property string activeSsid: applet ? (applet.activeSsid || "") : ""
+    // 对外展示用的接口名称：无线且已连接时用 WiFi 名称，否则回退接口名。
+    // 设计原因：wlo1/eno1 由内核按 PCI 位置生成，用户无法据此判断"连的是哪个 WiFi"；
+    // 回退逻辑收敛到 NetCommon.displayName()，与弹窗共用同一规则
+    readonly property string displayName: common.displayName(activeInterface, activeSsid)
     // 活动接口的 IPv4 地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipAddress: applet ? (applet.ipAddress || "") : ""
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
@@ -55,40 +79,33 @@ AppletItem {
 
     // 公共颜色与格式化函数：集中定义于 components/NetCommon.qml（随 import "components" 引入），
     // 与 NetworkPopup、TrafficChartWindow 共享同一份实现，消除跨组件重复定义
-    NetCommon { id: common }
+    NetCommon {
+        id: common
+        // 注入后端对象：单位换算由后端统一完成，QML 不再各自维护 KB/MB/GB 阈值表
+        applet: root.applet
+    }
 
     // 排序后的接口列表已不再需要：排序规则统一由 NetCommon.sortInterfaces 提供
     // （本文件此前维护的 sortedInterfaces 全工程无人引用，故删除）
 
-    // 紧凑格式化速度（用于任务栏图标和 tooltip，不带单位后缀，节省空间）
-    // 设计原因：任务栏 ~48px 空间有限，"1.2M" 比 "1.2 MB/s" 节省约一半宽度
-    // 最小单位为 KB：B 级别也转换为 KB 显示（如 512 B/s -> "0.50K"），
-    // 避免纯数字无后缀时用户无法判断单位；所有级别保留 2 位小数
-    function formatSpeedShort(bytesPerSec) {
-        if (bytesPerSec < 1024 * 1024) {
-            return (bytesPerSec / 1024).toFixed(2) + "K"
-        } else if (bytesPerSec < 1024 * 1024 * 1024) {
-            return (bytesPerSec / (1024 * 1024)).toFixed(2) + "M"
-        } else {
-            return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + "G"
-        }
-    }
-
-    // 拆分速度字符串为整数部分：formatSpeedShort("194.07K") -> "194"
-    // 用于任务栏双行数值小数点对齐：整数部分右对齐，小数部分左对齐，
+    // 速度格式化统一走后端：NetCommon 与 networkview 曾各自维护一套 KB/MB/GB 阈值，
+    // 新增"固定 Mbps"单位后若继续各写一份必然漂移。
+    // 现在换算规则只在 C++ 的 formatSpeed/formatSpeedCompact 里定义（可被单元测试覆盖），
+    // 本文件只做拆分以便任务栏的小数点对齐渲染。
+    // 设计原因：任务栏宽度有限，且采用"整数部分右对齐 + 小数部分左对齐"的两段式渲染，
     // 整数位数不同时小数点仍垂直对齐
     function formatSpeedIntPart(bytesPerSec) {
-        var str = formatSpeedShort(bytesPerSec)
-        var idx = str.indexOf('.')
-        return idx < 0 ? str : str.substring(0, idx)
+        return applet ? applet.formatSpeedCompact(bytesPerSec, applet.speedUnit, true)
+                      : "0.00"
     }
 
-    // 拆分速度字符串为小数+单位部分：formatSpeedShort("194.07K") -> ".07K"
+    // 拆分速度字符串为小数+单位部分：0.85Mbps -> ".85Mbps"
     // 与 formatSpeedIntPart 配合，分别渲染实现小数点对齐
     function formatSpeedDecimalPart(bytesPerSec) {
-        var str = formatSpeedShort(bytesPerSec)
-        var idx = str.indexOf('.')
-        return idx < 0 ? "" : str.substring(idx)
+        if (!applet) return ""
+        var full = applet.formatSpeedCompact(bytesPerSec, applet.speedUnit, false)
+        var intPart = applet.formatSpeedCompact(bytesPerSec, applet.speedUnit, true)
+        return full.substring(intPart.length)
     }
 
     // 统一打开独立窗口：右键菜单与弹窗内的详情入口共用这一个入口
@@ -304,8 +321,12 @@ AppletItem {
 
             Repeater {
                 // 将 "6.64K" 拆为 ["6", ".", "6", "4", "K"] 逐字符渲染
-                // 属性绑定：downloadSpeed 变化时 formatSpeedShort 重算，split 自动刷新 model
-                model: root.formatSpeedShort(root.downloadSpeed).split('')
+                // 属性绑定：速度或单位变化时后端重新格式化，split 自动刷新 model
+                // 注意：此处必须直接用后端返回值（而不是在 QML 里拼接单位），
+                // 否则竖排与横排会显示两套不同的单位口径
+                model: root.applet
+                       ? root.applet.formatSpeedCompact(root.downloadSpeed, root.applet.speedUnit, false).split('')
+                       : []
                 Text {
                     text: modelData
                     font.pixelSize: root.dockSize * 0.25
@@ -330,7 +351,9 @@ AppletItem {
             }
 
             Repeater {
-                model: root.formatSpeedShort(root.uploadSpeed).split('')
+                model: root.applet
+                       ? root.applet.formatSpeedCompact(root.uploadSpeed, root.applet.speedUnit, false).split('')
+                       : []
                 Text {
                     text: modelData
                     font.pixelSize: root.dockSize * 0.25
@@ -356,15 +379,17 @@ AppletItem {
     }
 
     // 悬停提示：网卡名 + IPv4 单行，IPv6 在第二行（仅有 IPv6 时追加）
-    // 设计原因：IPv6 地址较长，单行容纳不下；无 IPv6 时保持单行与原视觉一致
+    // 设计原因：IPv6 地址较长，单行容纳不下；无 IPv6 时保持单行与原视觉一致。
+    // 接口名经 common.displayName() 处理：无线且已连接时显示 WiFi 名称（如 "Home"），
+    // 否则回退接口名（如 "wlo1"）——wlo1 这种内核命名对用户没有意义
     PanelToolTip {
         id: toolTip
         text: !root.ready
               ? qsTr("No network interface detected")
               : (root.linkDownNow
                  // 断连时只说明接口已断开，不再拼地址行（此时地址可能仍是残留值）
-                 ? (root.activeInterface + " · " + qsTr("Disconnected"))
-                 : (root.activeInterface
+                 ? (root.displayName + " · " + qsTr("Disconnected"))
+                 : (root.displayName
                     + " · " + qsTr("IPv4: ") + (root.ipAddress || qsTr("None"))
                     + (root.ipv6Address ? "\n" + qsTr("IPv6: ") + root.ipv6Address : "")))
         toolTipX: DockPanelPositioner.x

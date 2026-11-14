@@ -49,6 +49,11 @@ Control {
     readonly property real totalDownload: applet ? applet.totalDownload : 0
     readonly property real totalUpload: applet ? applet.totalUpload : 0
     readonly property string activeInterface: applet ? (applet.activeInterface || "") : ""
+    // 活动接口连接到的 WiFi 名称（后端 Q_PROPERTY），非无线或未连接时为空串
+    readonly property string activeSsid: applet ? (applet.activeSsid || "") : ""
+    // 展示用的接口名称：无线已连接时用 WiFi 名称，否则回退接口名。
+    // 与任务栏悬停提示共用 NetCommon.displayName() 的回退规则
+    readonly property string displayName: common.displayName(activeInterface, activeSsid)
     // 活动接口的 IPv4 地址，由 C++ 后端 detectIpAddress 持续更新
     readonly property string ipAddress: applet ? (applet.ipAddress || "") : ""
     // 活动接口的 IPv6 全球地址，由 C++ 后端 detectIpAddress 持续更新
@@ -193,9 +198,11 @@ Control {
                         color: popup.tertiaryText
                     }
 
-                    // 接口名：跟随用户 textColor（primaryText），Spec 5.1 节要求
+                    // 接口名：无线且已连接时显示 WiFi 名称，否则回退接口名（wlo1/eno1）
+                    // 跟随用户 textColor（primaryText），Spec 5.1 节要求。
+                    // 回退规则经 common.displayName()，与任务栏悬停提示共用一处实现
                     Text {
-                        text: popup.activeInterface
+                        text: popup.displayName
                         font.pixelSize: 13
                         color: popup.primaryText
                     }

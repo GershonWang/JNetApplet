@@ -105,16 +105,32 @@ QtObject {
         return physical.concat(virtual)
     }
 
-    // 格式化速度显示（带单位，用于弹出面板，信息更完整）
-    // 最小单位为 KB，与 networkview.qml 的 formatSpeedShort 保持一致；所有级别保留 2 位小数
+    // 后端对象：由使用方注入（如 `common.applet: root.applet`）。
+    // 设计原因：格式化需要后端换算，但本组件被多处实例化（弹窗/趋势图/设置窗口）；
+    // 用属性注入而非全局单例，保证各窗口共享同一个后端实例，且组件可独立预览时置空。
+    // 单位也由后端 speedUnit 决定，调用方无需再传——避免各处传参不一致
+    property var applet: null
+
+    // 当前速度显示单位，直接转发后端；无后端对象时按智能自动（0）处理
+    readonly property int speedUnit: applet ? (applet.speedUnit || 0) : 0
+    // 语义化判据转发：调用方用 common.speedUnitIsMbps 而不是 `speedUnit === 2`，
+    // 避免单位取值调整后散落的数字比较静默失配
+    readonly property bool speedUnitIsMbps: applet ? (applet.speedUnitIsMbps === true) : false
+    readonly property bool speedUnitIsKBps: applet ? (applet.speedUnitIsKBps === true) : false
+
+    // 格式化速度显示（带单位，用于弹出面板与趋势图）
+    // 设计原因：换算规则不再在本文件实现，而是转调后端 formatSpeed()——
+    // 单位有三档（智能自动 / 固定 KB/s / 固定 Mbps），若 QML 再维护一份阈值表，
+    // 与后端必然漂移；放在 C++ 还能被单元测试覆盖（见 tests/）。
+    // 独立预览（applet 为空）时退回智能自动的本地实现，保证组件可单独渲染
     function formatSpeed(bytesPerSec) {
+        if (applet) return applet.formatSpeed(bytesPerSec, speedUnit)
         if (bytesPerSec < 1024 * 1024) {
             return (bytesPerSec / 1024).toFixed(2) + " KB/s"
         } else if (bytesPerSec < 1024 * 1024 * 1024) {
             return (bytesPerSec / (1024 * 1024)).toFixed(2) + " MB/s"
-        } else {
-            return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + " GB/s"
         }
+        return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + " GB/s"
     }
 
     // 格式化总量显示（用于弹出面板的累计统计）
@@ -128,6 +144,16 @@ QtObject {
         } else {
             return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB"
         }
+    }
+
+    // 对外展示用的接口名称：有 WiFi 名称就用它，否则回退接口名。
+    // 设计原因：wlo1/eno1 这类名字由内核按 PCI 位置生成，用户无法据此判断
+    // "连的是哪个 WiFi"；此前任务栏提示与弹窗各自拼接口名，新增 SSID 后
+    // 若各写一套"有则替换"的判断，必然出现一处显示 SSID、一处仍显示 wlo1 的错位。
+    // 参数 ssid 允许为空（非无线接口、无线未连接、或后端尚未取到）
+    function displayName(iface, ssid) {
+        if (ssid && ssid.length > 0) return ssid
+        return iface || ""
     }
 
     // 根据接口名返回类型图标（Unicode 符号），用于网络接口列表和弹窗接口信息区

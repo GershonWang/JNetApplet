@@ -31,7 +31,11 @@ WindowShell {
 
     // 公共格式化函数：集中定义于同目录 NetCommon.qml，
     // 与 networkview.qml、NetworkPopup 共享同一份实现，消除跨组件重复定义
-    NetCommon { id: common }
+    NetCommon {
+        id: common
+        // 注入后端对象：单位换算（formatSpeed）由后端统一完成，避免 QML 再维护阈值表
+        applet: root.applet
+    }
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 speedHistoryDownload / speedHistoryUpload（QVariantList of QPointF，
@@ -145,9 +149,24 @@ WindowShell {
         return nf * base
     }
 
-    // Y 轴刻度单位选择：根据上限自动选择 B/KB/MB/GB，返回 {div, suffix}
-    // 设计原因：让刻度数值保持在 0~1000 的易读区间（如 200 KB 而非 204800 B）
+    // Y 轴刻度单位选择：根据上限自动选择，返回 {div, suffix}
+    // 设计原因：让刻度数值保持在 0~1000 的易读区间（如 200 KB 而非 204800 B）。
+    //
+    // 单位跟随用户设置（common.speedUnit）：
+    //   - 固定 Mbps：刻度一律用 Mbps，div = 1e6/8（即每 Mbps 对应的字节数），
+    //     这样曲线（仍以 bytes/sec 存储）除以 div 后正好落在同样的坐标上，
+    //     刻度数值与顶部速度文字口径一致；
+    //   - 固定 KB/s：刻度一律用 KB，不做自适应换挡；
+    //   - 智能自动：沿用原来的 B/KB/MB/GB 自适应。
+    // 若这里不跟随单位，改为 Mbps 后刻度仍是 "KB/MB"，图表标题与坐标轴会两套口径
     function axisUnit(yMax) {
+        if (common.speedUnitIsMbps) {
+            // 1 Mbps = 1e6 bit/s = 125000 bytes/s
+            return { div: 125000, suffix: "Mbps" }
+        }
+        if (common.speedUnitIsKBps) {
+            return { div: 1024, suffix: "KB/s" }
+        }
         if (yMax >= 1024 * 1024 * 1024) return { div: 1024 * 1024 * 1024, suffix: "GB" }
         if (yMax >= 1024 * 1024) return { div: 1024 * 1024, suffix: "MB" }
         if (yMax >= 1024) return { div: 1024, suffix: "KB" }

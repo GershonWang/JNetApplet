@@ -34,7 +34,11 @@ WindowShell {
 
     // 公共格式化函数：集中定义于同目录 NetCommon.qml，
     // 与 networkview.qml、TrafficChartWindow 共享同一份实现
-    NetCommon { id: common }
+    NetCommon {
+        id: common
+        // 注入后端对象：单位换算（formatSpeed）由后端统一完成，避免 QML 再维护阈值表
+        applet: root.applet
+    }
 
     // 对外依赖：C++ 后端对象（NetworkMonitorApplet），由 networkview.qml 传入
     // 提供 trafficLog（JSON 对象，见文件头注释）；为 null 时组件可独立预览（显示空状态）

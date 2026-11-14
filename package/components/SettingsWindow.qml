@@ -22,7 +22,11 @@ Window {
 
     // 公共函数：interfaceIcon/interfaceDescription 已从本文件迁移至 NetCommon.qml，
     // 与 NetworkPopup 共享同一份实现，消除跨组件重复定义
-    NetCommon { id: common }
+    NetCommon {
+        id: common
+        // 注入后端对象：单位换算（formatSpeed）由后端统一完成，避免 QML 再维护阈值表
+        applet: root.applet
+    }
 
     // 公共主题色：集中定义于 WindowTheme.qml，随 isDarkMode 切换深浅。
     // 本窗口 winBg 浅色 #F5F5F5、lineColor 浅色 #E0E0E0 与默认值不同，在此覆盖
@@ -80,7 +84,11 @@ Window {
     // 底部"卸载插件"区域可能被压缩到难以点击；放开上限后内容优先按 preferred 高度展示
     // 注意：像素是否够用需在多网卡环境实测，必要时可改为整块内容放入滚动容器
     width: 350
-    height: 520
+    // 高度较原 520 增加 60：新增「速度单位」分区（标题 + 34px 按钮行 + 间距），
+    // 若不加高，多网卡机器上接口列表会被进一步挤压（该区已是 Layout.fillHeight 的
+    // ScrollView，被挤压后可视行数过少）。上限仍受 maximumHeight 约束，
+    // 小屏下由接口列表滚动承受压缩
+    height: 580
     minimumWidth: 350
     maximumWidth: 350
     minimumHeight: 360
@@ -383,6 +391,71 @@ Window {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: if (applet) applet.refreshInterval = modelData
+                                }
+                            }
+                        }
+                    }
+
+                    Item { Layout.preferredHeight: 4 }
+
+                    // 速度单位选择区：智能自动 / KB/s / Mbps
+                    // 设计原因：插件默认按二进制（KB/s→MB/s→GB/s）显示，而运营商与
+                    // 测速工具用十进制 Mbps，两者相差约 8 倍（1 MB/s ≈ 8 Mbps）；
+                    // 用户拿插件数值与宽带套餐（如 100 Mbps）对比时会对不上，
+                    // 故提供显式选择。选择结果经 applet.speedUnit 持久化并即时生效
+                    Text {
+                        text: qsTr("Speed Unit")
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        color: theme.textSecondary
+                    }
+
+                    // 三个单位选项：0=智能自动、1=固定 KB/s、2=固定 Mbps
+                    // 与刷新间隔共用同一套视觉与交互（三态：按下 > 选中 > hover），
+                    // 避免同一窗口出现两种按钮风格
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Repeater {
+                            // model 为 [显示文案, 取值] 二元组：文案需走 qsTr，不能直接拼
+                            model: [
+                                [qsTr("Auto"), 0],
+                                ["KB/s", 1],
+                                ["Mbps", 2]
+                            ]
+
+                            Rectangle {
+                                id: unitOption
+                                // 无障碍：速度单位是单选项，名称取可见文案
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: modelData[0]
+                                Accessible.checked: applet && applet.speedUnit === modelData[1]
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 34
+                                radius: 8
+                                color: applet && applet.speedUnit === modelData[1]
+                                       ? (unitMouse.pressed ? Qt.darker(root.selBg, 1.12) : root.selBg)
+                                       : (unitMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
+                                                            : (unitMouse.containsMouse ? theme.hoverBg : theme.cardBg))
+                                border.width: 1
+                                border.color: applet && applet.speedUnit === modelData[1]
+                                              ? root.selBorder : theme.lineColor
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData[0]
+                                    font.pixelSize: 13
+                                    color: applet && applet.speedUnit === modelData[1]
+                                           ? root.selText : theme.textPrimary
+                                }
+
+                                MouseArea {
+                                    id: unitMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: if (applet) applet.speedUnit = modelData[1]
                                 }
                             }
                         }
