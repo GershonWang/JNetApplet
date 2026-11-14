@@ -264,6 +264,26 @@
         <source>0 = off</source>
         <translation>0 = 关闭</translation>
     </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Taskbar Display</source>
+        <translation>任务栏显示</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Active interface</source>
+        <translation>当前接口</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>All interfaces</source>
+        <translation>全部接口</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="0"/>
+        <source>Combined mode sums all physical network cards; VPN and container interfaces are excluded to avoid double counting.</source>
+        <translation>合计模式会累加所有物理网卡；VPN 与容器接口已排除，避免重复计数。</translation>
+    </message>
 </context>
 <context>
     <name>TrafficChartWindow</name>
@@ -369,6 +389,11 @@
         <location filename="../package/networkview.qml" line="21"/>
         <source>Network Speed Monitor</source>
         <translation>网络速度监控</translation>
+    </message>
+    <message>
+        <location filename="../package/networkview.qml" line="0"/>
+        <source>All interfaces (combined)</source>
+        <translation>全部接口（合计）</translation>
     </message>
 </context>
 <context>
