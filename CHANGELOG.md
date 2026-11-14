@@ -116,6 +116,19 @@
   - `WindowShell` 用 `property alias` 暴露 `common`，供继承它的窗口访问档位
     （`property var common: common` 会自引用）。
 
+- **单元测试进入 CI**：抽出 `src/core/` 纯逻辑库（解析/判定/日志/格式化），
+  只依赖 Qt6::Core。新增 `JNET_BUILD_PLUGIN` 开关与 `tst_core` 测试目标
+  （112 项），CI 新增 `core-tests` job——此前因主插件依赖 Dtk6/DDEShell，
+  GitHub runner 装不了，单元测试**永远进不了 CI**，只能靠真机手工验证。
+  - `NetworkMonitorApplet` 的对应方法改为转调 core（不是复制一份），避免两边各改一套；
+  - 需要文件系统/子进程/DApplet 生命周期的部分刻意不抽（会是假抽象）；
+  - CI 里额外断言"用例数非零"，防止 Qt6::Test 缺失时 ctest 报 0 个测试却被当作通过。
+- **开机自启调研结论：不需要实现**。核实 `dde-shell@DDE.service`
+  （`PartOf=dde-session-core.target`、`Restart=always`）确认插件随 shell 加载，
+  不存在"开机不启动"的场景；额外装 systemd unit 反而会与 shell 生命周期冲突、
+  造成重复加载。经确认改为扩展核心库覆盖（formatSpeed/csvEscape 等 4 处
+  分支密集的纯函数纳入测试）。
+
 ### 修复
 
 - **切换活动接口不再产生假增量**：活动网卡热拔（USB 网卡、VPN 隧道消失）后，
