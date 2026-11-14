@@ -84,11 +84,13 @@ Window {
     // 底部"卸载插件"区域可能被压缩到难以点击；放开上限后内容优先按 preferred 高度展示
     // 注意：像素是否够用需在多网卡环境实测，必要时可改为整块内容放入滚动容器
     width: 350
-    // 高度较原 520 增加 60：新增「速度单位」分区（标题 + 34px 按钮行 + 间距），
-    // 若不加高，多网卡机器上接口列表会被进一步挤压（该区已是 Layout.fillHeight 的
+    // 高度随分区增加而调整：
+    //   520（初版）→ 580（新增「速度单位」分区）→ 700（新增「流量提醒」分区：
+    //   标题 + 已用回显 + 日/月两行输入，约 150px）
+    // 若不加高，多网卡机器上接口列表会被进一步挤压（该区是 Layout.fillHeight 的
     // ScrollView，被挤压后可视行数过少）。上限仍受 maximumHeight 约束，
     // 小屏下由接口列表滚动承受压缩
-    height: 580
+    height: 700
     minimumWidth: 350
     maximumWidth: 350
     minimumHeight: 360
@@ -459,6 +461,134 @@ Window {
                                 }
                             }
                         }
+                    }
+
+                    Item { Layout.preferredHeight: 4 }
+
+                    // ---- 流量提醒 ----
+                    // 设计原因：用户在没有运营商用量面板时无法察觉当天/当月已用多少，
+                    // 等到被限速才发现超量。提供日/月阈值，超限后发一次系统通知。
+                    // 阈值单位取十进制 GB（1 GB = 1000³ 字节），与运营商套餐口径一致；
+                    // 填 0 或留空表示关闭提醒
+                    Text {
+                        text: qsTr("Traffic Alerts")
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        color: theme.textSecondary
+                    }
+
+                    // 今日已用回显：让用户有依据地决定阈值填多少，而不是凭感觉
+                    // 数值取自后端 todayUsedBytes（与「流量统计」窗口同口径）
+                    Text {
+                        text: qsTr("Today used: %1 GB · This month: %2 GB")
+                              .arg(((applet ? applet.todayUsedBytes : 0) / 1e9).toFixed(2))
+                              .arg(((applet ? applet.monthUsedBytes : 0) / 1e9).toFixed(2))
+                        font.pixelSize: 11
+                        color: theme.textTertiary
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+
+                    // 日/月阈值输入行：标签 + 输入框 + 单位，两行结构对称
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Text {
+                            text: qsTr("Daily limit")
+                            font.pixelSize: 12
+                            color: theme.textPrimary
+                            Layout.preferredWidth: 90
+                        }
+
+                        // 文本输入而非 SpinBox：用户可能想填 1.5 GB 这类小数，
+                        // SpinBox 的整数步进无法表达
+                        TextField {
+                            id: dailyLimitField
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
+                            placeholderText: qsTr("0 = off")
+                            font.pixelSize: 12
+                            color: theme.textPrimary
+                            selectByMouse: true
+                            // 校验器限制为最多两位小数的非负数：从源头挡掉字母与负号，
+                            // 但仍需后端归一化兜底（如粘贴绕过校验、或清空后为空串）
+                            validator: DoubleValidator {
+                                bottom: 0
+                                decimals: 2
+                                notation: DoubleValidator.StandardNotation
+                            }
+                            onEditingFinished: {
+                                if (!applet) return
+                                // 空串按 0（关闭）处理；toDouble() 对非法输入返回 0
+                                applet.dailyLimitGb = text.length === 0 ? 0 : parseFloat(text)
+                                // 回写标准化后的值，让用户看到后端实际采纳的阈值
+                                text = applet.dailyLimitGb > 0 ? applet.dailyLimitGb : ""
+                            }
+                        }
+
+                        Text {
+                            text: "GB"
+                            font.pixelSize: 12
+                            color: theme.textTertiary
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Text {
+                            text: qsTr("Monthly limit")
+                            font.pixelSize: 12
+                            color: theme.textPrimary
+                            Layout.preferredWidth: 90
+                        }
+
+                        TextField {
+                            id: monthlyLimitField
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
+                            placeholderText: qsTr("0 = off")
+                            font.pixelSize: 12
+                            color: theme.textPrimary
+                            selectByMouse: true
+                            validator: DoubleValidator {
+                                bottom: 0
+                                decimals: 2
+                                notation: DoubleValidator.StandardNotation
+                            }
+                            onEditingFinished: {
+                                if (!applet) return
+                                applet.monthlyLimitGb = text.length === 0 ? 0 : parseFloat(text)
+                                text = applet.monthlyLimitGb > 0 ? applet.monthlyLimitGb : ""
+                            }
+                        }
+
+                        Text {
+                            text: "GB"
+                            font.pixelSize: 12
+                            color: theme.textTertiary
+                        }
+                    }
+
+                    // 输入框初值与外部变化同步：用 Binding 而非 text: 直接绑定。
+                    // 设计原因：直接绑定会在用户首次输入时被 TextField 的内部赋值销毁，
+                    // 之后再改配置也不会反映到输入框（与 TcpConnectionsWindow 的搜索框同一坑）。
+                    // 阈值 <= 0 时显示空串，与占位提示 "0 = off" 配合表达"已关闭"
+                    Binding {
+                        target: dailyLimitField
+                        property: "text"
+                        value: (applet && applet.dailyLimitGb > 0)
+                               ? String(applet.dailyLimitGb) : ""
+                        restoreMode: Binding.RestoreNone
+                    }
+                    Binding {
+                        target: monthlyLimitField
+                        property: "text"
+                        value: (applet && applet.monthlyLimitGb > 0)
+                               ? String(applet.monthlyLimitGb) : ""
+                        restoreMode: Binding.RestoreNone
                     }
 
                     Item { Layout.preferredHeight: 4 }
