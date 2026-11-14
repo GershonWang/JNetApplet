@@ -39,12 +39,29 @@ Item {
     // 填充色：跟随调用方的主题/配色，由调用方传入
     property color color: "#000000"
 
-    // 逻辑画框：路径按 24×24 编写，Shape 会等比缩放到本项实际尺寸
+    // 逻辑画框固定 24×24，实际尺寸由调用方的 width/height 决定，
+    // 二者之比即缩放系数（Shape 不自动缩放路径，见下方 Shape 处说明）
     implicitWidth: 24
     implicitHeight: 24
+    readonly property real unitScale: width > 0 ? width / 24 : 1
 
+    // 关键：QQuickShape **不缩放**路径坐标，它按绝对像素绘制，width/height 只影响
+    // 该项占位（且路径会溢出）。因此必须显式施加缩放变换，
+    // 让 24×24 逻辑画框缩放到调用方要求的实际尺寸。
+    // 实测依据：同一路径在 width=9.6 与 width=24 下渲染结果完全相同（宽10 高17），
+    // 证明此前把 fontSize 当尺寸传是无效的——这也是"箭头仍然太大"的真正原因。
     Shape {
-        anchors.fill: parent
+        width: 24
+        height: 24
+        transform: Scale {
+            xScale: control.unitScale
+            yScale: control.unitScale
+            origin.x: 0
+            origin.y: 0
+        }
+        // 居中对齐：24 画框按 unitScale 缩放后的视觉尺寸由调用方尺寸承载
+        x: (control.width  - 24 * control.unitScale) / 2
+        y: (control.height - 24 * control.unitScale) / 2
 
         ShapePath {
             strokeWidth: 0

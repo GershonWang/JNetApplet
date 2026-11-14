@@ -33,12 +33,22 @@ Item {
 
     implicitWidth: 24
     implicitHeight: 24
+    // 24 逻辑画框到实际尺寸的缩放系数。Shape 不自动缩放路径坐标（按绝对像素绘制），
+    // 必须显式施加 Scale，否则 width/height 完全不生效——见 ArrowIcon 处的实测说明
+    readonly property real unitScale: width > 0 ? width / 24 : 1
 
     // ---- 三角轮廓 ----
     // 24×24 画框内缩留白：顶点 (12,3.5)、底边 y=20.5、左右 (4,20.5)/(20,20.5)
     // 视觉高 17/24 = 0.708、宽 16/24 = 0.667（三角本身比箭头宽，故横纵比例不同）
     Shape {
-        anchors.fill: parent
+        width: 24
+        height: 24
+        transform: Scale {
+            xScale: control.unitScale
+            yScale: control.unitScale
+            origin.x: 0
+            origin.y: 0
+        }
 
         ShapePath {
             // 描边按画框比例给：1.6/24 ≈ 6.7%，随实际尺寸等比缩放
@@ -57,7 +67,14 @@ Item {
     // ---- 内部感叹号：竖条 + 下方点 ----
     // 位置取三角重心附近（重心 y ≈ 14.8），整体略偏下以避开尖端窄区
     Shape {
-        anchors.fill: parent
+        width: 24
+        height: 24
+        transform: Scale {
+            xScale: control.unitScale
+            yScale: control.unitScale
+            origin.x: 0
+            origin.y: 0
+        }
 
         // 竖条
         ShapePath {
