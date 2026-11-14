@@ -18,6 +18,11 @@
   - 新增回归用例 `testSwitchInterfaceResetsBaseline`、
     `testBaselineGuardCatchesDirectSwitch`、`testChooseDefaultInterface`。
 
+- **弹窗接口信息区不再裁切/重叠**：该区域原按"最多 3 行 ≈ 56px"估算后固定成 76px，
+  但断连说明行与 WiFi 信号行是后续新增的，双栈无线且链路断开时实际有 5 行（约 95px），
+  超出部分会压住下方分隔线与速度区。现改为跟随内容隐式高度（`ifaceCol.implicitHeight`），
+  并加 `clip` 兜底；弹窗整体高度本就由内容决定，不会因此出现跳动。
+
 ## v2.3.0 - 2026-09-26
 
 ### 新功能
