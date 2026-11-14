@@ -205,6 +205,16 @@
         <translation>刷新间隔</translation>
     </message>
     <message>
+        <location filename="../package/components/SettingsWindow.qml" line="407"/>
+        <source>Speed Unit</source>
+        <translation>速度单位</translation>
+    </message>
+    <message>
+        <location filename="../package/components/SettingsWindow.qml" line="423"/>
+        <source>Auto</source>
+        <translation>智能自动</translation>
+    </message>
+    <message>
         <location filename="../package/components/SettingsWindow.qml" line="446"/>
         <source>Warning</source>
         <translation>警告</translation>
