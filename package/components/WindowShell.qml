@@ -164,20 +164,30 @@ Window {
                 // 置顶按钮：28x28 圆形（与关闭按钮一致），由 TitleBar 的额外按钮槽
                 // 自动布局到关闭按钮左侧。三态视觉：未置顶=灰色图钉轮廓；
                 // 置顶=高亮蓝填充 + 淡蓝底；hover=淡灰底（置顶时淡蓝底优先）
-                Rectangle {
+                // 改用公共 IconButton：无障碍契约（role/name/onPressAction）、
+                // Tab 聚焦与 Enter/Space 触发收敛到组件内，此前仅能朗读、键盘不可用。
+                // Canvas 图钉通过默认属性插槽放入，保留"置顶态实心填充"的视觉差异
+                IconButton {
+                    id: pinButton
                     visible: shell.pinnable
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     width: 28
                     height: 28
                     radius: 14
+                    // 无障碍：图钉无文字，名称需说明当前动作与结果
+                    accessibleName: shell.pinned ? qsTr("Unpin window") : qsTr("Pin window on top")
                     // 三态：按下 > 置顶(淡蓝底) > hover(淡灰底)。
                     // pinHoverBg 是半透明色，按下态用同色提高透明度，
                     // 不用 Qt.darker（对含透明度的颜色会改变透明度语义）
-                    color: pinMouse.pressed
-                           ? Qt.rgba(shell.pinHoverBg.r, shell.pinHoverBg.g, shell.pinHoverBg.b, shell.pinHoverBg.a * 1.8)
-                           : (shell.pinned ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
-                                           : (pinMouse.containsMouse ? shell.pinHoverBg : "transparent"))
+                    pressedColor: Qt.rgba(shell.pinHoverBg.r, shell.pinHoverBg.g, shell.pinHoverBg.b, shell.pinHoverBg.a * 1.8)
+                    hoverColor: shell.pinned
+                                 ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
+                                 : shell.pinHoverBg
+                    baseColor: shell.pinned
+                               ? Qt.rgba(common.accentBlueBright.r, common.accentBlueBright.g, common.accentBlueBright.b, 0.12)
+                               : "transparent"
+                    onClicked: shell.pinned = !shell.pinned
 
                     // 置顶图标：Canvas 绘制"上箭头触顶"（⤒ 风格）——向上箭头指向顶部横杠，
                     // 是"置顶/移到顶部"最通用的视觉语言，与关闭按钮"×"形态区分明显
@@ -231,17 +241,6 @@ Window {
                         }
                     }
 
-                    // 无障碍：置顶按钮无文字（Canvas 画的图钉），名称需说明当前动作与结果
-                    Accessible.role: Accessible.Button
-                    Accessible.name: shell.pinned ? qsTr("Unpin window") : qsTr("Pin window on top")
-
-                    MouseArea {
-                        id: pinMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: shell.pinned = !shell.pinned
-                    }
                 }
             }
         }

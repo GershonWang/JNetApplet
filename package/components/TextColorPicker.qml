@@ -65,19 +65,23 @@ Rectangle {
         // 预设色块
         Repeater {
             model: root.presetColors
-            delegate: Rectangle {
+            // 色块：改用公共 ChoiceButton（单选项），获得 Tab 聚焦与 Enter/Space 触发。
+            // 无障碍名从原来的色值改为"颜色 N"——原先读屏会把 "#FFFFFF" 逐字符念出来
+            delegate: ChoiceButton {
                 width: 26
                 height: 26
                 radius: 13
-                color: "transparent"
-                // 无障碍：色块是"选择字体颜色"的单选项，名称用色值本身（无可读色名可复用）
-                Accessible.role: Accessible.RadioButton
-                Accessible.name: modelData
-                Accessible.checked: root.currentColor === modelData
-                // 当前选中态：2px 边框高亮（颜色随主题切换）
-                border.width: root.currentColor === modelData ? 2 : 0
-                border.color: theme.textPrimary
+                accessibleName: qsTr("Color %1").arg(index + 1)
+                checked: root.currentColor === modelData
+                selectedColor: "transparent"
+                baseColor: "transparent"
+                hoverColor: "transparent"
+                // 选中态：2px 主题色边框高亮（颜色随主题切换）
+                borderWidth: root.currentColor === modelData ? 2 : 0
+                borderColorOverride: theme.textPrimary
+                onClicked: root.colorSelected(modelData)
 
+                // 色块本体：尺寸/描边保持原值
                 Rectangle {
                     anchors.centerIn: parent
                     width: 22
@@ -89,28 +93,24 @@ Rectangle {
                                    || (root.isDarkMode && modelData === "#000000")) ? 1 : 0
                     border.color: theme.lineColor
                 }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.colorSelected(modelData)
-                }
             }
         }
 
-        // 跟随系统选项：斜线色块表示恢复默认
-        Rectangle {
+        // 跟随系统选项：斜线色块表示恢复默认。
+        // 改用 ChoiceButton 以获得 Tab 聚焦与 Enter/Space 触发
+        ChoiceButton {
             width: 26
             height: 26
             radius: 13
-            color: "transparent"
-            // 无障碍：恢复默认色（空串）的单选项
-            Accessible.role: Accessible.RadioButton
-            Accessible.name: qsTr("Follow System")
-            Accessible.checked: root.currentColor === ""
+            accessibleName: qsTr("Follow System")
+            checked: root.currentColor === ""
+            selectedColor: "transparent"
+            baseColor: "transparent"
+            hoverColor: "transparent"
             // currentColor 为空串时高亮（跟随系统选中态）
-            border.width: root.currentColor === "" ? 2 : 0
-            border.color: theme.textPrimary
+            borderWidth: root.currentColor === "" ? 2 : 0
+            borderColorOverride: theme.textPrimary
+            onClicked: root.colorSelected("")
 
             Rectangle {
                 anchors.centerIn: parent
@@ -136,12 +136,6 @@ Rectangle {
                         ctx.stroke()
                     }
                 }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.colorSelected("")
             }
         }
 

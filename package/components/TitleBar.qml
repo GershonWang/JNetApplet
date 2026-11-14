@@ -74,40 +74,29 @@ Item {
     }
 
     // 关闭按钮：28x28 圆形，hover 时淡红底 + 红色 ×（颜色由 closeHoverColor 决定）
-    Rectangle {
+    // 改用公共 IconButton：它把无障碍契约（role/name/onPressAction）、
+    // Tab 聚焦与 Enter/Space 触发收敛到一处，此前这里是「能朗读、键盘不可用」
+    IconButton {
         id: closeButton
-        // 无障碍：图标按钮的文字是 "×"，对屏幕阅读器无意义，显式给出名称与角色
-        Accessible.role: Accessible.Button
-        Accessible.name: qsTr("Close")
         anchors.right: parent.right
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
         width: 28
         height: 28
         radius: 14
-        // hover 底色由 closeHoverColor 派生（同色 15% 透明），不再写死红色：
-        // 子窗口若换用非红色高亮，底与字仍然一致
-        // 三态：按下 > hover > 常态，底色透明度逐级加深
-        color: closeMouse.pressed
-               ? Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g, titleBar.closeHoverColor.b, 0.25)
-               : (closeMouse.containsMouse
-                  ? Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g, titleBar.closeHoverColor.b, 0.15)
-                  : "transparent")
-
-        Text {
-            anchors.centerIn: parent
-            text: "×"
-            font.pixelSize: 20
-            font.weight: Font.Bold
-            color: closeMouse.containsMouse ? titleBar.closeHoverColor : titleBar.secondaryTextColor
-        }
-
-        MouseArea {
-            id: closeMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: Window.window.hide()
-        }
+        symbol: "×"
+        symbolFontSize: 20
+        symbolBold: true
+        // 图标是 "×"，对读屏无意义，显式给出用途名称
+        accessibleName: qsTr("Close")
+        symbolColor: titleBar.secondaryTextColor
+        symbolHoverColor: titleBar.closeHoverColor
+        // hover 底色由 closeHoverColor 派生（同色 15% 透明），不写死红色：
+        // 子窗口若换用非红色高亮，底与字仍一致；按下自动加深到 25%
+        hoverColor: Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g,
+                             titleBar.closeHoverColor.b, 0.15)
+        pressedColor: Qt.rgba(titleBar.closeHoverColor.r, titleBar.closeHoverColor.g,
+                               titleBar.closeHoverColor.b, 0.25)
+        onClicked: Window.window.hide()
     }
 }

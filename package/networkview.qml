@@ -16,9 +16,19 @@ AppletItem {
     id: root
     objectName: "network monitor applet"
 
-    // 无障碍：整个任务栏图标是一个"左键打开网络监控详情弹窗"的按钮
+    // 无障碍：整个任务栏图标是一个"左键打开网络监控详情弹窗"的按钮。
+    // 这一处用 TapHandler 而非 MouseArea，无法直接复用 IconButton 组件，
+    // 但键盘契约仍须与其它按钮一致：Tab 可聚焦 + Enter/Space 打开弹窗 +
+    // 读屏的 onPressAction 可激活。此前只有 role/name，键盘用户完全无法操作任务栏图标。
+    // 注意：任务栏图标通常不在窗口焦点链上，activeFocusOnTab 主要覆盖
+    // "任务栏获得焦点"的场景（如无障碍键盘导航模式），不影响鼠标使用
     Accessible.role: Accessible.Button
     Accessible.name: qsTr("Network Speed Monitor")
+    Accessible.onPressAction: root.togglePopupFromKeyboard()
+    activeFocusOnTab: true
+    Keys.onReturnPressed: root.togglePopupFromKeyboard()
+    Keys.onEnterPressed: root.togglePopupFromKeyboard()
+    Keys.onSpacePressed: root.togglePopupFromKeyboard()
     property int dockOrder: 21
     property int dockSize: Panel.rootObject.dockItemMaxSize || 48
     // 任务栏方向：0=Top, 1=Right, 2=Bottom, 3=Left；% 2 为 0 表示水平，1 表示竖向
@@ -117,6 +127,20 @@ AppletItem {
         var full = applet.formatSpeedCompact(bytesPerSec, applet.speedUnit, false)
         var intPart = applet.formatSpeedCompact(bytesPerSec, applet.speedUnit, true)
         return full.substring(intPart.length)
+    }
+
+    // 键盘/读屏打开或关闭详情弹窗的统一入口。
+    // 设计原因：TapHandler 的 onTapped 里已有"开着就关、关着就开"的逻辑，
+    // 若键盘路径另写一份，两条路迟早不一致（例如一边忘了 requestClosePopup）。
+    // 抽到这里后，鼠标与键盘共用同一段行为
+    function togglePopupFromKeyboard() {
+        if (networkPopup.popupVisible) {
+            networkPopup.close()
+        } else {
+            Panel.requestClosePopup()
+            networkPopup.open()
+        }
+        toolTip.close()
     }
 
     // 统一打开独立窗口：右键菜单与弹窗内的详情入口共用这一个入口

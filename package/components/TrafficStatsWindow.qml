@@ -225,124 +225,77 @@ WindowShell {
                 Layout.rightMargin: 16
                 spacing: 8
 
-                // 按日 tab
-                Rectangle {
-                    property bool sel: root.currentTab === 0
-                    // 无障碍：视图切换 tab 视为单选项
-                    Accessible.role: Accessible.RadioButton
-                    Accessible.name: qsTr("By Day")
-                    Accessible.checked: sel
+                // 按日 / 按月 tab：改用公共 ChoiceButton。
+                // 配色按原值传入：选中=accentBlue 底 + 白字 + 加粗；未选中=透明底、
+                // hover 时 blue 描边与蓝字。选中按下加深 1.2 倍（组件内已实现）
+                ChoiceButton {
                     width: 80
                     height: 24
                     radius: 5
-                    // 三态：按下 > 选中 > 常态；未选中按下用卡片底色给出反馈
-                    color: sel
-                           ? (dayMouse.pressed ? Qt.darker(common.accentBlue, 1.2) : common.accentBlue)
-                           : (dayMouse.pressed
-                              ? Qt.rgba(common.cardBackground.r, common.cardBackground.g, common.cardBackground.b, common.cardBackground.a * 1.8)
-                              : "transparent")
-                    border.width: 1
-                    border.color: sel ? common.accentBlue
-                                      : (dayMouse.containsMouse ? common.accentBlue : root.theme.lineColor)
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("By Day")
-                        font.pixelSize: 12
-                        font.weight: sel ? Font.Bold : Font.Normal
-                        color: sel ? "white"
-                                   : (dayMouse.pressed ? Qt.darker(common.accentBlue, 1.2)
-                                      : (dayMouse.containsMouse ? common.accentBlue : root.theme.textSecondary))
-                    }
-                    MouseArea {
-                        id: dayMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.currentTab = 0
-                    }
+                    text: qsTr("By Day")
+                    fontSize: 12
+                    checked: root.currentTab === 0
+                    selectedColor: common.accentBlue
+                    selectedBorderColor: common.accentBlue
+                    selectedTextColor: "white"
+                    baseColor: "transparent"
+                    baseBorderColor: root.theme.lineColor
+                    hoverColor: "transparent"
+                    textColor: root.theme.textSecondary
+                    hoverTextColor: common.accentBlue
+                    onClicked: root.currentTab = 0
                 }
 
-                // 按月 tab
-                Rectangle {
-                    property bool sel: root.currentTab === 1
-                    // 无障碍：视图切换 tab 视为单选项
-                    Accessible.role: Accessible.RadioButton
-                    Accessible.name: qsTr("By Month")
-                    Accessible.checked: sel
+                ChoiceButton {
                     width: 90
                     height: 24
                     radius: 5
-                    // 三态：按下 > 选中 > 常态；未选中按下用卡片底色给出反馈
-                    color: sel
-                           ? (monthMouse.pressed ? Qt.darker(common.accentBlue, 1.2) : common.accentBlue)
-                           : (monthMouse.pressed
-                              ? Qt.rgba(common.cardBackground.r, common.cardBackground.g, common.cardBackground.b, common.cardBackground.a * 1.8)
-                              : "transparent")
-                    border.width: 1
-                    border.color: sel ? common.accentBlue
-                                      : (monthMouse.containsMouse ? common.accentBlue : root.theme.lineColor)
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("By Month")
-                        font.pixelSize: 12
-                        font.weight: sel ? Font.Bold : Font.Normal
-                        color: sel ? "white"
-                                   : (monthMouse.pressed ? Qt.darker(common.accentBlue, 1.2)
-                                      : (monthMouse.containsMouse ? common.accentBlue : root.theme.textSecondary))
-                    }
-                    MouseArea {
-                        id: monthMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.currentTab = 1
-                    }
+                    text: qsTr("By Month")
+                    fontSize: 12
+                    checked: root.currentTab === 1
+                    selectedColor: common.accentBlue
+                    selectedBorderColor: common.accentBlue
+                    selectedTextColor: "white"
+                    baseColor: "transparent"
+                    baseBorderColor: root.theme.lineColor
+                    hoverColor: "transparent"
+                    textColor: root.theme.textSecondary
+                    hoverTextColor: common.accentBlue
+                    onClicked: root.currentTab = 1
                 }
 
                 Item { Layout.fillWidth: true }
 
                 // 导出按钮：把当前页签数据导出为 CSV/JSON。
                 // 放在周期说明左侧，与右侧文字同属"辅助操作"区，不抢表格焦点
-                Rectangle {
+                // 改用公共 IconButton：顺带修掉此前的重复标注——
+                // 原实现在 Rectangle 与 MouseArea 上各写了一次 Accessible.role/name，
+                // 读屏会重复朗读；现在契约只存在于组件内的唯一位置
+                IconButton {
                     id: exportButton
-                    Accessible.role: Accessible.Button
-                    Accessible.name: qsTr("Export")
+                    accessibleName: qsTr("Export")
                     width: 64
                     height: 24
                     radius: 5
-                    color: exportMouse.pressed
-                           ? Qt.rgba(common.accentBlue.r, common.accentBlue.g, common.accentBlue.b, 0.22)
-                           : (exportMouse.containsMouse
-                              ? Qt.rgba(common.accentBlue.r, common.accentBlue.g, common.accentBlue.b, 0.12)
-                              : "transparent")
-                    border.width: 1
-                    border.color: exportMouse.containsMouse ? common.accentBlue : root.theme.lineColor
+                    borderWidth: 1
+                    borderColor: root.theme.lineColor
+                    baseColor: "transparent"
+                    hoverColor: Qt.rgba(common.accentBlue.r, common.accentBlue.g, common.accentBlue.b, 0.12)
+                    pressedColor: Qt.rgba(common.accentBlue.r, common.accentBlue.g, common.accentBlue.b, 0.22)
+                    symbol: qsTr("Export")
+                    symbolFontSize: 11
+                    symbolColor: root.theme.textSecondary
+                    symbolHoverColor: common.accentBlue
+                    onClicked: root.requestExport()
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("Export")
-                        font.pixelSize: 11
-                        color: exportMouse.containsMouse ? common.accentBlue : root.theme.textSecondary
-                    }
-
+                    // 右键 = 直接导出到下载目录。
+                    // 不依赖门户服务的固定路径：无 xdg-desktop-portal 的环境里
+                    // FileDialog 打开后既不 accepted 也不 rejected，用户会以为"点了没反应"
                     MouseArea {
-                        id: exportMouse
                         anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        // 无障碍：该按钮有降级路径，读屏用户也需要能触发
-                        Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("Export")
-                        onClicked: root.requestExport()
-                        // 右键 = 直接导出到下载目录。
-                        // 设计原因：无 xdg-desktop-portal 的环境里 FileDialog 打开后
-                        // 既不 accepted 也不 rejected，用户会以为"点了没反应"；
-                        // 留一条不依赖门户服务的固定路径，并立刻提示实际文件位置
-                        onPressed: {
-                            if (mouse.button === Qt.RightButton) {
-                                root.exportToDefaultLocation()
-                            }
-                        }
+                        acceptedButtons: Qt.RightButton
+                        hoverEnabled: false
+                        onPressed: root.exportToDefaultLocation()
                     }
                 }
 

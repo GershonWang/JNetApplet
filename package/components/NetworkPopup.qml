@@ -268,28 +268,28 @@ Control {
 
                     // 一键复制图标：点击复制 IPv4 到剪贴板，复制后短暂显示 ✓
                     // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
-                    Text {
-                        text: popup.copiedField === "ipv4" ? "✓" : "⧉"
-                        // 无障碍：图标按钮自身无文字，借用相邻地址标签作为可读名称
-                        Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("IPv4")
-                        font.pixelSize: 12
-                        // 四态：已复制(绿 ✓) > 按下(深蓝) > hover(蓝) > 常态(主文字色)
-                        color: popup.copiedField === "ipv4"
-                               ? popup.accentGreen
-                               : (ipv4CopyMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
-                                  : (ipv4CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText))
-
-                        MouseArea {
-                            id: ipv4CopyMouse
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            hoverEnabled: true
-                            onClicked: {
-                                popup.copyToClipboard(popup.ipAddress)
-                                popup.copiedField = "ipv4"
-                                copyFeedbackTimer.restart()
-                            }
+                    // 图标按钮自身无文字，借用相邻地址标签作为可读名称。
+                    // 用 IconButton 承载：无障碍契约、Tab 聚焦、Enter/Space 触发
+                    // 都收敛在组件内，此前只能朗读、键盘不可用。
+                    // 四态（已复制绿 ✓ > 按下深蓝 > hover 蓝 > 常态）通过组件颜色属性表达
+                    IconButton {
+                        width: 16
+                        height: 16
+                        accessibleName: qsTr("IPv4")
+                        symbol: popup.copiedField === "ipv4" ? "✓" : "⧉"
+                        symbolFontSize: 12
+                        symbolColor: popup.primaryText
+                        symbolHoverColor: popup.accentBlue
+                        pressedColor: "transparent"
+                        hoverColor: "transparent"
+                        // 已复制态优先于 hover：绿色 ✓ 是明确的成功反馈，
+                        // 优先级高于 hover/按下，否则刚复制完鼠标一动就变回普通色
+                        activated: popup.copiedField === "ipv4"
+                        activatedColor: popup.accentGreen
+                        onClicked: {
+                            popup.copyToClipboard(popup.ipAddress)
+                            popup.copiedField = "ipv4"
+                            copyFeedbackTimer.restart()
                         }
                     }
                 }
@@ -334,28 +334,28 @@ Control {
 
                     // 一键复制图标：点击复制 IPv6 到剪贴板，复制后短暂显示 ✓
                     // 默认态用 primaryText 保证深色背景上清晰可见，hover 变蓝
-                    Text {
-                        text: popup.copiedField === "ipv6" ? "✓" : "⧉"
-                        // 无障碍：图标按钮自身无文字，借用相邻地址标签作为可读名称
-                        Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("IPv6")
-                        font.pixelSize: 12
-                        // 四态：已复制(绿 ✓) > 按下(深蓝) > hover(蓝) > 常态(主文字色)
-                        color: popup.copiedField === "ipv6"
-                               ? popup.accentGreen
-                               : (ipv6CopyMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
-                                  : (ipv6CopyMouse.containsMouse ? popup.accentBlue : popup.primaryText))
-
-                        MouseArea {
-                            id: ipv6CopyMouse
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            hoverEnabled: true
-                            onClicked: {
-                                popup.copyToClipboard(popup.ipv6Address)
-                                popup.copiedField = "ipv6"
-                                copyFeedbackTimer.restart()
-                            }
+                    // 图标按钮自身无文字，借用相邻地址标签作为可读名称。
+                    // 用 IconButton 承载：无障碍契约、Tab 聚焦、Enter/Space 触发
+                    // 都收敛在组件内，此前只能朗读、键盘不可用。
+                    // 四态（已复制绿 ✓ > 按下深蓝 > hover 蓝 > 常态）通过组件颜色属性表达
+                    IconButton {
+                        width: 16
+                        height: 16
+                        accessibleName: qsTr("IPv6")
+                        symbol: popup.copiedField === "ipv6" ? "✓" : "⧉"
+                        symbolFontSize: 12
+                        symbolColor: popup.primaryText
+                        symbolHoverColor: popup.accentBlue
+                        pressedColor: "transparent"
+                        hoverColor: "transparent"
+                        // 已复制态优先于 hover：绿色 ✓ 是明确的成功反馈，
+                        // 优先级高于 hover/按下，否则刚复制完鼠标一动就变回普通色
+                        activated: popup.copiedField === "ipv6"
+                        activatedColor: popup.accentGreen
+                        onClicked: {
+                            popup.copyToClipboard(popup.ipv6Address)
+                            popup.copiedField = "ipv6"
+                            copyFeedbackTimer.restart()
                         }
                     }
                 }
@@ -739,50 +739,40 @@ Control {
                     id: chipRepeater
                     model: popup.sortedInterfaces
 
-                    Rectangle {
+                    // 接口 chip：改用公共 ChoiceButton（单选项）。
+                    // 宽度仍按原公式计算——chip 少时等宽撑满一行、多时固定宽度水平滚动，
+                    // chipText 的隐式宽度借组件内的文字测量得到
+                    ChoiceButton {
                         // 宽度取等宽和自然宽度的较大值：
                         // chip 少时 equalChipWidth > 自然宽度 -> 分散撑满一行
                         // chip 多时 自然宽度 > equalChipWidth -> 固定宽度 + 水平滚动
-                        width: Math.max(chipFlickable.equalChipWidth, chipText.implicitWidth + 24)
+                        width: Math.max(chipFlickable.equalChipWidth, chipLabel.implicitWidth + 24)
                         height: 28
                         radius: 8
-                        // 选中态：蓝色填充+蓝边框；未选中态：透明背景+cardBorder 边框
-                        // hover 态：边框变蓝、文字变蓝，提供清晰交互反馈
-                        // 无障碍：接口 chip 是"切换活动接口"的单选项，角色与选中态供屏幕阅读器播报
-                        Accessible.role: Accessible.RadioButton
-                        Accessible.name: modelData
-                        Accessible.checked: modelData === popup.activeInterface
-                        // 选中态蓝色填充；按下时加深（填充型用 Qt.darker，
-                        // 透明型用 cardBackground 提高透明度，两者都给出点击反馈）
-                        color: modelData === popup.activeInterface
-                               ? (chipMouse.pressed ? Qt.darker(popup.accentBlue, 1.2) : popup.accentBlue)
-                               : (chipMouse.pressed
-                                  ? Qt.rgba(popup.cardBackground.r, popup.cardBackground.g, popup.cardBackground.b, popup.cardBackground.a * 1.8)
-                                  : "transparent")
-                        border.width: 1
-                        border.color: modelData === popup.activeInterface
-                                       ? popup.accentBlue
-                                       : (chipMouse.containsMouse ? popup.accentBlue : popup.cardBorder)
-
-                        Text {
-                            id: chipText
-                            anchors.centerIn: parent
-                            text: modelData
-                            font.pixelSize: 12
-                            font.weight: modelData === popup.activeInterface ? Font.Bold : Font.Normal
-                            color: modelData === popup.activeInterface
-                                   ? "white"
-                                   : (chipMouse.containsMouse ? popup.accentBlue : popup.primaryText)
+                        text: modelData
+                        accessibleName: modelData
+                        fontSize: 12
+                        checked: modelData === popup.activeInterface
+                        selectedColor: popup.accentBlue
+                        selectedBorderColor: popup.accentBlue
+                        selectedTextColor: "white"
+                        baseColor: "transparent"
+                        baseBorderColor: popup.cardBorder
+                        // 未选中按下：用卡片底色提高透明度给出反馈（与原实现一致）
+                        hoverColor: "transparent"
+                        textColor: popup.primaryText
+                        hoverTextColor: popup.accentBlue
+                        onClicked: {
+                            if (popup.applet) popup.applet.setActiveInterface(modelData)
                         }
 
-                        MouseArea {
-                            id: chipMouse
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            hoverEnabled: true
-                            onClicked: {
-                                if (popup.applet) popup.applet.setActiveInterface(modelData)
-                            }
+                        // 供上面的宽度公式读取文字隐式宽度（与组件内显示的是同一串文字）
+                        Text {
+                            id: chipLabel
+                            visible: false
+                            text: modelData
+                            font.pixelSize: 12
+                            font.weight: Font.Bold
                         }
                     }
                 }
@@ -818,64 +808,73 @@ Control {
 
             Item { Layout.fillWidth: true }
 
-            Text {
-                text: qsTr("Traffic Chart")
-                // 无障碍：弹窗内的详情入口是纯文字按钮，名称即文案
-                Accessible.role: Accessible.Button
-                Accessible.name: text
-                font.pixelSize: 11
-                // 按下加深一档，与 hover 区分
-                color: chartEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
-                       : (chartEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
+            // 详情入口是纯文字按钮：用 IconButton 的内容插槽承载原有 Text，
+            // 以获得 Tab 聚焦与 Enter/Space 触发（此前只能朗读、键盘不可用）
+            IconButton {
+                implicitWidth: entryLabel_chart.implicitWidth
+                implicitHeight: entryLabel_chart.implicitHeight
+                accessibleName: qsTr("Traffic Chart")
+                // 向外扩 4px 点击热区：文字本身较窄，扩大后更容易点中
+                // （组件内 MouseArea 已填满，故用负 margin 的容器实现）
+                hoverColor: "transparent"
+                pressedColor: "transparent"
+                onClicked: popup.detailsRequested("chart")
 
-                MouseArea {
-                    id: chartEntryMouse
-                    // 向外扩 4px：文字本身较窄，扩大点击热区便于点中
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: popup.detailsRequested("chart")
+                Text {
+                    id: entryLabel_chart
+                    anchors.centerIn: parent
+                    text: qsTr("Traffic Chart")
+                    font.pixelSize: 11
+                    // 按下加深一档，与 hover 区分（颜色由按钮状态驱动，不猜内部结构）
+                    color: parent.parent ? parent.parent.pressed
+                           ? Qt.darker(popup.accentBlue, 1.2)
+                           : parent.parent.currentColor : popup.tertiaryText
                 }
             }
 
-            Text {
-                text: qsTr("Traffic Statistics")
-                // 无障碍：弹窗内的详情入口是纯文字按钮，名称即文案
-                Accessible.role: Accessible.Button
-                Accessible.name: text
-                font.pixelSize: 11
-                // 按下加深一档，与 hover 区分
-                color: statsEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
-                       : (statsEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
+            // 纯文字按钮：用 IconButton 内容插槽承载，获得 Tab 聚焦与 Enter/Space 触发
+            IconButton {
+                implicitWidth: entryLabel_stats.implicitWidth
+                implicitHeight: entryLabel_stats.implicitHeight
+                accessibleName: qsTr("Traffic Statistics")
+                hoverColor: "transparent"
+                pressedColor: "transparent"
+                symbolColor: popup.tertiaryText
+                symbolHoverColor: popup.accentBlue
+                onClicked: popup.detailsRequested("stats")
 
-                MouseArea {
-                    id: statsEntryMouse
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: popup.detailsRequested("stats")
+                Text {
+                    id: entryLabel_stats
+                    anchors.centerIn: parent
+                    text: qsTr("Traffic Statistics")
+                    font.pixelSize: 11
+                    // 按下加深一档，与 hover 区分（颜色由按钮状态驱动）
+                    color: parent.parent ? parent.parent.pressed
+                           ? Qt.darker(popup.accentBlue, 1.2)
+                           : parent.parent.currentColor : popup.tertiaryText
                 }
             }
 
-            Text {
-                text: qsTr("TCP Connections")
-                // 无障碍：弹窗内的详情入口是纯文字按钮，名称即文案
-                Accessible.role: Accessible.Button
-                Accessible.name: text
-                font.pixelSize: 11
-                // 按下加深一档，与 hover 区分
-                color: tcpEntryMouse.pressed ? Qt.darker(popup.accentBlue, 1.2)
-                       : (tcpEntryMouse.containsMouse ? popup.accentBlue : popup.tertiaryText)
+            // 纯文字按钮：用 IconButton 内容插槽承载，获得 Tab 聚焦与 Enter/Space 触发
+            IconButton {
+                implicitWidth: entryLabel_tcp.implicitWidth
+                implicitHeight: entryLabel_tcp.implicitHeight
+                accessibleName: qsTr("TCP Connections")
+                hoverColor: "transparent"
+                pressedColor: "transparent"
+                symbolColor: popup.tertiaryText
+                symbolHoverColor: popup.accentBlue
+                onClicked: popup.detailsRequested("tcp")
 
-                MouseArea {
-                    id: tcpEntryMouse
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: popup.detailsRequested("tcp")
+                Text {
+                    id: entryLabel_tcp
+                    anchors.centerIn: parent
+                    text: qsTr("TCP Connections")
+                    font.pixelSize: 11
+                    // 按下加深一档，与 hover 区分（颜色由按钮状态驱动）
+                    color: parent.parent ? parent.parent.pressed
+                           ? Qt.darker(popup.accentBlue, 1.2)
+                           : parent.parent.currentColor : popup.tertiaryText
                 }
             }
 

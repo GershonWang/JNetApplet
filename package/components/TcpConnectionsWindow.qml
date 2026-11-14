@@ -146,32 +146,22 @@ WindowShell {
                     restoreMode: Binding.RestoreNone
                 }
 
-                // 清除按钮：有输入时显示 ×，点击清空搜索
-                Rectangle {
+                // 清除按钮：有输入时显示 ×，点击清空搜索。
+                // 改用 IconButton：无障碍契约、Tab 聚焦、Enter/Space 触发收敛在组件内
+                IconButton {
                     visible: root.searchText.length > 0
-                    width: 20; height: 20
+                    width: 20
+                    height: 20
                     radius: 10
-                    // 无障碍：清空按钮无文字（"×"），显式给出名称
-                    Accessible.role: Accessible.Button
-                    Accessible.name: qsTr("Clear search")
-                    color: clearSearchMouse.pressed
-                           ? Qt.darker(root.theme.hoverBg, 1.12)
-                           : (clearSearchMouse.containsMouse ? root.theme.hoverBg : "transparent")
-                    Text {
-                        anchors.centerIn: parent
-                        text: "×"
-                        font.pixelSize: 14
-                        color: clearSearchMouse.pressed
-                               ? Qt.darker(root.accentColor, 1.15)
-                               : (clearSearchMouse.containsMouse ? root.accentColor : root.theme.textTertiary)
-                    }
-                    MouseArea {
-                        id: clearSearchMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.searchText = ""
-                    }
+                    // 图标是 "×"，对读屏无意义，显式给出用途
+                    accessibleName: qsTr("Clear search")
+                    symbol: "×"
+                    symbolFontSize: 14
+                    symbolColor: root.theme.textTertiary
+                    symbolHoverColor: root.accentColor
+                    hoverColor: root.theme.hoverBg
+                    pressedColor: Qt.darker(root.theme.hoverBg, 1.12)
+                    onClicked: root.searchText = ""
                 }
 
                 Item { Layout.fillWidth: true }

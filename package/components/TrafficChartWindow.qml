@@ -230,57 +230,45 @@ WindowShell {
                 Repeater {
                     model: root.timeWindows
 
-                    Rectangle {
+                    // 时间窗口按钮：改用公共 ChoiceButton，获得 Tab 聚焦与 Enter/Space 触发
+                    ChoiceButton {
                         required property var modelData
-                        property bool isSelected: root.timeWindowSec === modelData
-                        // 无障碍：时间窗口按钮是三选一，名称复用按钮上的窗口文案
-                        Accessible.role: Accessible.RadioButton
-                        Accessible.name: root.formatWindowLabel(modelData)
-                        Accessible.checked: isSelected
-
                         // 宽度按按钮文案实测：中文"1 分钟 / 5 分钟 / 30 分钟"在 10px 字号下
                         // 约 28~33px，原固定 24px（按英文 1m/5m/30m 设计）会让文字居中溢出到
                         // 相邻按钮和右侧接口标签上，视觉上连成一片；+12 为左右各 6px 内边距，
-                        // 保留下限 24 使极短文案（如将来新增的 "1m"）仍保持一致的点击热区
-                        width: Math.max(24, label.implicitWidth + 12)
+                        // 保留下限 24 使极短文案（如将来新增的 "1m"）仍保持一致的点击热区。
+                        // 这里的 label 是隐藏的文字测量器，与组件内实际渲染的文字同源
+                        width: Math.max(24, windowLabel.implicitWidth + 12)
                         height: 18
                         radius: 4
-                        // 选中态：蓝色填充+白字；未选中态：透明背景+浅边框，hover 边框变蓝
-                        color: isSelected
-                               ? (mouse.pressed ? Qt.darker(common.accentBlue, 1.2) : common.accentBlue)
-                               : (mouse.pressed
-                                  ? Qt.rgba(common.cardBackground.r, common.cardBackground.g, common.cardBackground.b, common.cardBackground.a * 1.8)
-                                  : "transparent")
-                        border.width: 1
-                        border.color: isSelected
-                                       ? common.accentBlue
-                                       : (mouse.containsMouse ? common.accentBlue : root.theme.lineColor)
-
-                        Text {
-                            id: label
-                            anchors.centerIn: parent
-                            text: root.formatWindowLabel(modelData)
-                            font.pixelSize: 10
-                            font.weight: isSelected ? Font.Bold : Font.Normal
-                            color: isSelected ? "white"
-                                              : (mouse.pressed ? Qt.darker(common.accentBlue, 1.2)
-                                                 : (mouse.containsMouse ? common.accentBlue : root.theme.textSecondary))
+                        text: root.formatWindowLabel(modelData)
+                        accessibleName: root.formatWindowLabel(modelData)
+                        fontSize: 10
+                        checked: root.timeWindowSec === modelData
+                        selectedColor: common.accentBlue
+                        selectedBorderColor: common.accentBlue
+                        selectedTextColor: "white"
+                        baseColor: "transparent"
+                        baseBorderColor: root.theme.lineColor
+                        hoverColor: "transparent"
+                        textColor: root.theme.textSecondary
+                        hoverTextColor: common.accentBlue
+                        onClicked: {
+                            if (root.timeWindowSec !== modelData) {
+                                root.timeWindowSec = modelData
+                                // 时间窗口变化后：清空 Hover（坐标系已变），并重绘图表
+                                root.hoverIndex = -1
+                                root.hoverHint = ""
+                                canvas.requestPaint()
+                            }
                         }
 
-                        MouseArea {
-                            id: mouse
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            hoverEnabled: true
-                            onClicked: {
-                                if (root.timeWindowSec !== modelData) {
-                                    root.timeWindowSec = modelData
-                                    // 时间窗口变化后：清空 Hover（坐标系已变），并重绘图表
-                                    root.hoverIndex = -1
-                                    root.hoverHint = ""
-                                    canvas.requestPaint()
-                                }
-                            }
+                        Text {
+                            id: windowLabel
+                            visible: false
+                            text: root.formatWindowLabel(modelData)
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
                         }
                     }
                 }

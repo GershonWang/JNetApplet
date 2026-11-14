@@ -236,10 +236,18 @@ Window {
                                         // 该行接口是否为无线：查后端的无线接口名列表。
                                         // 行内图标与类型描述共用同一判定，避免重复求值
                                         readonly property bool isWireless: wirelessInterfaces.indexOf(modelData) !== -1
-                                        // 无障碍：整行是"切换活动接口"的单选项
+                                        // 无障碍：整行是"切换活动接口"的单选项。
+                                        // 这一行包含图标/单选点/两段文字，结构不是通用按钮，
+                                        // 故保留自身实现，但把无障碍契约补齐到与公共组件一致：
+                                        // 读屏激活、Tab 聚焦、Enter/Space 触发缺一不可
                                         Accessible.role: Accessible.RadioButton
                                         Accessible.name: modelData
                                         Accessible.checked: isActive
+                                        Accessible.onPressAction: if (applet) applet.setActiveInterface(modelData)
+                                        activeFocusOnTab: true
+                                        Keys.onReturnPressed: if (applet) applet.setActiveInterface(modelData)
+                                        Keys.onEnterPressed: if (applet) applet.setActiveInterface(modelData)
+                                        Keys.onSpacePressed: if (applet) applet.setActiveInterface(modelData)
                                         readonly property bool hovered: rowMouse.containsMouse
                                         // 选中态强调色由 root.selText 提供（浅色 #1565c0 / 深色 #64b5f6）：
                                         // 保证 ▢ 等空心图标在选中背景上仍有足够对比度
@@ -251,9 +259,12 @@ Window {
                                                                    : (hovered ? root.selBgHover : root.selBg))
                                                : (rowMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
                                                                    : (hovered ? theme.hoverBg : "transparent"))
-                                        // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动
+                                        // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动。
+                                        // 键盘焦点优先显示：否则 Tab 到这一行时用户看不出焦点在哪
                                         border.width: 1
-                                        border.color: isActive ? root.selBorder : "transparent"
+                                        border.color: ifaceRow.activeFocus
+                                                      ? root.selBorder
+                                                      : (isActive ? root.selBorder : "transparent")
 
                                         // 整行 hover + 点击：行内元素均不处理鼠标事件，
                                         // 点击行任意位置即选中该接口
@@ -375,40 +386,23 @@ Window {
                         Repeater {
                             model: [1000, 2000, 5000]
 
-                            Rectangle {
-                                id: intervalOption
-                                // 无障碍：刷新区间是单选项，名称与可见文字一致（"1s/2s/5s"）
-                                Accessible.role: Accessible.RadioButton
-                                Accessible.name: (modelData / 1000) + "s"
-                                Accessible.checked: applet && applet.refreshInterval === modelData
+                            // 改用公共 ChoiceButton：无障碍契约、Tab 聚焦、
+                            // Enter/Space 触发都收敛在组件内，配色按原值传入以保证视觉不变
+                            ChoiceButton {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 34
                                 radius: 8
-                                // 选中态蓝色填充边框，未选中态卡片背景，hover 态加深
-                                // 三态：按下 > 选中 > hover，按下加深一档
-                                color: applet && applet.refreshInterval === modelData
-                                       ? (intervalMouse.pressed ? Qt.darker(root.selBg, 1.12) : root.selBg)
-                                       : (intervalMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
-                                                                : (intervalMouse.containsMouse ? theme.hoverBg : theme.cardBg))
-                                border.width: 1
-                                border.color: applet && applet.refreshInterval === modelData
-                                              ? root.selBorder : theme.lineColor
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: (modelData / 1000) + "s"
-                                    font.pixelSize: 13
-                                    color: applet && applet.refreshInterval === modelData
-                                           ? root.selText : theme.textPrimary
-                                }
-
-                                MouseArea {
-                                    id: intervalMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: if (applet) applet.refreshInterval = modelData
-                                }
+                                text: (modelData / 1000) + "s"
+                                fontSize: 13
+                                checked: applet && applet.refreshInterval === modelData
+                                selectedColor: root.selBg
+                                selectedBorderColor: root.selBorder
+                                selectedTextColor: root.selText
+                                baseColor: theme.cardBg
+                                baseBorderColor: theme.lineColor
+                                hoverColor: theme.hoverBg
+                                textColor: theme.textPrimary
+                                onClicked: if (applet) applet.refreshInterval = modelData
                             }
                         }
                     }
@@ -442,38 +436,21 @@ Window {
                                 ["Mbps", 2]
                             ]
 
-                            Rectangle {
-                                id: unitOption
-                                // 无障碍：速度单位是单选项，名称取可见文案
-                                Accessible.role: Accessible.RadioButton
-                                Accessible.name: modelData[0]
-                                Accessible.checked: applet && applet.speedUnit === modelData[1]
+                            ChoiceButton {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 34
                                 radius: 8
-                                color: applet && applet.speedUnit === modelData[1]
-                                       ? (unitMouse.pressed ? Qt.darker(root.selBg, 1.12) : root.selBg)
-                                       : (unitMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
-                                                            : (unitMouse.containsMouse ? theme.hoverBg : theme.cardBg))
-                                border.width: 1
-                                border.color: applet && applet.speedUnit === modelData[1]
-                                              ? root.selBorder : theme.lineColor
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData[0]
-                                    font.pixelSize: 13
-                                    color: applet && applet.speedUnit === modelData[1]
-                                           ? root.selText : theme.textPrimary
-                                }
-
-                                MouseArea {
-                                    id: unitMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: if (applet) applet.speedUnit = modelData[1]
-                                }
+                                text: modelData[0]
+                                fontSize: 13
+                                checked: applet && applet.speedUnit === modelData[1]
+                                selectedColor: root.selBg
+                                selectedBorderColor: root.selBorder
+                                selectedTextColor: root.selText
+                                baseColor: theme.cardBg
+                                baseBorderColor: theme.lineColor
+                                hoverColor: theme.hoverBg
+                                textColor: theme.textPrimary
+                                onClicked: if (applet) applet.speedUnit = modelData[1]
                             }
                         }
                     }
@@ -503,37 +480,23 @@ Window {
                                 [qsTr("All interfaces"), true]
                             ]
 
-                            Rectangle {
-                                id: aggregateOption
-                                Accessible.role: Accessible.RadioButton
-                                Accessible.name: modelData[0]
-                                Accessible.checked: applet && applet.aggregateSpeed === modelData[1]
+                            ChoiceButton {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 34
                                 radius: 8
-                                color: applet && applet.aggregateSpeed === modelData[1]
-                                       ? (aggregateMouse.pressed ? Qt.darker(root.selBg, 1.12) : root.selBg)
-                                       : (aggregateMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
-                                                                 : (aggregateMouse.containsMouse ? theme.hoverBg : theme.cardBg))
-                                border.width: 1
-                                border.color: applet && applet.aggregateSpeed === modelData[1]
-                                              ? root.selBorder : theme.lineColor
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData[0]
-                                    font.pixelSize: 12
-                                    color: applet && applet.aggregateSpeed === modelData[1]
-                                           ? root.selText : theme.textPrimary
-                                }
-
-                                MouseArea {
-                                    id: aggregateMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: if (applet) applet.aggregateSpeed = modelData[1]
-                                }
+                                text: modelData[0]
+                                // 这一组原本就是 12px（其余两组 13px），保持原值不统一，
+                                // 否则会改变这一行的视觉密度
+                                fontSize: 12
+                                checked: applet && applet.aggregateSpeed === modelData[1]
+                                selectedColor: root.selBg
+                                selectedBorderColor: root.selBorder
+                                selectedTextColor: root.selText
+                                baseColor: theme.cardBg
+                                baseBorderColor: theme.lineColor
+                                hoverColor: theme.hoverBg
+                                textColor: theme.textPrimary
+                                onClicked: if (applet) applet.aggregateSpeed = modelData[1]
                             }
                         }
                     }
@@ -677,21 +640,22 @@ Window {
 
                     Item { Layout.preferredHeight: 4 }
 
-                    // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担
-                    Rectangle {
+                    // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担。
+                    // 用 IconButton 的内容插槽承载原有 Text——它的文字需要
+                    // elide/居中/Medium 字重，塞进 symbol 会丢失这些样式
+                    IconButton {
                         id: uninstallButton
-                        // 无障碍：危险操作按钮，名称即动作
-                        Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("Uninstall Plugin")
+                        accessibleName: qsTr("Uninstall Plugin")
                         Layout.fillWidth: true
                         Layout.preferredHeight: 40
-                        // 三态：按下 > hover > 常态，底色透明度逐级加深
-                        color: uninstallMouse.pressed
-                               ? Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
-                               : (uninstallMouse.containsMouse ? common.accentRedHover : common.accentRedLight)
                         radius: 10
-                        border.width: 1
-                        border.color: accentColor
+                        borderWidth: 1
+                        borderColor: accentColor
+                        // 三态：按下 > hover > 常态，底色透明度逐级加深
+                        baseColor: common.accentRedLight
+                        hoverColor: common.accentRedHover
+                        pressedColor: Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
+                        onClicked: uninstallConfirmDialog.open()
 
                         Text {
                             // 只声明垂直居中：水平方向由 left/right + margins 决定宽度，
@@ -706,14 +670,6 @@ Window {
                             color: accentColor
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                        }
-
-                        MouseArea {
-                            id: uninstallMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: uninstallConfirmDialog.open()
                         }
                     }
 
