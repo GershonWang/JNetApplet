@@ -7,6 +7,7 @@
 #include "core/netparsers.h"
 #include "core/netstate.h"
 #include "core/trafficlog.h"
+#include "core/format.h"
 #include <pluginfactory.h>
 
 #include <QFile>
@@ -452,24 +453,10 @@ double NetworkMonitorApplet::monthlyLimitGb() const
     return m_monthlyLimitGb;
 }
 
-// 归一化阈值输入：负数、0、NaN、无穷大统一按 0（关闭）处理
-// 设计原因：QML 侧是文本输入框，用户可能键入 "-1"、空串或异常字符；
-// 若不在此收敛，脏值会被持久化并在下次启动时参与换算，导致提醒永不触发且无提示。
-// 边界：+infinity 也满足 `> 0`，若只判 `gb > 0` 会让它通过校验，
-// 而 `qint64` 转换会得到未定义结果（实测得到 inf 被写进配置），故必须显式排除。
-// 该场景由 testQuotaLimitSetting 固定住
-static double normalizeLimitGb(double gb)
-{
-    // qIsFinite 同时排除 NaN 与 ±infinity；随后再排除负数与 0
-    if (!qIsFinite(gb) || !(gb > 0)) {
-        return 0.0;
-    }
-    return gb;
-}
 
 void NetworkMonitorApplet::setDailyLimitGb(double gb)
 {
-    const double normalized = normalizeLimitGb(gb);
+    const double normalized = JNetCore::normalizeLimitGb(gb);
     if (qFuzzyCompare(m_dailyLimitGb, normalized)) {
         return;
     }
@@ -480,7 +467,7 @@ void NetworkMonitorApplet::setDailyLimitGb(double gb)
 
 void NetworkMonitorApplet::setMonthlyLimitGb(double gb)
 {
-    const double normalized = normalizeLimitGb(gb);
+    const double normalized = JNetCore::normalizeLimitGb(gb);
     if (qFuzzyCompare(m_monthlyLimitGb, normalized)) {
         return;
     }
@@ -629,20 +616,6 @@ static QVariantList flattenTrafficRows(const QJsonObject &trafficLog, const QStr
 }
 
 
-// CSV 字段转义（RFC 4180）
-// 设计原因：字段含逗号、双引号或换行时必须用双引号包裹，内部双引号成对转义；
-// 当前接口名（eno1/wlo1）和日期不会触发，但这是 CSV 正确性问题——
-// 用户可能改过配置、将来也可能支持自定义别名，届时坏掉极难排查
-static QString csvEscape(const QString &field)
-{
-    if (!field.contains(QLatin1Char(',')) && !field.contains(QLatin1Char('"'))
-        && !field.contains(QLatin1Char('\n')) && !field.contains(QLatin1Char('\r'))) {
-        return field;
-    }
-    QString escaped = field;
-    escaped.replace(QLatin1String("\""), QLatin1String("\"\""));
-    return QLatin1Char('"') + escaped + QLatin1Char('"');
-}
 
 // 把指定 section 的数据导出为 CSV 文本
 // 表头与数据都用纯字节数，便于在表格软件里直接求和；行序与界面一致
@@ -654,9 +627,9 @@ QString NetworkMonitorApplet::exportTrafficAsCsv(const QString &section) const
     csv += QStringLiteral("date,interface,download_bytes,upload_bytes,total_bytes\n");
     for (const QVariant &item : rows) {
         const QVariantMap row = item.toMap();
-        csv += csvEscape(row.value(QStringLiteral("date")).toString());
+        csv += JNetCore::csvEscape(row.value(QStringLiteral("date")).toString());
         csv += QLatin1Char(',');
-        csv += csvEscape(row.value(QStringLiteral("iface")).toString());
+        csv += JNetCore::csvEscape(row.value(QStringLiteral("iface")).toString());
         csv += QLatin1Char(',');
         csv += QString::number(row.value(QStringLiteral("rx")).toLongLong());
         csv += QLatin1Char(',');
@@ -760,32 +733,9 @@ QString NetworkMonitorApplet::defaultExportPath(const QString &section,
 // 带单位的完整速度字符串，供弹窗、趋势图与悬停提示使用
 // 换算规则是全局唯一定义处，QML 侧不再各自实现 KB/MB/GB 阈值
 QString NetworkMonitorApplet::formatSpeed(double bytesPerSec, int unit) const
+
 {
-    // 负值/NaN 一律按 0 显示：上游已做负值钳制，这里是防御性兜底，
-    // 避免异常值在界面上显示成 "-1.00 KB/s"
-    if (!(bytesPerSec > 0)) {
-        bytesPerSec = 0;
-    }
-
-    if (unit == SpeedUnitMbps) {
-        // 字节/秒 → 兆比特/秒：×8 得比特，再除以 1e6（十进制，与运营商口径一致）
-        const double mbps = bytesPerSec * 8.0 / 1000000.0;
-        return QStringLiteral("%1 Mbps").arg(mbps, 0, 'f', 2);
-    }
-    if (unit == SpeedUnitKBps) {
-        // 固定千字节每秒：不做自适应换挡，数值可能很大（如 12345.67 KB/s），
-        // 但这是用户显式选择的口径，不应擅自改成 MB/s
-        return QStringLiteral("%1 KB/s").arg(bytesPerSec / 1024.0, 0, 'f', 2);
-    }
-
-    // 智能自动：沿用既有的二进制阶梯与两位小数，保持与历史版本一致的观感
-    if (bytesPerSec < 1024.0 * 1024.0) {
-        return QStringLiteral("%1 KB/s").arg(bytesPerSec / 1024.0, 0, 'f', 2);
-    }
-    if (bytesPerSec < 1024.0 * 1024.0 * 1024.0) {
-        return QStringLiteral("%1 MB/s").arg(bytesPerSec / (1024.0 * 1024.0), 0, 'f', 2);
-    }
-    return QStringLiteral("%1 GB/s").arg(bytesPerSec / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
+    return JNetCore::formatSpeed(bytesPerSec, unit);
 }
 
 // 任务栏用的紧凑写法（无空格）
@@ -793,39 +743,9 @@ QString NetworkMonitorApplet::formatSpeed(double bytesPerSec, int unit) const
 // 同时任务栏采用"整数部分右对齐 + 小数部分左对齐"的两段式渲染实现小数点对齐，
 // 故 intPart 为 true 时只返回数值部分，由 QML 分别渲染两段
 QString NetworkMonitorApplet::formatSpeedCompact(double bytesPerSec, int unit, bool intPart) const
+
 {
-    if (!(bytesPerSec > 0)) {
-        bytesPerSec = 0;
-    }
-
-    QString value;
-    QString suffix;
-
-    if (unit == SpeedUnitMbps) {
-        // 固定 Mbps 采用两位小数（用户选定口径），如 "0.85Mbps"、"100.00Mbps"
-        value = QString::number(bytesPerSec * 8.0 / 1000000.0, 'f', 2);
-        suffix = QStringLiteral("Mbps");
-    } else if (unit == SpeedUnitKBps) {
-        value = QString::number(bytesPerSec / 1024.0, 'f', 2);
-        suffix = QStringLiteral("K");
-    } else {
-        // 智能自动：与完整显示保持一致的三级换挡，但单位缩写为单个字母
-        if (bytesPerSec < 1024.0 * 1024.0) {
-            value = QString::number(bytesPerSec / 1024.0, 'f', 2);
-            suffix = QStringLiteral("K");
-        } else if (bytesPerSec < 1024.0 * 1024.0 * 1024.0) {
-            value = QString::number(bytesPerSec / (1024.0 * 1024.0), 'f', 2);
-            suffix = QStringLiteral("M");
-        } else {
-            value = QString::number(bytesPerSec / (1024.0 * 1024.0 * 1024.0), 'f', 2);
-            suffix = QStringLiteral("G");
-        }
-    }
-
-    if (intPart) {
-        return value;
-    }
-    return value + suffix;
+    return JNetCore::formatSpeedCompact(bytesPerSec, unit, intPart);
 }
 
 // 设置任务栏网速字体颜色，空串表示跟随系统主题

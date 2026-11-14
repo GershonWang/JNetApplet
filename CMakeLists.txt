@@ -42,6 +42,8 @@ add_library(jnetcore STATIC
     src/core/netstate.cpp
     src/core/trafficlog.h
     src/core/trafficlog.cpp
+    src/core/format.h
+    src/core/format.cpp
 )
 # 位置无关代码：被主插件 SHARED 库静态链接
 set_target_properties(jnetcore PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -19,6 +19,7 @@
 #include "core/netparsers.h"
 #include "core/netstate.h"
 #include "core/trafficlog.h"
+#include "core/format.h"
 
 #include <QJsonObject>
 #include <QTest>
@@ -48,6 +49,15 @@ private slots:
     // ---- 流量阈值 ----
     void testShouldNotifyQuota_data();
     void testShouldNotifyQuota();
+
+    // ---- 速度格式化与数值归一化 ----
+    void testFormatSpeed_data();
+    void testFormatSpeed();
+    void testFormatSpeedCompact_data();
+    void testFormatSpeedCompact();
+    void testCsvEscape_data();
+    void testCsvEscape();
+    void testNormalizeLimitGb();
 
     // ---- 流量日志数据操作 ----
     void testAppendTraffic();
@@ -503,6 +513,118 @@ void CoreLogicTest::testPeriodUsedBytes()
     QCOMPARE(JNetCore::periodUsedBytes(hugeLog, QStringLiteral("byDay"),
                                        QStringLiteral("2026-11-14")),
              qint64(9007199254740993LL));
+}
+
+
+void CoreLogicTest::testFormatSpeed_data()
+{
+    QTest::addColumn<double>("bytes");
+    QTest::addColumn<int>("unit");
+    QTest::addColumn<QString>("expected");
+
+    // 智能自动：0 与负值都显示 0，不能出现负号
+    QTest::newRow("auto-zero") << 0.0 << 0 << QStringLiteral("0.00 KB/s");
+    QTest::newRow("auto-negative") << -1024.0 << 0 << QStringLiteral("0.00 KB/s");
+    QTest::newRow("auto-512B") << 512.0 << 0 << QStringLiteral("0.50 KB/s");
+    QTest::newRow("auto-1K") << 1024.0 << 0 << QStringLiteral("1.00 KB/s");
+    // 边界：刚好 1 MB 换到 MB/s；刚好 1 GB 换到 GB/s
+    QTest::newRow("auto-1M") << 1048576.0 << 0 << QStringLiteral("1.00 MB/s");
+    QTest::newRow("auto-1G") << 1073741824.0 << 0 << QStringLiteral("1.00 GB/s");
+
+    // 固定 KB/s：10 MB 仍是 10240.00 KB/s，不擅自换挡
+    QTest::newRow("kbps-1K") << 1024.0 << 1 << QStringLiteral("1.00 KB/s");
+    QTest::newRow("kbps-10M") << 10485760.0 << 1 << QStringLiteral("10240.00 KB/s");
+
+    // 固定 Mbps：十进制，bytes×8/1e6。1 MB/s ≈ 8.39 Mbps（1024 与 1000 的差异，属预期口径）
+    QTest::newRow("mbps-1") << 125000.0 << 2 << QStringLiteral("1.00 Mbps");
+    QTest::newRow("mbps-1MBps") << 1048576.0 << 2 << QStringLiteral("8.39 Mbps");
+    QTest::newRow("mbps-100") << 12500000.0 << 2 << QStringLiteral("100.00 Mbps");
+    QTest::newRow("mbps-zero") << 0.0 << 2 << QStringLiteral("0.00 Mbps");
+}
+
+void CoreLogicTest::testFormatSpeed()
+{
+    QFETCH(double, bytes);
+    QFETCH(int, unit);
+    QFETCH(QString, expected);
+    QCOMPARE(JNetCore::formatSpeed(bytes, unit), expected);
+}
+
+void CoreLogicTest::testFormatSpeedCompact_data()
+{
+    QTest::addColumn<double>("bytes");
+    QTest::addColumn<int>("unit");
+    QTest::addColumn<bool>("intPart");
+    QTest::addColumn<QString>("expected");
+
+    // 智能自动：三位换挡，单位缩写为单字母
+    QTest::newRow("auto-K-int") << 198727.0 << 0 << true << QStringLiteral("194.07");
+    QTest::newRow("auto-K-full") << 198727.0 << 0 << false << QStringLiteral("194.07K");
+    QTest::newRow("auto-M-full") << 4308992.0 << 0 << false << QStringLiteral("4.11M");
+    QTest::newRow("auto-G-full") << 1073741824.0 << 0 << false << QStringLiteral("1.00G");
+    QTest::newRow("auto-zero") << 0.0 << 0 << false << QStringLiteral("0.00K");
+
+    // 固定 KB/s
+    QTest::newRow("kbps-full") << 198727.0 << 1 << false << QStringLiteral("194.07K");
+    QTest::newRow("kbps-10M") << 10485760.0 << 1 << false << QStringLiteral("10240.00K");
+
+    // 固定 Mbps：两位小数
+    QTest::newRow("mbps-full") << 125000.0 << 2 << false << QStringLiteral("1.00Mbps");
+    QTest::newRow("mbps-100") << 12500000.0 << 2 << false << QStringLiteral("100.00Mbps");
+    QTest::newRow("mbps-int-part") << 100000.0 << 2 << true << QStringLiteral("0.80");
+    QTest::newRow("mbps-zero") << 0.0 << 2 << false << QStringLiteral("0.00Mbps");
+}
+
+void CoreLogicTest::testFormatSpeedCompact()
+{
+    QFETCH(double, bytes);
+    QFETCH(int, unit);
+    QFETCH(bool, intPart);
+    QFETCH(QString, expected);
+    QCOMPARE(JNetCore::formatSpeedCompact(bytes, unit, intPart), expected);
+}
+
+void CoreLogicTest::testCsvEscape_data()
+{
+    QTest::addColumn<QString>("input");
+    QTest::addColumn<QString>("expected");
+
+    // 普通字段不加引号
+    QTest::newRow("plain") << QStringLiteral("eno1") << QStringLiteral("eno1");
+    QTest::newRow("chinese") << QStringLiteral("有线网卡") << QStringLiteral("有线网卡");
+    // 含逗号必须整体加引号，否则列数会错
+    QTest::newRow("comma") << QStringLiteral("wlan, guest") << QStringLiteral("\"wlan, guest\"");
+    // 双引号成对转义
+    QTest::newRow("quote") << QStringLiteral("a\"b") << QStringLiteral("\"a\"\"b\"");
+    // 逗号 + 双引号组合（导出测试里的真实样本）
+    QTest::newRow("comma-and-quote")
+        << QStringLiteral("wlan, \"guest\"") << QStringLiteral("\"wlan, \"\"guest\"\"\"");
+    // 换行：用引号包裹表意
+    QTest::newRow("newline") << QStringLiteral("a\nb") << QStringLiteral("\"a\nb\"");
+}
+
+void CoreLogicTest::testCsvEscape()
+{
+    QFETCH(QString, input);
+    QFETCH(QString, expected);
+    QCOMPARE(JNetCore::csvEscape(input), expected);
+}
+
+void CoreLogicTest::testNormalizeLimitGb()
+{
+    // 合法值原样保留
+    QCOMPARE(JNetCore::normalizeLimitGb(1.5), 1.5);
+    QCOMPARE(JNetCore::normalizeLimitGb(20.0), 20.0);
+
+    // 负数、0 归为 0（关闭）
+    QCOMPARE(JNetCore::normalizeLimitGb(-3.0), 0.0);
+    QCOMPARE(JNetCore::normalizeLimitGb(0.0), 0.0);
+
+    // NaN 与无穷大同样归 0：+infinity 满足 `> 0`，只判 > 0 会让它通过校验，
+    // 而字节换算会得到未定义结果（实测曾把 inf 写进配置）
+    QCOMPARE(JNetCore::normalizeLimitGb(std::numeric_limits<double>::quiet_NaN()), 0.0);
+    QCOMPARE(JNetCore::normalizeLimitGb(std::numeric_limits<double>::infinity()), 0.0);
+    QCOMPARE(JNetCore::normalizeLimitGb(-std::numeric_limits<double>::infinity()), 0.0);
 }
 
 QTEST_MAIN(CoreLogicTest)
