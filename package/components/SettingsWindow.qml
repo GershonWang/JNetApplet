@@ -146,559 +146,571 @@ Window {
             // 超过 1080p 屏幕下 maximumHeight 的上限（0.8*1080=864）。
             // 若不滚动，底部「卸载插件」会被裁掉——那正是用户需要点击的区域。
             // 设计原因：宁可让内容整体滚动，也不再继续加高窗口（小屏会被压得更狠）
-            ScrollView {
+            // 用 Flickable 而非 ScrollView：
+            // ScrollView 会把内容项（ColumnLayout）压成视口高度——实测
+            // contentHeight=609 而视口 595，只差 14px，底部「卸载插件」
+            // 永远滚不出来（用户反馈的实际故障）。
+            // 根因：ColumnLayout 的 implicitHeight 同样受父项约束，
+            // 因此 height: implicitHeight 无效，childrenRect.height 还会
+            // 触发 Binding loop。Flickable 的 contentHeight 由我们显式
+            // 绑定真实内容高度，最可靠。
+            Flickable {
                 id: contentScroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                // 需要垂直滚动条：内容高度超过视口时出现
-                ScrollBar.vertical.policy: ScrollBar.AsNeeded
-                contentWidth: availableWidth
+                contentWidth: width
+                // 真实内容高度 = 内容项高度 + 上下留白 32
+                contentHeight: contentWrapper.height + 32
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                ColumnLayout {
-                    // 宽度锁定为视口宽度（减去滚动条占位），避免子项把内容撑宽导致横向滚动。
-                    // 内边距不能靠 ColumnLayout 的 padding 实现（它没有这些属性，
-                    // 那是 Control 的属性；误写会让本文件整体加载失败、插件从任务栏消失），
-                    // 也不能用 margins——margins 不改 width，内容会横向溢出。
-                    // 故改为「宽度减去左右边距」，与原先 anchors.margins: 16 的观感一致
-                    width: contentScroll.availableWidth - 32
-                    // 左右与上边距用 x/y 偏移实现：布局容器没有 padding/margin 属性，
-                    // 误用会让本文件整体加载失败、插件随即从任务栏消失
+                // 包裹层：高度取内部 ColumnLayout 的 implicitHeight，
+                // 该值不受视口约束（ColumnLayout 作为 Flickable 的孙项，
+                // 不再被当作内容项强制拉伸）
+                Item {
+                    id: contentWrapper
+                    width: contentScroll.width - 32
                     x: 16
                     y: 16
-                    spacing: common.spacingSection
-                    // 让内容高度自然撑开（ColumnLayout 会按子项累加 implicitHeight），
-                    // 底部留白由 ScrollView 的 contentHeight 与 viewport 差值承担
+                    height: contentColumn.implicitHeight
 
-                    // 网络接口选择区
-                    Text {
-                        text: qsTr("Network Interface")
-                        font.pixelSize: common.fontSizeSubtitle
-                        font.weight: Font.Bold
-                        color: theme.textSecondary
-                    }
+                    ColumnLayout {
+                        id: contentColumn
+                        // 宽度跟随包裹层，避免子项把内容撑宽导致横向滚动
+                        width: parent.width
+                        spacing: common.spacingSection
 
-                    // 接口列表容器：最多显示约 5 行（160px），超出部分垂直滚动
-                    Rectangle {
-                        Layout.fillWidth: true
-                        // 高度 = 上下边距 10*2 + 列表可视高度；可视高度 = min(内容高度, 160)
-                        // 内容高度 = 行高 30*n + 行间距 2*(n-1)，接口少时卡片随行数收缩
-                        Layout.preferredHeight: networkInterfaces.length > 0
-                            ? Math.min(ifaceColumn.implicitHeight, 160) + 20
-                            : 80
-                        color: theme.cardBg
-                        radius: 10
-                        border.width: 1
-                        border.color: theme.lineColor
+                        // 网络接口选择区
+                        Text {
+                            text: qsTr("Network Interface")
+                            font.pixelSize: common.fontSizeSubtitle
+                            font.weight: Font.Bold
+                            color: theme.textSecondary
+                        }
 
-                        // 用 ScrollView 而非裸 Flickable：自带滚轮滚动支持，
-                        // 且滚动条显示时自动让出内容宽度，不会遮挡行内文字
-                        ScrollView {
-                            id: ifaceScrollView
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            visible: networkInterfaces.length > 0
-                            clip: true
-                            // 内容宽度跟随可视宽度（自动减去滚动条占位），禁止水平滚动
-                            contentWidth: availableWidth
+                        // 接口列表容器：最多显示约 5 行（160px），超出部分垂直滚动
+                        Rectangle {
+                            Layout.fillWidth: true
+                            // 高度 = 上下边距 10*2 + 列表可视高度；可视高度 = min(内容高度, 160)
+                            // 内容高度 = 行高 30*n + 行间距 2*(n-1)，接口少时卡片随行数收缩
+                            Layout.preferredHeight: networkInterfaces.length > 0
+                                ? Math.min(ifaceColumn.implicitHeight, 160) + 20
+                                : 80
+                            color: theme.cardBg
+                            radius: 10
+                            border.width: 1
+                            border.color: theme.lineColor
 
-                            // 自定义滚动条样式：4px 圆角矩形细条，
-                            // 颜色使用主题感知灰色系（随 isDarkMode 切换深浅）；
-                            // AsNeeded 策略保证接口少时不显示滚动条
-                            ScrollBar.vertical: ScrollBar {
-                                id: ifaceScrollBar
-                                policy: ScrollBar.AsNeeded
-                                interactive: true
+                            // 用 ScrollView 而非裸 Flickable：自带滚轮滚动支持，
+                            // 且滚动条显示时自动让出内容宽度，不会遮挡行内文字
+                            ScrollView {
+                                id: ifaceScrollView
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                visible: networkInterfaces.length > 0
+                                clip: true
+                                // 内容宽度跟随可视宽度（自动减去滚动条占位），禁止水平滚动
+                                contentWidth: availableWidth
 
-                                contentItem: Rectangle {
-                                    implicitWidth: 4
-                                    radius: 2
-                                    // 按压/悬停加深、默认稍淡，保证滚动条在卡片背景上可见
-                                    color: ifaceScrollBar.pressed ? theme.textSecondary
-                                          : (ifaceScrollBar.hovered ? theme.textSecondary : theme.textTertiary)
+                                // 自定义滚动条样式：4px 圆角矩形细条，
+                                // 颜色使用主题感知灰色系（随 isDarkMode 切换深浅）；
+                                // AsNeeded 策略保证接口少时不显示滚动条
+                                ScrollBar.vertical: ScrollBar {
+                                    id: ifaceScrollBar
+                                    policy: ScrollBar.AsNeeded
+                                    interactive: true
+
+                                    contentItem: Rectangle {
+                                        implicitWidth: 4
+                                        radius: 2
+                                        // 按压/悬停加深、默认稍淡，保证滚动条在卡片背景上可见
+                                        color: ifaceScrollBar.pressed ? theme.textSecondary
+                                              : (ifaceScrollBar.hovered ? theme.textSecondary : theme.textTertiary)
+                                    }
                                 }
-                            }
 
-                            Column {
-                                id: ifaceColumn
-                                width: ifaceScrollView.availableWidth
-                                // 行间距 2：紧凑列表，各行 hover 背景不粘连
-                                spacing: 2
+                                Column {
+                                    id: ifaceColumn
+                                    width: ifaceScrollView.availableWidth
+                                    // 行间距 2：紧凑列表，各行 hover 背景不粘连
+                                    spacing: 2
 
-                                // 接口列表：整行点击切换活动接口
-                                // 行样式：类型图标 + 单选圆点 + 名称 + 右侧类型描述；
-                                // hover 底、选中底与边框颜色均随 isDarkMode 切换深浅
-                                Repeater {
-                                    // 排序规则统一由 common.sortInterfaces 提供，确保各处顺序一致
-                                    model: common.sortInterfaces(networkInterfaces)
-                                    delegate: Rectangle {
-                                        id: ifaceRow
-                                        width: ifaceColumn.width
-                                        height: 30
-                                        radius: 8
-                                        // 当前行是否为活动接口（选中态）
-                                        readonly property bool isActive: modelData === activeInterface
-                                        // 该行接口是否为无线：查后端的无线接口名列表。
-                                        // 行内图标与类型描述共用同一判定，避免重复求值
-                                        readonly property bool isWireless: wirelessInterfaces.indexOf(modelData) !== -1
-                                        // 无障碍：整行是"切换活动接口"的单选项。
-                                        // 这一行包含图标/单选点/两段文字，结构不是通用按钮，
-                                        // 故保留自身实现，但把无障碍契约补齐到与公共组件一致：
-                                        // 读屏激活、Tab 聚焦、Enter/Space 触发缺一不可
-                                        Accessible.role: Accessible.RadioButton
-                                        Accessible.name: modelData
-                                        Accessible.checked: isActive
-                                        Accessible.onPressAction: if (applet) applet.setActiveInterface(modelData)
-                                        activeFocusOnTab: true
-                                        Keys.onReturnPressed: if (applet) applet.setActiveInterface(modelData)
-                                        Keys.onEnterPressed: if (applet) applet.setActiveInterface(modelData)
-                                        Keys.onSpacePressed: if (applet) applet.setActiveInterface(modelData)
-                                        readonly property bool hovered: rowMouse.containsMouse
-                                        // 选中态强调色由 root.selText 提供（浅色 #1565c0 / 深色 #64b5f6）：
-                                        // 保证 ▢ 等空心图标在选中背景上仍有足够对比度
-                                        readonly property color activeColor: root.selText
-                                        // 背景优先级：选中 > hover；选中行 hover 时稍加深以保留交互反馈
-                                        // 背景优先级：按下 > 选中 > hover，按下加深一档
-                                        color: isActive
-                                               ? (rowMouse.pressed ? Qt.darker(root.selBgHover, 1.12)
-                                                                   : (hovered ? root.selBgHover : root.selBg))
-                                               : (rowMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
-                                                                   : (hovered ? theme.hoverBg : "transparent"))
-                                        // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动。
-                                        // 键盘焦点优先显示：否则 Tab 到这一行时用户看不出焦点在哪
-                                        border.width: 1
-                                        border.color: ifaceRow.activeFocus
-                                                      ? root.selBorder
-                                                      : (isActive ? root.selBorder : "transparent")
+                                    // 接口列表：整行点击切换活动接口
+                                    // 行样式：类型图标 + 单选圆点 + 名称 + 右侧类型描述；
+                                    // hover 底、选中底与边框颜色均随 isDarkMode 切换深浅
+                                    Repeater {
+                                        // 排序规则统一由 common.sortInterfaces 提供，确保各处顺序一致
+                                        model: common.sortInterfaces(networkInterfaces)
+                                        delegate: Rectangle {
+                                            id: ifaceRow
+                                            width: ifaceColumn.width
+                                            height: 30
+                                            radius: 8
+                                            // 当前行是否为活动接口（选中态）
+                                            readonly property bool isActive: modelData === activeInterface
+                                            // 该行接口是否为无线：查后端的无线接口名列表。
+                                            // 行内图标与类型描述共用同一判定，避免重复求值
+                                            readonly property bool isWireless: wirelessInterfaces.indexOf(modelData) !== -1
+                                            // 无障碍：整行是"切换活动接口"的单选项。
+                                            // 这一行包含图标/单选点/两段文字，结构不是通用按钮，
+                                            // 故保留自身实现，但把无障碍契约补齐到与公共组件一致：
+                                            // 读屏激活、Tab 聚焦、Enter/Space 触发缺一不可
+                                            Accessible.role: Accessible.RadioButton
+                                            Accessible.name: modelData
+                                            Accessible.checked: isActive
+                                            Accessible.onPressAction: if (applet) applet.setActiveInterface(modelData)
+                                            activeFocusOnTab: true
+                                            Keys.onReturnPressed: if (applet) applet.setActiveInterface(modelData)
+                                            Keys.onEnterPressed: if (applet) applet.setActiveInterface(modelData)
+                                            Keys.onSpacePressed: if (applet) applet.setActiveInterface(modelData)
+                                            readonly property bool hovered: rowMouse.containsMouse
+                                            // 选中态强调色由 root.selText 提供（浅色 #1565c0 / 深色 #64b5f6）：
+                                            // 保证 ▢ 等空心图标在选中背景上仍有足够对比度
+                                            readonly property color activeColor: root.selText
+                                            // 背景优先级：选中 > hover；选中行 hover 时稍加深以保留交互反馈
+                                            // 背景优先级：按下 > 选中 > hover，按下加深一档
+                                            color: isActive
+                                                   ? (rowMouse.pressed ? Qt.darker(root.selBgHover, 1.12)
+                                                                       : (hovered ? root.selBgHover : root.selBg))
+                                                   : (rowMouse.pressed ? Qt.darker(theme.hoverBg, 1.12)
+                                                                       : (hovered ? theme.hoverBg : "transparent"))
+                                            // 选中行加细边框增强视觉；未选中保持透明边框占位，避免切换时出现 1px 抖动。
+                                            // 键盘焦点优先显示：否则 Tab 到这一行时用户看不出焦点在哪
+                                            border.width: 1
+                                            border.color: ifaceRow.activeFocus
+                                                          ? root.selBorder
+                                                          : (isActive ? root.selBorder : "transparent")
 
-                                        // 整行 hover + 点击：行内元素均不处理鼠标事件，
-                                        // 点击行任意位置即选中该接口
-                                        MouseArea {
-                                            id: rowMouse
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: if (applet) applet.setActiveInterface(modelData)
-                                        }
-
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 10
-                                            anchors.rightMargin: 10
-                                            spacing: 8
-
-                                            // 网卡类型图标：固定宽度居中，保证不同字形的视觉对齐
-                                            Text {
-                                                Layout.alignment: Qt.AlignVCenter
-                                                Layout.preferredWidth: 20
-                                                horizontalAlignment: Text.AlignHCenter
-                                                text: common.interfaceIcon(modelData, ifaceRow.isWireless)
-                                                font.pixelSize: common.fontSizeTitle
-                                                color: ifaceRow.isActive ? ifaceRow.activeColor : theme.iconGray
+                                            // 整行 hover + 点击：行内元素均不处理鼠标事件，
+                                            // 点击行任意位置即选中该接口
+                                            MouseArea {
+                                                id: rowMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: if (applet) applet.setActiveInterface(modelData)
                                             }
 
-                                            // 自绘单选圆点：替代 RadioButton 作纯视觉指示器，
-                                            // 避免 DTK 样式渲染差异（本文件早期版本 RadioButton 标签渲染异常），
-                                            // 选中态颜色完全可控；点击由整行 MouseArea 统一处理
-                                            Rectangle {
-                                                Layout.alignment: Qt.AlignVCenter
-                                                Layout.preferredWidth: 16
-                                                Layout.preferredHeight: 16
-                                                radius: 8
-                                                color: "transparent"
-                                                border.width: 2
-                                                border.color: ifaceRow.isActive ? ifaceRow.activeColor
-                                                              : (ifaceRow.hovered ? theme.textSecondary : theme.textTertiary)
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
 
-                                                Rectangle {
-                                                    anchors.centerIn: parent
-                                                    width: 8
-                                                    height: 8
-                                                    radius: 4
-                                                    visible: ifaceRow.isActive
-                                                    color: ifaceRow.activeColor
+                                                // 网卡类型图标：固定宽度居中，保证不同字形的视觉对齐
+                                                Text {
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.preferredWidth: 20
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    text: common.interfaceIcon(modelData, ifaceRow.isWireless)
+                                                    font.pixelSize: common.fontSizeTitle
+                                                    color: ifaceRow.isActive ? ifaceRow.activeColor : theme.iconGray
                                                 }
-                                            }
 
-                                            // 接口名称：过长时右侧省略
-                                            Text {
-                                                Layout.alignment: Qt.AlignVCenter
-                                                Layout.fillWidth: true
-                                                text: modelData
-                                                font.pixelSize: common.fontSizeSubtitle
-                                                font.weight: ifaceRow.isActive ? Font.Medium : Font.Normal
-                                                color: ifaceRow.isActive ? ifaceRow.activeColor : theme.textPrimary
-                                                elide: Text.ElideRight
-                                            }
+                                                // 自绘单选圆点：替代 RadioButton 作纯视觉指示器，
+                                                // 避免 DTK 样式渲染差异（本文件早期版本 RadioButton 标签渲染异常），
+                                                // 选中态颜色完全可控；点击由整行 MouseArea 统一处理
+                                                Rectangle {
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.preferredWidth: 16
+                                                    Layout.preferredHeight: 16
+                                                    radius: 8
+                                                    color: "transparent"
+                                                    border.width: 2
+                                                    border.color: ifaceRow.isActive ? ifaceRow.activeColor
+                                                                  : (ifaceRow.hovered ? theme.textSecondary : theme.textTertiary)
 
-                                            // 接口类型描述：右对齐显示，与接口名分居两侧
-                                            Text {
-                                                Layout.alignment: Qt.AlignVCenter
-                                                text: common.interfaceDescription(modelData, ifaceRow.isWireless)
-                                                font.pixelSize: common.fontSizeBody
-                                                color: theme.textTertiary
+                                                    Rectangle {
+                                                        anchors.centerIn: parent
+                                                        width: 8
+                                                        height: 8
+                                                        radius: 4
+                                                        visible: ifaceRow.isActive
+                                                        color: ifaceRow.activeColor
+                                                    }
+                                                }
+
+                                                // 接口名称：过长时右侧省略
+                                                Text {
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.fillWidth: true
+                                                    text: modelData
+                                                    font.pixelSize: common.fontSizeSubtitle
+                                                    font.weight: ifaceRow.isActive ? Font.Medium : Font.Normal
+                                                    color: ifaceRow.isActive ? ifaceRow.activeColor : theme.textPrimary
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                // 接口类型描述：右对齐显示，与接口名分居两侧
+                                                Text {
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    text: common.interfaceDescription(modelData, ifaceRow.isWireless)
+                                                    font.pixelSize: common.fontSizeBody
+                                                    color: theme.textTertiary
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
+
+                            // 无接口提示：在卡片内居中
+                            Text {
+                                anchors.centerIn: parent
+                                text: qsTr("No network interface detected")
+                                font.pixelSize: common.fontSizeBody
+                                color: theme.textTertiary
+                                visible: networkInterfaces.length === 0
+                            }
                         }
 
-                        // 无接口提示：在卡片内居中
+                        // 字体颜色选择区：预设色板 + 跟随系统选项
+                        // 设计原因：用户选择的颜色通过 applet.textColor 持久化到
+                        // ~/.config/jnetapplet/settings.ini，重启 dde-shell 后仍生效
                         Text {
-                            anchors.centerIn: parent
-                            text: qsTr("No network interface detected")
-                            font.pixelSize: common.fontSizeBody
-                            color: theme.textTertiary
-                            visible: networkInterfaces.length === 0
+                            Layout.topMargin: common.spacingGroup
+                            text: qsTr("Font Color")
+                            font.pixelSize: common.fontSizeSubtitle
+                            font.weight: Font.Bold
+                            color: theme.textSecondary
                         }
-                    }
 
-                    // 字体颜色选择区：预设色板 + 跟随系统选项
-                    // 设计原因：用户选择的颜色通过 applet.textColor 持久化到
-                    // ~/.config/jnetapplet/settings.ini，重启 dde-shell 后仍生效
-                    Text {
-                        Layout.topMargin: common.spacingGroup
-                        text: qsTr("Font Color")
-                        font.pixelSize: common.fontSizeSubtitle
-                        font.weight: Font.Bold
-                        color: theme.textSecondary
-                    }
-
-                    TextColorPicker {
-                        Layout.fillWidth: true
-                        currentColor: applet ? applet.textColor : ""
-                        // 深色模式标记向下传递：TextColorPicker 内部色板卡片同样主题感知
-                        isDarkMode: root.isDarkMode
-                        onColorSelected: if (applet) applet.textColor = color
-                    }
-
-                    // 刷新间隔选择区：1 秒 / 2 秒 / 5 秒
-                    // 设计原因：用户可能觉得每秒刷新开销大或过于频繁，提供更长的间隔选项；
-                    // 选择结果通过 applet.refreshInterval 持久化并即时生效，
-                    // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
-                    Text {
-                        Layout.topMargin: common.spacingGroup
-                        text: qsTr("Refresh Interval")
-                        font.pixelSize: common.fontSizeSubtitle
-                        font.weight: Font.Bold
-                        color: theme.textSecondary
-                    }
-
-                    // 三个间隔选项按钮：1 秒 / 2 秒 / 5 秒
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Repeater {
-                            model: [1000, 2000, 5000]
-
-                            // 改用公共 ChoiceButton：无障碍契约、Tab 聚焦、
-                            // Enter/Space 触发都收敛在组件内，配色按原值传入以保证视觉不变
-                            ChoiceButton {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 34
-                                radius: 8
-                                text: (modelData / 1000) + "s"
-                                fontSize: 13
-                                checked: applet && applet.refreshInterval === modelData
-                                selectedColor: root.selBg
-                                selectedBorderColor: root.selBorder
-                                selectedTextColor: root.selText
-                                baseColor: theme.cardBg
-                                baseBorderColor: theme.lineColor
-                                hoverColor: theme.hoverBg
-                                textColor: theme.textPrimary
-                                onClicked: if (applet) applet.refreshInterval = modelData
-                            }
+                        TextColorPicker {
+                            Layout.fillWidth: true
+                            currentColor: applet ? applet.textColor : ""
+                            // 深色模式标记向下传递：TextColorPicker 内部色板卡片同样主题感知
+                            isDarkMode: root.isDarkMode
+                            onColorSelected: if (applet) applet.textColor = color
                         }
-                    }
 
-                    // 速度单位选择区：智能自动 / KB/s / Mbps
-                    // 设计原因：插件默认按二进制（KB/s→MB/s→GB/s）显示，而运营商与
-                    // 测速工具用十进制 Mbps，两者相差约 8 倍（1 MB/s ≈ 8 Mbps）；
-                    // 用户拿插件数值与宽带套餐（如 100 Mbps）对比时会对不上，
-                    // 故提供显式选择。选择结果经 applet.speedUnit 持久化并即时生效
-                    Text {
-                        Layout.topMargin: common.spacingGroup
-                        text: qsTr("Speed Unit")
-                        font.pixelSize: common.fontSizeSubtitle
-                        font.weight: Font.Bold
-                        color: theme.textSecondary
-                    }
-
-                    // 三个单位选项：0=智能自动、1=固定 KB/s、2=固定 Mbps
-                    // 与刷新间隔共用同一套视觉与交互（三态：按下 > 选中 > hover），
-                    // 避免同一窗口出现两种按钮风格
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Repeater {
-                            // model 为 [显示文案, 取值] 二元组：文案需走 qsTr，不能直接拼
-                            model: [
-                                [qsTr("Auto"), 0],
-                                ["KB/s", 1],
-                                ["Mbps", 2]
-                            ]
-
-                            ChoiceButton {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 34
-                                radius: 8
-                                text: modelData[0]
-                                fontSize: 13
-                                checked: applet && applet.speedUnit === modelData[1]
-                                selectedColor: root.selBg
-                                selectedBorderColor: root.selBorder
-                                selectedTextColor: root.selText
-                                baseColor: theme.cardBg
-                                baseBorderColor: theme.lineColor
-                                hoverColor: theme.hoverBg
-                                textColor: theme.textPrimary
-                                onClicked: if (applet) applet.speedUnit = modelData[1]
-                            }
-                        }
-                    }
-
-                    // ---- 任务栏显示口径：单接口 / 所有物理网卡合计 ----
-                    // 设计原因：多网卡场景（有线 + 无线同时工作、或容器宿主多网口）下，
-                    // 只看单卡会低估实际吞吐；而多数用户只需看主网卡，故做成显式开关，
-                    // 默认保持原来的单接口视图，不改变既有观感。
-                    // 合计口径排除 tun/docker/veth 等虚拟接口，避免与物理网卡重复计数
-                    Text {
-                        Layout.topMargin: common.spacingGroup
-                        text: qsTr("Taskbar Display")
-                        font.pixelSize: common.fontSizeSubtitle
-                        font.weight: Font.Bold
-                        color: theme.textSecondary
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        // 与速度单位那组同款按钮，两个选项互斥
-                        Repeater {
-                            model: [
-                                [qsTr("Active interface"), false],
-                                [qsTr("All interfaces"), true]
-                            ]
-
-                            ChoiceButton {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 34
-                                radius: 8
-                                text: modelData[0]
-                                // 这一组原本就是 12px（其余两组 13px），保持原值不统一，
-                                // 否则会改变这一行的视觉密度
-                                fontSize: 12
-                                checked: applet && applet.aggregateSpeed === modelData[1]
-                                selectedColor: root.selBg
-                                selectedBorderColor: root.selBorder
-                                selectedTextColor: root.selText
-                                baseColor: theme.cardBg
-                                baseBorderColor: theme.lineColor
-                                hoverColor: theme.hoverBg
-                                textColor: theme.textPrimary
-                                onClicked: if (applet) applet.aggregateSpeed = modelData[1]
-                            }
-                        }
-                    }
-
-                    // 说明文字：用户需要知道"合计"到底包含哪些接口，以及 VPN 为何不在内
-                    Text {
-                        text: qsTr("Combined mode sums all physical network cards; VPN and container interfaces are excluded to avoid double counting.")
-                        font.pixelSize: common.fontSizeSmall
-                        color: theme.textTertiary
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                    }
-
-                    // ---- 流量提醒（默认折叠：低频配置项）----
-                    // 折叠理由：分区增至 7 个后内容约 900px 超过窗口 640px，
-                    // 首屏看不到底部功能。阈值属设置一次就不再动的低频项，故默认收起；
-                    // 折叠状态不持久化，用户在设置窗口内展开即可看到
-                    CollapsibleSection {
-                        Layout.fillWidth: true
-                        title: qsTr("Traffic Alerts")
-                        titleFontSize: common.fontSizeSubtitle
-                        titleColor: theme.textSecondary
-                        indicatorColor: theme.textTertiary
-                        expanded: false
-
-                        // 今日已用回显：让用户有依据地决定阈值填多少，而不是凭感觉
-                        // 数值取自后端 todayUsedBytes（与「流量统计」窗口同口径）
+                        // 刷新间隔选择区：1 秒 / 2 秒 / 5 秒
+                        // 设计原因：用户可能觉得每秒刷新开销大或过于频繁，提供更长的间隔选项；
+                        // 选择结果通过 applet.refreshInterval 持久化并即时生效，
+                        // 速度计算基于真实流逝时间（elapsedSec），改变间隔不影响计算正确性
                         Text {
-                            text: qsTr("Today used: %1 GB · This month: %2 GB")
-                                  .arg(((applet ? applet.todayUsedBytes : 0) / 1e9).toFixed(2))
-                                  .arg(((applet ? applet.monthUsedBytes : 0) / 1e9).toFixed(2))
+                            Layout.topMargin: common.spacingGroup
+                            text: qsTr("Refresh Interval")
+                            font.pixelSize: common.fontSizeSubtitle
+                            font.weight: Font.Bold
+                            color: theme.textSecondary
+                        }
+
+                        // 三个间隔选项按钮：1 秒 / 2 秒 / 5 秒
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Repeater {
+                                model: [1000, 2000, 5000]
+
+                                // 改用公共 ChoiceButton：无障碍契约、Tab 聚焦、
+                                // Enter/Space 触发都收敛在组件内，配色按原值传入以保证视觉不变
+                                ChoiceButton {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 34
+                                    radius: 8
+                                    text: (modelData / 1000) + "s"
+                                    fontSize: 13
+                                    checked: applet && applet.refreshInterval === modelData
+                                    selectedColor: root.selBg
+                                    selectedBorderColor: root.selBorder
+                                    selectedTextColor: root.selText
+                                    baseColor: theme.cardBg
+                                    baseBorderColor: theme.lineColor
+                                    hoverColor: theme.hoverBg
+                                    textColor: theme.textPrimary
+                                    onClicked: if (applet) applet.refreshInterval = modelData
+                                }
+                            }
+                        }
+
+                        // 速度单位选择区：智能自动 / KB/s / Mbps
+                        // 设计原因：插件默认按二进制（KB/s→MB/s→GB/s）显示，而运营商与
+                        // 测速工具用十进制 Mbps，两者相差约 8 倍（1 MB/s ≈ 8 Mbps）；
+                        // 用户拿插件数值与宽带套餐（如 100 Mbps）对比时会对不上，
+                        // 故提供显式选择。选择结果经 applet.speedUnit 持久化并即时生效
+                        Text {
+                            Layout.topMargin: common.spacingGroup
+                            text: qsTr("Speed Unit")
+                            font.pixelSize: common.fontSizeSubtitle
+                            font.weight: Font.Bold
+                            color: theme.textSecondary
+                        }
+
+                        // 三个单位选项：0=智能自动、1=固定 KB/s、2=固定 Mbps
+                        // 与刷新间隔共用同一套视觉与交互（三态：按下 > 选中 > hover），
+                        // 避免同一窗口出现两种按钮风格
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Repeater {
+                                // model 为 [显示文案, 取值] 二元组：文案需走 qsTr，不能直接拼
+                                model: [
+                                    [qsTr("Auto"), 0],
+                                    ["KB/s", 1],
+                                    ["Mbps", 2]
+                                ]
+
+                                ChoiceButton {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 34
+                                    radius: 8
+                                    text: modelData[0]
+                                    fontSize: 13
+                                    checked: applet && applet.speedUnit === modelData[1]
+                                    selectedColor: root.selBg
+                                    selectedBorderColor: root.selBorder
+                                    selectedTextColor: root.selText
+                                    baseColor: theme.cardBg
+                                    baseBorderColor: theme.lineColor
+                                    hoverColor: theme.hoverBg
+                                    textColor: theme.textPrimary
+                                    onClicked: if (applet) applet.speedUnit = modelData[1]
+                                }
+                            }
+                        }
+
+                        // ---- 任务栏显示口径：单接口 / 所有物理网卡合计 ----
+                        // 设计原因：多网卡场景（有线 + 无线同时工作、或容器宿主多网口）下，
+                        // 只看单卡会低估实际吞吐；而多数用户只需看主网卡，故做成显式开关，
+                        // 默认保持原来的单接口视图，不改变既有观感。
+                        // 合计口径排除 tun/docker/veth 等虚拟接口，避免与物理网卡重复计数
+                        Text {
+                            Layout.topMargin: common.spacingGroup
+                            text: qsTr("Taskbar Display")
+                            font.pixelSize: common.fontSizeSubtitle
+                            font.weight: Font.Bold
+                            color: theme.textSecondary
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            // 与速度单位那组同款按钮，两个选项互斥
+                            Repeater {
+                                model: [
+                                    [qsTr("Active interface"), false],
+                                    [qsTr("All interfaces"), true]
+                                ]
+
+                                ChoiceButton {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 34
+                                    radius: 8
+                                    text: modelData[0]
+                                    // 这一组原本就是 12px（其余两组 13px），保持原值不统一，
+                                    // 否则会改变这一行的视觉密度
+                                    fontSize: 12
+                                    checked: applet && applet.aggregateSpeed === modelData[1]
+                                    selectedColor: root.selBg
+                                    selectedBorderColor: root.selBorder
+                                    selectedTextColor: root.selText
+                                    baseColor: theme.cardBg
+                                    baseBorderColor: theme.lineColor
+                                    hoverColor: theme.hoverBg
+                                    textColor: theme.textPrimary
+                                    onClicked: if (applet) applet.aggregateSpeed = modelData[1]
+                                }
+                            }
+                        }
+
+                        // 说明文字：用户需要知道"合计"到底包含哪些接口，以及 VPN 为何不在内
+                        Text {
+                            text: qsTr("Combined mode sums all physical network cards; VPN and container interfaces are excluded to avoid double counting.")
                             font.pixelSize: common.fontSizeSmall
                             color: theme.textTertiary
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                         }
 
-                        // 日/月阈值输入行：标签 + 输入框 + 单位，两行结构对称
-                        RowLayout {
+                        // ---- 流量提醒（默认折叠：低频配置项）----
+                        // 折叠理由：分区增至 7 个后内容约 900px 超过窗口 640px，
+                        // 首屏看不到底部功能。阈值属设置一次就不再动的低频项，故默认收起；
+                        // 折叠状态不持久化，用户在设置窗口内展开即可看到
+                        CollapsibleSection {
                             Layout.fillWidth: true
-                            spacing: 8
+                            title: qsTr("Traffic Alerts")
+                            titleFontSize: common.fontSizeSubtitle
+                            titleColor: theme.textSecondary
+                            indicatorColor: theme.textTertiary
+                            expanded: false
 
+                            // 今日已用回显：让用户有依据地决定阈值填多少，而不是凭感觉
+                            // 数值取自后端 todayUsedBytes（与「流量统计」窗口同口径）
                             Text {
-                                text: qsTr("Daily limit")
-                                font.pixelSize: common.fontSizeBody
-                                color: theme.textPrimary
-                                Layout.preferredWidth: 90
-                            }
-
-                            // 文本输入而非 SpinBox：用户可能想填 1.5 GB 这类小数，
-                            // SpinBox 的整数步进无法表达
-                            TextField {
-                                id: dailyLimitField
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 30
-                                placeholderText: qsTr("0 = off")
-                                font.pixelSize: common.fontSizeBody
-                                color: theme.textPrimary
-                                selectByMouse: true
-                                // 校验器限制为最多两位小数的非负数：从源头挡掉字母与负号，
-                                // 但仍需后端归一化兜底（如粘贴绕过校验、或清空后为空串）
-                                validator: DoubleValidator {
-                                    bottom: 0
-                                    decimals: 2
-                                    notation: DoubleValidator.StandardNotation
-                                }
-                                onEditingFinished: {
-                                    if (!applet) return
-                                    // 空串按 0（关闭）处理；toDouble() 对非法输入返回 0
-                                    applet.dailyLimitGb = text.length === 0 ? 0 : parseFloat(text)
-                                    // 回写标准化后的值，让用户看到后端实际采纳的阈值
-                                    text = applet.dailyLimitGb > 0 ? applet.dailyLimitGb : ""
-                                }
-                            }
-
-                            Text {
-                                text: "GB"
-                                font.pixelSize: common.fontSizeBody
+                                text: qsTr("Today used: %1 GB · This month: %2 GB")
+                                      .arg(((applet ? applet.todayUsedBytes : 0) / 1e9).toFixed(2))
+                                      .arg(((applet ? applet.monthUsedBytes : 0) / 1e9).toFixed(2))
+                                font.pixelSize: common.fontSizeSmall
                                 color: theme.textTertiary
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Text {
-                                text: qsTr("Monthly limit")
-                                font.pixelSize: common.fontSizeBody
-                                color: theme.textPrimary
-                                Layout.preferredWidth: 90
-                            }
-
-                            TextField {
-                                id: monthlyLimitField
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 30
-                                placeholderText: qsTr("0 = off")
-                                font.pixelSize: common.fontSizeBody
-                                color: theme.textPrimary
-                                selectByMouse: true
-                                validator: DoubleValidator {
-                                    bottom: 0
-                                    decimals: 2
-                                    notation: DoubleValidator.StandardNotation
+                                wrapMode: Text.WordWrap
+                            }
+
+                            // 日/月阈值输入行：标签 + 输入框 + 单位，两行结构对称
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Text {
+                                    text: qsTr("Daily limit")
+                                    font.pixelSize: common.fontSizeBody
+                                    color: theme.textPrimary
+                                    Layout.preferredWidth: 90
                                 }
-                                onEditingFinished: {
-                                    if (!applet) return
-                                    applet.monthlyLimitGb = text.length === 0 ? 0 : parseFloat(text)
-                                    text = applet.monthlyLimitGb > 0 ? applet.monthlyLimitGb : ""
+
+                                // 文本输入而非 SpinBox：用户可能想填 1.5 GB 这类小数，
+                                // SpinBox 的整数步进无法表达
+                                TextField {
+                                    id: dailyLimitField
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    placeholderText: qsTr("0 = off")
+                                    font.pixelSize: common.fontSizeBody
+                                    color: theme.textPrimary
+                                    selectByMouse: true
+                                    // 校验器限制为最多两位小数的非负数：从源头挡掉字母与负号，
+                                    // 但仍需后端归一化兜底（如粘贴绕过校验、或清空后为空串）
+                                    validator: DoubleValidator {
+                                        bottom: 0
+                                        decimals: 2
+                                        notation: DoubleValidator.StandardNotation
+                                    }
+                                    onEditingFinished: {
+                                        if (!applet) return
+                                        // 空串按 0（关闭）处理；toDouble() 对非法输入返回 0
+                                        applet.dailyLimitGb = text.length === 0 ? 0 : parseFloat(text)
+                                        // 回写标准化后的值，让用户看到后端实际采纳的阈值
+                                        text = applet.dailyLimitGb > 0 ? applet.dailyLimitGb : ""
+                                    }
+                                }
+
+                                Text {
+                                    text: "GB"
+                                    font.pixelSize: common.fontSizeBody
+                                    color: theme.textTertiary
                                 }
                             }
 
-                            Text {
-                                text: "GB"
-                                font.pixelSize: common.fontSizeBody
-                                color: theme.textTertiary
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                Text {
+                                    text: qsTr("Monthly limit")
+                                    font.pixelSize: common.fontSizeBody
+                                    color: theme.textPrimary
+                                    Layout.preferredWidth: 90
+                                }
+
+                                TextField {
+                                    id: monthlyLimitField
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    placeholderText: qsTr("0 = off")
+                                    font.pixelSize: common.fontSizeBody
+                                    color: theme.textPrimary
+                                    selectByMouse: true
+                                    validator: DoubleValidator {
+                                        bottom: 0
+                                        decimals: 2
+                                        notation: DoubleValidator.StandardNotation
+                                    }
+                                    onEditingFinished: {
+                                        if (!applet) return
+                                        applet.monthlyLimitGb = text.length === 0 ? 0 : parseFloat(text)
+                                        text = applet.monthlyLimitGb > 0 ? applet.monthlyLimitGb : ""
+                                    }
+                                }
+
+                                Text {
+                                    text: "GB"
+                                    font.pixelSize: common.fontSizeBody
+                                    color: theme.textTertiary
+                                }
+                            }
+
+                            // 输入框初值与外部变化同步：用 Binding 而非 text: 直接绑定。
+                            // 设计原因：直接绑定会在用户首次输入时被 TextField 的内部赋值销毁，
+                            // 之后再改配置也不会反映到输入框（与 TcpConnectionsWindow 的搜索框同一坑）。
+                            // 阈值 <= 0 时显示空串，与占位提示 "0 = off" 配合表达"已关闭"
+                            Binding {
+                                target: dailyLimitField
+                                property: "text"
+                                value: (applet && applet.dailyLimitGb > 0)
+                                       ? String(applet.dailyLimitGb) : ""
+                                restoreMode: Binding.RestoreNone
+                            }
+                            Binding {
+                                target: monthlyLimitField
+                                property: "text"
+                                value: (applet && applet.monthlyLimitGb > 0)
+                                       ? String(applet.monthlyLimitGb) : ""
+                                restoreMode: Binding.RestoreNone
                             }
                         }
 
-                        // 输入框初值与外部变化同步：用 Binding 而非 text: 直接绑定。
-                        // 设计原因：直接绑定会在用户首次输入时被 TextField 的内部赋值销毁，
-                        // 之后再改配置也不会反映到输入框（与 TcpConnectionsWindow 的搜索框同一坑）。
-                        // 阈值 <= 0 时显示空串，与占位提示 "0 = off" 配合表达"已关闭"
-                        Binding {
-                            target: dailyLimitField
-                            property: "text"
-                            value: (applet && applet.dailyLimitGb > 0)
-                                   ? String(applet.dailyLimitGb) : ""
-                            restoreMode: Binding.RestoreNone
-                        }
-                        Binding {
-                            target: monthlyLimitField
-                            property: "text"
-                            value: (applet && applet.monthlyLimitGb > 0)
-                                   ? String(applet.monthlyLimitGb) : ""
-                            restoreMode: Binding.RestoreNone
-                        }
-                    }
-
-                    // ---- 卸载插件（默认折叠：极少使用且具破坏性）----
-                    CollapsibleSection {
-                        Layout.fillWidth: true
-                        title: qsTr("Uninstall Plugin")
-                        titleFontSize: common.fontSizeSubtitle
-                        titleColor: accentColor
-                        indicatorColor: theme.textTertiary
-                        expanded: false
-
-                        // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担。
-                        // 用 IconButton 的内容插槽承载原有 Text——它的文字需要
-                        // elide/居中/Medium 字重，塞进 symbol 会丢失这些样式
-                        IconButton {
-                            id: uninstallButton
-                            accessibleName: qsTr("Uninstall Plugin")
+                        // ---- 卸载插件（默认折叠：极少使用且具破坏性）----
+                        CollapsibleSection {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 40
-                            radius: 10
-                            borderWidth: 1
-                            borderColor: accentColor
-                            // 三态：按下 > hover > 常态，底色透明度逐级加深
-                            baseColor: common.accentRedLight
-                            hoverColor: common.accentRedHover
-                            pressedColor: Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
-                            onClicked: uninstallConfirmDialog.open()
+                            title: qsTr("Uninstall Plugin")
+                            titleFontSize: common.fontSizeSubtitle
+                            titleColor: accentColor
+                            indicatorColor: theme.textTertiary
+                            expanded: false
 
+                            // 卸载插件按钮：文字固定为动作名，状态提示由下方独立提示行承担。
+                            // 用 IconButton 的内容插槽承载原有 Text——它的文字需要
+                            // elide/居中/Medium 字重，塞进 symbol 会丢失这些样式
+                            IconButton {
+                                id: uninstallButton
+                                accessibleName: qsTr("Uninstall Plugin")
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+                                radius: 10
+                                borderWidth: 1
+                                borderColor: accentColor
+                                // 三态：按下 > hover > 常态，底色透明度逐级加深
+                                baseColor: common.accentRedLight
+                                hoverColor: common.accentRedHover
+                                pressedColor: Qt.rgba(common.accentRed.r, common.accentRed.g, common.accentRed.b, 0.22)
+                                onClicked: uninstallConfirmDialog.open()
+
+                                Text {
+                                    // 只声明垂直居中：水平方向由 left/right + margins 决定宽度，
+                                    // 与 centerIn 同时声明属于冲突锚点（运行时会告警且以最后赋值者为准）
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.margins: 8
+                                    text: qsTr("Uninstall Plugin")
+                                    font.pixelSize: common.fontSizeSubtitle
+                                    font.weight: Font.Medium
+                                    color: accentColor
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            // 复制成功提示行：独立于按钮，长文案可换行且不受按钮高度限制
+                            // 5 秒后由 statusHideTimer 清除（uninstallCopied 置回 false）
                             Text {
-                                // 只声明垂直居中：水平方向由 left/right + margins 决定宽度，
-                                // 与 centerIn 同时声明属于冲突锚点（运行时会告警且以最后赋值者为准）
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.margins: 8
-                                text: qsTr("Uninstall Plugin")
-                                font.pixelSize: common.fontSizeSubtitle
-                                font.weight: Font.Medium
-                                color: accentColor
+                                Layout.fillWidth: true
+                                Layout.topMargin: -4
+                                visible: root.uninstallCopied
+                                text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
+                                font.pixelSize: common.fontSizeSmall
+                                color: common.accentGreen
                                 horizontalAlignment: Text.AlignHCenter
-                                elide: Text.ElideRight
-                            }
+                                wrapMode: Text.WordWrap
+                        }
                         }
 
-                        // 复制成功提示行：独立于按钮，长文案可换行且不受按钮高度限制
-                        // 5 秒后由 statusHideTimer 清除（uninstallCopied 置回 false）
-                        Text {
-                            Layout.fillWidth: true
-                            Layout.topMargin: -4
-                            visible: root.uninstallCopied
-                            text: qsTr("Uninstall command copied to clipboard. Please paste and run it in terminal.")
-                            font.pixelSize: common.fontSizeSmall
-                            color: common.accentGreen
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.WordWrap
-                    }
-                    }
 
-
+                    }
                 }
             }
         }
