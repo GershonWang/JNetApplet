@@ -193,6 +193,27 @@ QtObject {
         }
     }
 
+    // 整数计数加千分位：4275851 → "4,275,851"
+    // 设计原因：包统计的收发包数是自开机起的累计值，动辄六七位数。
+    // 不加分隔时 "4275851" 与 "6212883" 几乎无法快速比较大小，
+    // 加千分位后位数一眼可辨。只用于计数类数值，不用于速度/流量
+    //（那些由 formatTotal 走单位换算，语义不同）。
+    // 实现说明：不用 toLocaleString —— QML 的 JS 环境下其结果依赖系统 locale，
+    // 不同环境可能得到 "4.275.851" 或 "4 275 851"，跨环境不一致；
+    // 这里显式按三位插逗号，保证任何环境输出相同。
+    function formatCount(value) {
+        var n = Math.round(Number(value) || 0)
+        var neg = n < 0
+        var str = String(Math.abs(n))
+        var out = ""
+        // 从右往左每三位切一段，再反转拼回
+        for (var i = str.length; i > 0; i -= 3) {
+            var start = Math.max(0, i - 3)
+            out = str.substring(start, i) + (out.length > 0 ? "," + out : "")
+        }
+        return (neg ? "-" : "") + out
+    }
+
     // 对外展示用的接口名称：有 WiFi 名称就用它，否则回退接口名。
     // 设计原因：wlo1/eno1 这类名字由内核按 PCI 位置生成，用户无法据此判断
     // "连的是哪个 WiFi"；此前任务栏提示与弹窗各自拼接口名，新增 SSID 后

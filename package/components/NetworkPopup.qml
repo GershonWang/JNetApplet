@@ -590,7 +590,7 @@ Control {
             }
 
             Text {
-                text: popup.rxPackets.toFixed(0)
+                text: common.formatCount(popup.rxPackets)
                 font.pixelSize: common.fontSizeSubtitle
                 color: popup.primaryText
             }
@@ -605,14 +605,15 @@ Control {
             }
 
             Text {
-                text: popup.txPackets.toFixed(0)
+                text: common.formatCount(popup.txPackets)
                 font.pixelSize: common.fontSizeSubtitle
                 color: popup.primaryText
             }
 
             // 错误数：仅在存在错误或丢包时显示，格式 "错误 {rxE}/{txE}"
             Text {
-                text: qsTr("Errors") + " " + popup.rxErrors.toFixed(0) + "/" + popup.txErrors.toFixed(0)
+                text: qsTr("Errors") + " " + common.formatCount(popup.rxErrors)
+                      + "/" + common.formatCount(popup.txErrors)
                 font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
@@ -620,7 +621,8 @@ Control {
 
             // 丢包数：仅在存在错误或丢包时显示，格式 "丢包 {rxD}/{txD}"
             Text {
-                text: qsTr("Dropped") + " " + popup.rxDropped.toFixed(0) + "/" + popup.txDropped.toFixed(0)
+                text: qsTr("Dropped") + " " + common.formatCount(popup.rxDropped)
+                      + "/" + common.formatCount(popup.txDropped)
                 font.pixelSize: common.fontSizeBody
                 color: popup.tertiaryText
                 visible: popup.rxErrors > 0 || popup.txErrors > 0 || popup.rxDropped > 0 || popup.txDropped > 0
