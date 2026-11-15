@@ -63,10 +63,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 依赖必须与 CMakeLists.txt 的 find_package 对齐，否则 configure 直接失败。
+      # 实测事故：只装 qt6-base-dev 时，CMake 报
+      #   Failed to find required Qt component "Quick"
+      #   Qt6QuickConfig.cmake does not exist
+      # 因为 Quick 在 qt6-declarative-dev、LinguistTools 在 qt6-tools-dev，两者都不在
+      # qt6-base-dev 里。CMakeLists 用的是 find_package(Qt6 REQUIRED COMPONENTS
+      # Core Quick Network LinguistTools)，四个组件缺一不可。
       - name: 安装编译工具链
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake qt6-base-dev
+          sudo apt-get install -y build-essential cmake \
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev
 
       # 只编译纯逻辑核心库与其测试，**不编译主插件**：
       # NetworkMonitorApplet 继承 DApplet，需要 Dtk6::Core 与 Dde::Shell，
@@ -153,10 +161,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # qt6-declarative-dev 提供 QtQuick 等核心 QML 模块的 qmltypes；
+      # qml6-module-qtquick-dialogs 是被校验模块之一（脚本要读它的 exports）；
+      # qt6-tools-dev 提供 qmake6，用于查询真实的 QML 模块根目录
+      #（不装也能靠回退路径工作，但显式装更稳，避免依赖路径猜测）。
       - name: 安装 Qt6 QML 模块（用于读取模块导出信息）
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-declarative-dev qml6-module-qtquick-dialogs
+          sudo apt-get install -y qt6-declarative-dev qt6-tools-dev \
+            qml6-module-qtquick-dialogs
 
       - name: 校验 import 版本与 dde-shell 类型属性
         run: |

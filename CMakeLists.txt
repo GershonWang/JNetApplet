@@ -16,14 +16,23 @@ set(CMAKE_AUTOMOC ON)
 #     cmake -B build -DJNET_BUILD_PLUGIN=OFF && cmake --build build --target tst_core
 option(JNET_BUILD_PLUGIN "构建 dde-shell 插件本体（需要 Dtk6 与 DDEShell）" ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Quick Network LinguistTools)
-# Test 仅用于单元测试目标，非主插件依赖；将其设为可选，
-# 避免未安装 Qt6 Test 开发包的环境构建主插件时失败
-find_package(Qt6 OPTIONAL_COMPONENTS Test)
+# Qt 组件按开关分级查找，让 JNET_BUILD_PLUGIN=OFF 真的只需 qt6-base-dev。
+# 设计原因（实测事故）：原先无论开关如何都 REQUIRED 查找 Quick 与 LinguistTools，
+# 而这两个组件分别来自 qt6-declarative-dev 与 qt6-tools-dev。
+# CI 里只装了 qt6-base-dev，于是 configure 直接失败：
+#   Failed to find required Qt component "Quick"
+#   Qt6QuickConfig.cmake does not exist
+# 这与"核心库只依赖 Qt6::Core、任何装了 qt6-base-dev 的机器都能跑"的设计目标矛盾。
+# 现在只有构建插件时才要求 Quick/Network/LinguistTools。
+find_package(Qt6 REQUIRED COMPONENTS Core)
 if(JNET_BUILD_PLUGIN)
+    find_package(Qt6 REQUIRED COMPONENTS Quick Network LinguistTools)
     find_package(Dtk6 REQUIRED COMPONENTS Core)
     find_package(DDEShell REQUIRED)
 endif()
+# Test 仅用于单元测试目标，非主插件依赖；将其设为可选，
+# 避免未安装 Qt6 Test 开发包的环境构建主插件时失败
+find_package(Qt6 OPTIONAL_COMPONENTS Test)
 
 # 插件 ID
 set(PLUGIN_ID "space.jokul.JNetApplet")
